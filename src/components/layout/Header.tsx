@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Wallet, User, LogOut, Settings, Trophy, Ticket, LayoutDashboard, Menu } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
   Sheet,
   SheetContent,
@@ -79,6 +80,8 @@ export function Header() {
           {/* Theme Toggle */}
           <ThemeToggle />
           
+          {/* Notifications */}
+          {user && <NotificationCenter />}
           {isLoading ? (
             <div className="h-10 w-24 bg-muted animate-pulse rounded-md" />
           ) : user && profile ? (
