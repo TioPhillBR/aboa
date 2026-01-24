@@ -16,6 +16,8 @@ import Carteira from "./pages/Carteira";
 import Perfil from "./pages/Perfil";
 import Ganhadores from "./pages/Ganhadores";
 import MeusTickets from "./pages/MeusTickets";
+import AdminDashboard from "./pages/admin/Dashboard";
+import AdminSorteios from "./pages/admin/Sorteios";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +41,9 @@ const App = () => (
             <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
             <Route path="/ganhadores" element={<Ganhadores />} />
             <Route path="/meus-tickets" element={<ProtectedRoute><MeusTickets /></ProtectedRoute>} />
+            {/* Admin Routes */}
+            <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/admin/sorteios" element={<ProtectedRoute requireAdmin><AdminSorteios /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
