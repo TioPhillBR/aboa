@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { Ticket, Sparkles, Trophy, Home, User } from 'lucide-react';
+import { Ticket, Sparkles, Trophy, Home, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -8,7 +8,7 @@ const navItems = [
   { href: '/sorteios', label: 'Sorteios', icon: Ticket },
   { href: '/raspadinhas', label: 'Raspadinhas', icon: Sparkles },
   { href: '/ganhadores', label: 'Ganhadores', icon: Trophy },
-  { href: '/perfil', label: 'Perfil', icon: User, requiresAuth: true },
+  { href: '/estatisticas', label: 'Stats', icon: BarChart3, requiresAuth: true },
 ];
 
 export function MobileNav() {
