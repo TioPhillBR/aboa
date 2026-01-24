@@ -143,6 +143,96 @@ export type Database = {
           },
         ]
       }
+      referral_codes: {
+        Row: {
+          bonus_per_referral: number
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          user_id: string
+          uses_count: number
+        }
+        Insert: {
+          bonus_per_referral?: number
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          user_id: string
+          uses_count?: number
+        }
+        Update: {
+          bonus_per_referral?: number
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          user_id?: string
+          uses_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_codes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          bonus_awarded: number
+          bonus_awarded_at: string | null
+          created_at: string
+          id: string
+          referral_code_id: string
+          referred_id: string
+          referrer_id: string
+        }
+        Insert: {
+          bonus_awarded?: number
+          bonus_awarded_at?: string | null
+          created_at?: string
+          id?: string
+          referral_code_id: string
+          referred_id: string
+          referrer_id: string
+        }
+        Update: {
+          bonus_awarded?: number
+          bonus_awarded_at?: string | null
+          created_at?: string
+          id?: string
+          referral_code_id?: string
+          referred_id?: string
+          referrer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referral_code_id_fkey"
+            columns: ["referral_code_id"]
+            isOneToOne: false
+            referencedRelation: "referral_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referred_id_fkey"
+            columns: ["referred_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scratch_cards: {
         Row: {
           cover_image_url: string | null
@@ -403,6 +493,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_referral_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

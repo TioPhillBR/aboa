@@ -20,6 +20,7 @@ import Perfil from "./pages/Perfil";
 import Ganhadores from "./pages/Ganhadores";
 import MeusTickets from "./pages/MeusTickets";
 import Estatisticas from "./pages/Estatisticas";
+import Indicacoes from "./pages/Indicacoes";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminSorteios from "./pages/admin/Sorteios";
 import AdminRaspadinhas from "./pages/admin/Raspadinhas";
@@ -51,6 +52,7 @@ const App = () => (
                 <Route path="/ganhadores" element={<Ganhadores />} />
                 <Route path="/meus-tickets" element={<ProtectedRoute><MeusTickets /></ProtectedRoute>} />
                 <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
+                <Route path="/indicacoes" element={<ProtectedRoute><Indicacoes /></ProtectedRoute>} />
                 {/* Admin Routes */}
                 <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
                 <Route path="/admin/sorteios" element={<ProtectedRoute requireAdmin><AdminSorteios /></ProtectedRoute>} />
