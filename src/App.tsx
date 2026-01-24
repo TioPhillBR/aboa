@@ -12,6 +12,7 @@ import Sorteios from "./pages/Sorteios";
 import SorteioDetail from "./pages/SorteioDetail";
 import Raspadinhas from "./pages/Raspadinhas";
 import RaspadinhaDetail from "./pages/RaspadinhaDetail";
+import Carteira from "./pages/Carteira";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/sorteio/:id" element={<SorteioDetail />} />
             <Route path="/raspadinhas" element={<Raspadinhas />} />
             <Route path="/raspadinha/:id" element={<RaspadinhaDetail />} />
+            <Route path="/carteira" element={<ProtectedRoute><Carteira /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
