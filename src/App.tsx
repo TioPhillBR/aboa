@@ -10,6 +10,8 @@ import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Sorteios from "./pages/Sorteios";
 import SorteioDetail from "./pages/SorteioDetail";
+import Raspadinhas from "./pages/Raspadinhas";
+import RaspadinhaDetail from "./pages/RaspadinhaDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +29,8 @@ const App = () => (
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/sorteios" element={<Sorteios />} />
             <Route path="/sorteio/:id" element={<SorteioDetail />} />
+            <Route path="/raspadinhas" element={<Raspadinhas />} />
+            <Route path="/raspadinha/:id" element={<RaspadinhaDetail />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
