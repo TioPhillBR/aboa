@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
+import { NotificationProvider } from "@/hooks/useNotifications";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MobileNav } from "@/components/layout/MobileNav";
 import Index from "./pages/Index";
@@ -31,8 +32,9 @@ const App = () => (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <TooltipProvider>
         <AuthProvider>
-          <Toaster />
-          <Sonner />
+          <NotificationProvider>
+            <Toaster />
+            <Sonner />
           <BrowserRouter>
             <div className="pb-16 md:pb-0">
               <Routes>
@@ -58,6 +60,7 @@ const App = () => (
             </div>
             <MobileNav />
           </BrowserRouter>
+          </NotificationProvider>
         </AuthProvider>
       </TooltipProvider>
     </ThemeProvider>

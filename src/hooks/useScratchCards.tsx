@@ -212,6 +212,13 @@ export function useScratchCard(scratchCardId: string) {
   };
 
   const revealChance = async (chanceId: string, isWinner: boolean, prize: number) => {
+    // Verificar se já foi revelada localmente para evitar duplicação
+    const existingChance = myChances.find(c => c.id === chanceId);
+    if (existingChance?.is_revealed) {
+      console.log('Chance already revealed, skipping update');
+      return { error: null };
+    }
+
     try {
       const { error } = await supabase
         .from('scratch_chances')
@@ -219,7 +226,8 @@ export function useScratchCard(scratchCardId: string) {
           is_revealed: true,
           revealed_at: new Date().toISOString(),
         })
-        .eq('id', chanceId);
+        .eq('id', chanceId)
+        .eq('is_revealed', false); // Apenas atualizar se ainda não revelada
 
       if (error) throw error;
 

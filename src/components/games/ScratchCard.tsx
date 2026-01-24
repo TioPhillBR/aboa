@@ -3,7 +3,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScratchSymbolResult } from '@/types';
 import { Trophy, RotateCcw, Sparkles } from 'lucide-react';
-import confetti from 'canvas-confetti';
 
 interface ScratchCardProps {
   symbols: ScratchSymbolResult[];
@@ -31,8 +30,9 @@ export function ScratchCard({
   const [isScratching, setIsScratching] = useState(false);
   const [scratchPercentage, setScratchPercentage] = useState(0);
   const [isRevealed, setIsRevealed] = useState(externalRevealed);
-  const [hasCheckedWin, setHasCheckedWin] = useState(false);
+  const [hasCalledOnReveal, setHasCalledOnReveal] = useState(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const onRevealCalledRef = useRef(false);
 
   // Verificar se há 3 símbolos iguais
   const checkWin = useCallback(() => {
@@ -163,24 +163,17 @@ export function ScratchCard({
     const percentage = calculateScratchPercentage();
     setScratchPercentage(percentage);
 
-    // Verificar se deve revelar
-    if (percentage >= REVEAL_THRESHOLD && !hasCheckedWin) {
-      setHasCheckedWin(true);
+    // Verificar se deve revelar (apenas se ainda não chamou onReveal)
+    if (percentage >= REVEAL_THRESHOLD && !hasCalledOnReveal && !onRevealCalledRef.current) {
+      onRevealCalledRef.current = true;
+      setHasCalledOnReveal(true);
       setIsRevealed(true);
       
       const result = checkWin();
-      if (result.isWinner) {
-        // Animação de vitória
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#ffd700', '#ffb700', '#ff9500', '#ffffff'],
-        });
-      }
+      // Chamar onReveal apenas uma vez
       onReveal?.(result.isWinner, result.prize);
     }
-  }, [isRevealed, hasCheckedWin, calculateScratchPercentage, checkWin, onReveal]);
+  }, [isRevealed, hasCalledOnReveal, calculateScratchPercentage, checkWin, onReveal]);
 
   // Event handlers
   const getPosition = (e: React.MouseEvent | React.TouchEvent) => {
@@ -226,19 +219,14 @@ export function ScratchCard({
   };
 
   const revealAll = () => {
+    if (hasCalledOnReveal || onRevealCalledRef.current) return;
+    
+    onRevealCalledRef.current = true;
+    setHasCalledOnReveal(true);
     setIsRevealed(true);
-    if (!hasCheckedWin) {
-      setHasCheckedWin(true);
-      const result = checkWin();
-      if (result.isWinner) {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-        });
-      }
-      onReveal?.(result.isWinner, result.prize);
-    }
+    
+    const result = checkWin();
+    onReveal?.(result.isWinner, result.prize);
   };
 
   // Encontrar símbolos que formam trio vencedor

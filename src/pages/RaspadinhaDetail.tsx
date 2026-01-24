@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { ScratchCard } from '@/components/games/ScratchCard';
+import { WinCelebration } from '@/components/games/WinCelebration';
 import { useScratchCard } from '@/hooks/useScratchCards';
 import { useWallet } from '@/hooks/useWallet';
 import { useAuth } from '@/hooks/useAuth';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,10 +29,14 @@ export default function RaspadinhaDetail() {
   const { user } = useAuth();
   const { scratchCard, symbols, myChances, isLoading, buyChance, revealChance } = useScratchCard(id || '');
   const { balance, purchase, awardPrize } = useWallet();
+  const { addNotification } = useNotifications();
   const { toast } = useToast();
   
   const [isBuying, setIsBuying] = useState(false);
   const [activeChance, setActiveChance] = useState<ScratchChance | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationPrize, setCelebrationPrize] = useState(0);
+  const hasRevealedRef = useRef(false);
 
   const handleBuyChance = async () => {
     if (!user) {
@@ -93,23 +99,40 @@ export default function RaspadinhaDetail() {
   };
 
   const handleReveal = async (isWinner: boolean, prize: number) => {
-    if (!activeChance) return;
+    if (!activeChance || hasRevealedRef.current) return;
+    
+    // Marcar que já foi revelada para evitar duplicação
+    hasRevealedRef.current = true;
 
     // Marcar como revelada
     await revealChance(activeChance.id, isWinner, prize);
 
-    // Se ganhou, creditar prêmio
+    // Se ganhou, creditar prêmio e mostrar celebração
     if (isWinner && prize > 0) {
       await awardPrize(prize, `Prêmio raspadinha - ${scratchCard?.title}`, scratchCard?.id);
-      toast({
-        title: '🎉 Parabéns!',
-        description: `Você ganhou R$ ${prize.toFixed(2)}! O valor foi creditado na sua carteira.`,
+      
+      // Mostrar celebração
+      setCelebrationPrize(prize);
+      setShowCelebration(true);
+      
+      // Adicionar notificação
+      addNotification({
+        type: 'prize_won',
+        title: '🎉 Você Ganhou!',
+        message: `Parabéns! Você ganhou R$ ${prize.toFixed(2)} na raspadinha "${scratchCard?.title}"!`,
+        icon: '🏆',
+        link: `/raspadinha/${scratchCard?.id}`,
       });
     }
   };
 
   const handlePlayAgain = () => {
     setActiveChance(null);
+    hasRevealedRef.current = false;
+  };
+
+  const handleCloseCelebration = () => {
+    setShowCelebration(false);
   };
 
   const unrevealed = myChances.filter(c => !c.is_revealed);
@@ -394,6 +417,13 @@ export default function RaspadinhaDetail() {
           </div>
         </div>
       </main>
+
+      {/* Celebração de vitória */}
+      <WinCelebration 
+        isVisible={showCelebration} 
+        prize={celebrationPrize} 
+        onClose={handleCloseCelebration}
+      />
     </div>
   );
 }
