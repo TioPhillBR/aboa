@@ -1,0 +1,565 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { AdminLayout } from '@/components/admin/AdminLayout';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast';
+import { Raffle, Profile } from '@/types';
+import { 
+  Ticket, 
+  Plus, 
+  Play, 
+  Users,
+  Calendar,
+  Edit,
+  Trash2,
+  Eye,
+  Loader2
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+interface RaffleWithStats extends Raffle {
+  tickets_sold: number;
+  participants: Profile[];
+}
+
+export default function AdminSorteios() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [raffles, setRaffles] = useState<RaffleWithStats[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [selectedRaffle, setSelectedRaffle] = useState<RaffleWithStats | null>(null);
+  const [drawDialogOpen, setDrawDialogOpen] = useState(false);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    price: '',
+    total_numbers: '',
+    draw_date: '',
+  });
+
+  useEffect(() => {
+    fetchRaffles();
+  }, []);
+
+  const fetchRaffles = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data: rafflesData, error } = await supabase
+        .from('raffles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Para cada sorteio, buscar estatísticas
+      const rafflesWithStats = await Promise.all(
+        (rafflesData || []).map(async (raffle) => {
+          // Buscar tickets
+          const { data: ticketsData } = await supabase
+            .from('raffle_tickets')
+            .select('user_id')
+            .eq('raffle_id', raffle.id);
+
+          const uniqueUserIds = [...new Set((ticketsData || []).map(t => t.user_id))];
+
+          // Buscar perfis dos participantes
+          let participants: Profile[] = [];
+          if (uniqueUserIds.length > 0) {
+            const { data: profilesData } = await supabase
+              .from('profiles')
+              .select('*')
+              .in('id', uniqueUserIds);
+            participants = (profilesData || []) as Profile[];
+          }
+
+          return {
+            ...raffle,
+            tickets_sold: ticketsData?.length || 0,
+            participants,
+          } as RaffleWithStats;
+        })
+      );
+
+      setRaffles(rafflesWithStats);
+    } catch (error) {
+      console.error('Error fetching raffles:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateRaffle = async () => {
+    if (!user) return;
+
+    if (!formData.title || !formData.price || !formData.total_numbers || !formData.draw_date) {
+      toast({
+        title: 'Preencha todos os campos',
+        description: 'Todos os campos são obrigatórios',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const { error } = await supabase.from('raffles').insert({
+        title: formData.title,
+        description: formData.description || null,
+        price: parseFloat(formData.price),
+        total_numbers: parseInt(formData.total_numbers),
+        draw_date: new Date(formData.draw_date).toISOString(),
+        status: 'open',
+        created_by: user.id,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sorteio criado!',
+        description: 'O sorteio foi criado com sucesso.',
+      });
+
+      setCreateDialogOpen(false);
+      setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '' });
+      fetchRaffles();
+    } catch (error) {
+      console.error('Error creating raffle:', error);
+      toast({
+        title: 'Erro ao criar sorteio',
+        description: 'Não foi possível criar o sorteio. Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteRaffle = async (raffleId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este sorteio?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('raffles')
+        .delete()
+        .eq('id', raffleId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sorteio excluído',
+        description: 'O sorteio foi excluído com sucesso.',
+      });
+
+      fetchRaffles();
+    } catch (error) {
+      console.error('Error deleting raffle:', error);
+      toast({
+        title: 'Erro ao excluir',
+        description: 'Não foi possível excluir o sorteio.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openDrawDialog = (raffle: RaffleWithStats) => {
+    if (raffle.participants.length < 2) {
+      toast({
+        title: 'Participantes insuficientes',
+        description: 'É necessário pelo menos 2 participantes para realizar o sorteio.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSelectedRaffle(raffle);
+    setDrawDialogOpen(true);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'open':
+        return <Badge className="bg-green-500">Aberto</Badge>;
+      case 'drawing':
+        return <Badge className="bg-yellow-500 animate-pulse">Sorteando</Badge>;
+      case 'completed':
+        return <Badge variant="secondary">Finalizado</Badge>;
+      case 'cancelled':
+        return <Badge variant="destructive">Cancelado</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
+    }
+  };
+
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <Ticket className="h-8 w-8" />
+              Sorteios
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Gerencie os sorteios e realize sorteios ao vivo
+            </p>
+          </div>
+
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Novo Sorteio
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Criar Novo Sorteio</DialogTitle>
+                <DialogDescription>
+                  Preencha os dados do sorteio
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Título</Label>
+                  <Input
+                    id="title"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Ex: Sorteio iPhone 15"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição (opcional)</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descrição do sorteio..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Preço por número (R$)</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={formData.price}
+                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      placeholder="10.00"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="total_numbers">Total de números</Label>
+                    <Input
+                      id="total_numbers"
+                      type="number"
+                      min="1"
+                      value={formData.total_numbers}
+                      onChange={(e) => setFormData({ ...formData, total_numbers: e.target.value })}
+                      placeholder="100"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="draw_date">Data do Sorteio</Label>
+                  <Input
+                    id="draw_date"
+                    type="datetime-local"
+                    value={formData.draw_date}
+                    onChange={(e) => setFormData({ ...formData, draw_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleCreateRaffle} disabled={isCreating}>
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    'Criar Sorteio'
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Table */}
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Título</TableHead>
+                  <TableHead>Preço</TableHead>
+                  <TableHead>Números</TableHead>
+                  <TableHead>Participantes</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                    </TableCell>
+                  </TableRow>
+                ) : raffles.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      Nenhum sorteio criado ainda
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  raffles.map((raffle) => (
+                    <TableRow key={raffle.id}>
+                      <TableCell className="font-medium">{raffle.title}</TableCell>
+                      <TableCell>R$ {raffle.price.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {raffle.tickets_sold} / {raffle.total_numbers}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          {raffle.participants.length}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          {format(new Date(raffle.draw_date), 'dd/MM/yyyy HH:mm')}
+                        </div>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(raffle.status)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {raffle.status === 'open' && (
+                            <Button
+                              size="sm"
+                              onClick={() => openDrawDialog(raffle)}
+                              className="gap-1 bg-green-500 hover:bg-green-600"
+                            >
+                              <Play className="h-3 w-3" />
+                              Sortear
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" asChild>
+                            <Link to={`/sorteio/${raffle.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          {raffle.status === 'open' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeleteRaffle(raffle.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Draw Dialog */}
+        {selectedRaffle && (
+          <DrawRaffleDialog
+            raffle={selectedRaffle}
+            open={drawDialogOpen}
+            onOpenChange={setDrawDialogOpen}
+            onComplete={() => {
+              setDrawDialogOpen(false);
+              setSelectedRaffle(null);
+              fetchRaffles();
+            }}
+          />
+        )}
+      </div>
+    </AdminLayout>
+  );
+}
+
+// Componente do diálogo de sorteio
+import { RouletteWheel } from '@/components/games/RouletteWheel';
+
+interface DrawRaffleDialogProps {
+  raffle: RaffleWithStats;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onComplete: () => void;
+}
+
+function DrawRaffleDialog({ raffle, open, onOpenChange, onComplete }: DrawRaffleDialogProps) {
+  const { toast } = useToast();
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [winner, setWinner] = useState<Profile | null>(null);
+  const [winnerTicket, setWinnerTicket] = useState<number | null>(null);
+
+  const handleStartDraw = async () => {
+    setIsDrawing(true);
+
+    // Atualizar status para 'drawing'
+    await supabase
+      .from('raffles')
+      .update({ status: 'drawing' })
+      .eq('id', raffle.id);
+  };
+
+  const handleWinnerSelected = async (selectedWinner: Profile) => {
+    setWinner(selectedWinner);
+
+    // Buscar um ticket aleatório do vencedor
+    const { data: tickets } = await supabase
+      .from('raffle_tickets')
+      .select('ticket_number')
+      .eq('raffle_id', raffle.id)
+      .eq('user_id', selectedWinner.id);
+
+    const winningTicket = tickets?.[Math.floor(Math.random() * (tickets?.length || 1))]?.ticket_number || 1;
+    setWinnerTicket(winningTicket);
+
+    // Atualizar o sorteio com o vencedor
+    const { error } = await supabase
+      .from('raffles')
+      .update({
+        status: 'completed',
+        winner_id: selectedWinner.id,
+        winner_ticket_number: winningTicket,
+      })
+      .eq('id', raffle.id);
+
+    if (error) {
+      console.error('Error updating winner:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível salvar o vencedor.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: '🎉 Sorteio Realizado!',
+        description: `${selectedWinner.full_name} foi o vencedor!`,
+      });
+    }
+
+    setIsDrawing(false);
+  };
+
+  const handleClose = () => {
+    if (!isDrawing) {
+      onOpenChange(false);
+      if (winner) {
+        onComplete();
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Play className="h-5 w-5 text-green-500" />
+            Realizar Sorteio: {raffle.title}
+          </DialogTitle>
+          <DialogDescription>
+            {raffle.participants.length} participantes • {raffle.tickets_sold} tickets vendidos
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-6">
+          {!isDrawing && !winner ? (
+            <div className="text-center space-y-6">
+              <div className="p-8 rounded-xl bg-muted/50">
+                <Users className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                <p className="text-lg font-medium mb-2">
+                  Pronto para sortear!
+                </p>
+                <p className="text-muted-foreground">
+                  {raffle.participants.length} participantes estão concorrendo
+                </p>
+              </div>
+
+              <Button
+                size="lg"
+                onClick={handleStartDraw}
+                className="gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+              >
+                <Play className="h-5 w-5" />
+                Iniciar Sorteio Ao Vivo
+              </Button>
+            </div>
+          ) : (
+            <RouletteWheel
+              participants={raffle.participants}
+              onWinnerSelected={handleWinnerSelected}
+              autoSpin={isDrawing && !winner}
+              winner={winner}
+            />
+          )}
+        </div>
+
+        {winner && (
+          <DialogFooter>
+            <Button onClick={handleClose}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
