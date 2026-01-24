@@ -282,12 +282,19 @@ export default function SorteioDetail() {
                     </div>
                     {isCompleted ? 'Resultado do Sorteio' : 'Sorteio em Andamento'}
                   </CardTitle>
+                  {isDrawing && (
+                    <CardDescription className="flex items-center gap-2 text-yellow-600">
+                      <Zap className="h-4 w-4 animate-pulse" />
+                      O sorteio está acontecendo ao vivo! Acompanhe em tempo real.
+                    </CardDescription>
+                  )}
                 </CardHeader>
                 <CardContent className="p-4 md:p-6">
                   <RouletteWheel 
                     participants={participants}
                     winner={winner}
                     autoSpin={isDrawing}
+                    raffleTitle={raffle.title}
                   />
                 </CardContent>
               </Card>

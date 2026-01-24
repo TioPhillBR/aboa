@@ -69,6 +69,79 @@ export function useRaffle(raffleId: string) {
     }
   }, [raffleId, user]);
 
+  // Subscribe to realtime changes on the raffle
+  useEffect(() => {
+    if (!raffleId) return;
+
+    const channel = supabase
+      .channel(`raffle-${raffleId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'raffles',
+          filter: `id=eq.${raffleId}`,
+        },
+        (payload) => {
+          console.log('Raffle updated in realtime:', payload);
+          if (payload.eventType === 'UPDATE') {
+            setRaffle(payload.new as Raffle);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'raffle_tickets',
+          filter: `raffle_id=eq.${raffleId}`,
+        },
+        (payload) => {
+          console.log('New ticket purchased:', payload);
+          // Atualizar tickets em tempo real
+          const newTicket = payload.new as RaffleTicket;
+          setTickets((prev) => [...prev, newTicket]);
+          setSoldNumbers((prev) => [...prev, newTicket.ticket_number]);
+          
+          // Atualizar meus tickets se for meu
+          if (user && newTicket.user_id === user.id) {
+            setMyTickets((prev) => [...prev, newTicket]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [raffleId, user]);
+
+  // Fetch participant profiles when tickets change
+  useEffect(() => {
+    const fetchNewParticipants = async () => {
+      const uniqueUserIds = [...new Set(tickets.map(t => t.user_id))];
+      const existingIds = participants.map(p => p.id);
+      const newUserIds = uniqueUserIds.filter(id => !existingIds.includes(id));
+
+      if (newUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', newUserIds);
+
+        if (profilesData) {
+          setParticipants((prev) => [...prev, ...(profilesData as Profile[])]);
+        }
+      }
+    };
+
+    if (tickets.length > 0) {
+      fetchNewParticipants();
+    }
+  }, [tickets]);
+
   const fetchRaffleData = async () => {
     try {
       setIsLoading(true);
