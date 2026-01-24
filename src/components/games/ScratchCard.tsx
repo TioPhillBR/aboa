@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScratchSymbolResult } from '@/types';
 import { Trophy, RotateCcw, Sparkles } from 'lucide-react';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 interface ScratchCardProps {
   symbols: ScratchSymbolResult[];
@@ -33,6 +34,8 @@ export function ScratchCard({
   const [hasCalledOnReveal, setHasCalledOnReveal] = useState(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const onRevealCalledRef = useRef(false);
+  const lastScratchSoundRef = useRef(0);
+  const { playScratch, playReveal, playWin, playBigWin } = useSoundEffects();
 
   // Verificar se há 3 símbolos iguais
   const checkWin = useCallback(() => {
@@ -159,6 +162,13 @@ export function ScratchCard({
 
     lastPosRef.current = { x, y };
 
+    // Play scratch sound (throttled)
+    const now = Date.now();
+    if (now - lastScratchSoundRef.current > 100) {
+      playScratch();
+      lastScratchSoundRef.current = now;
+    }
+
     // Calcular porcentagem
     const percentage = calculateScratchPercentage();
     setScratchPercentage(percentage);
@@ -170,10 +180,23 @@ export function ScratchCard({
       setIsRevealed(true);
       
       const result = checkWin();
+      playReveal();
+      
+      // Play win sound if winner
+      if (result.isWinner) {
+        setTimeout(() => {
+          if (result.prize >= 50) {
+            playBigWin();
+          } else {
+            playWin();
+          }
+        }, 300);
+      }
+      
       // Chamar onReveal apenas uma vez
       onReveal?.(result.isWinner, result.prize);
     }
-  }, [isRevealed, hasCalledOnReveal, calculateScratchPercentage, checkWin, onReveal]);
+  }, [isRevealed, hasCalledOnReveal, calculateScratchPercentage, checkWin, onReveal, playScratch, playReveal, playWin, playBigWin]);
 
   // Event handlers
   const getPosition = (e: React.MouseEvent | React.TouchEvent) => {
@@ -225,7 +248,19 @@ export function ScratchCard({
     setHasCalledOnReveal(true);
     setIsRevealed(true);
     
+    playReveal();
     const result = checkWin();
+    
+    if (result.isWinner) {
+      setTimeout(() => {
+        if (result.prize >= 50) {
+          playBigWin();
+        } else {
+          playWin();
+        }
+      }, 300);
+    }
+    
     onReveal?.(result.isWinner, result.prize);
   };
 

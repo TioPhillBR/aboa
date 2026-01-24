@@ -1,1 +1,7 @@
 project_id = "sarauvembzbneunhssud"
+
+[functions.generate-pix]
+verify_jwt = false
+
+[functions.confirm-pix]
+verify_jwt = false
