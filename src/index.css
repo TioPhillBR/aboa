@@ -130,6 +130,37 @@ All colors MUST be HSL.
   .safe-area-pb {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  /* Container responsive overrides */
+  .container {
+    @apply px-4 sm:px-6 lg:px-8;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      max-width: 640px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .container {
+      max-width: 768px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      max-width: 1024px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .container {
+      max-width: 1280px;
+    }
+  }
 }
 
 @layer utilities {
