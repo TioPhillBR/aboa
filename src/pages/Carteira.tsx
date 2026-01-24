@@ -12,12 +12,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { PixPayment } from '@/components/payment/PixPayment';
 import { 
   Wallet, 
   Plus, 
@@ -28,7 +28,7 @@ import {
   Sparkles,
   Clock,
   TrendingUp,
-  CreditCard
+  QrCode
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -36,18 +36,19 @@ import { TransactionType } from '@/types';
 
 const CREDIT_OPTIONS = [10, 25, 50, 100, 200, 500];
 
+type PaymentStep = 'select-amount' | 'pix-payment';
+
 export default function Carteira() {
   const { user } = useAuth();
   const { wallet, transactions, balance, isLoading, deposit, refetch } = useWallet();
   const { toast } = useToast();
   
-  const [isAddingCredits, setIsAddingCredits] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<PaymentStep>('select-amount');
 
-  const handleAddCredits = async () => {
+  const handleContinueToPayment = () => {
     const amount = selectedAmount || parseFloat(customAmount);
     
     if (!amount || amount <= 0) {
@@ -68,31 +69,32 @@ export default function Carteira() {
       return;
     }
 
-    setIsProcessing(true);
+    setPaymentStep('pix-payment');
+  };
 
-    // Simular processamento de pagamento
-    await new Promise(resolve => setTimeout(resolve, 1500));
+  const handlePaymentSuccess = () => {
+    setSelectedAmount(null);
+    setCustomAmount('');
+    setDialogOpen(false);
+    setPaymentStep('select-amount');
+    refetch();
+  };
 
-    const { error } = await deposit(amount);
+  const handlePaymentCancel = () => {
+    setPaymentStep('select-amount');
+  };
 
-    if (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível adicionar créditos. Tente novamente.',
-        variant: 'destructive',
-      });
-    } else {
-      toast({
-        title: 'Créditos adicionados!',
-        description: `R$ ${amount.toFixed(2)} foram adicionados à sua carteira.`,
-      });
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      setPaymentStep('select-amount');
       setSelectedAmount(null);
       setCustomAmount('');
-      setDialogOpen(false);
-      refetch();
     }
+  };
 
-    setIsProcessing(false);
+  const getPaymentAmount = () => {
+    return selectedAmount || parseFloat(customAmount) || 0;
   };
 
   const getTransactionIcon = (type: TransactionType) => {
@@ -207,7 +209,7 @@ export default function Carteira() {
               </CardHeader>
               
               <CardContent className="relative">
-                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
                   <DialogTrigger asChild>
                     <Button 
                       size="lg" 
@@ -219,95 +221,93 @@ export default function Carteira() {
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5" />
-                        Adicionar Créditos
-                      </DialogTitle>
-                      <DialogDescription>
-                        Escolha um valor para adicionar à sua carteira
-                      </DialogDescription>
-                    </DialogHeader>
+                    {paymentStep === 'select-amount' ? (
+                      <>
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <QrCode className="h-5 w-5 text-[#32BCAD]" />
+                            Adicionar Créditos via PIX
+                          </DialogTitle>
+                          <DialogDescription>
+                            Escolha um valor para adicionar à sua carteira
+                          </DialogDescription>
+                        </DialogHeader>
 
-                    <div className="space-y-6 py-4">
-                      {/* Valores pré-definidos */}
-                      <div className="grid grid-cols-3 gap-3">
-                        {CREDIT_OPTIONS.map((amount) => (
-                          <Button
-                            key={amount}
-                            variant={selectedAmount === amount ? 'default' : 'outline'}
-                            className="h-16 text-lg font-semibold"
-                            onClick={() => {
-                              setSelectedAmount(amount);
-                              setCustomAmount('');
-                            }}
-                          >
-                            R$ {amount}
-                          </Button>
-                        ))}
-                      </div>
-
-                      {/* Valor customizado */}
-                      <div className="space-y-2">
-                        <Label htmlFor="customAmount">Ou digite outro valor</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            R$
-                          </span>
-                          <Input
-                            id="customAmount"
-                            type="number"
-                            min="5"
-                            step="0.01"
-                            placeholder="0,00"
-                            value={customAmount}
-                            onChange={(e) => {
-                              setCustomAmount(e.target.value);
-                              setSelectedAmount(null);
-                            }}
-                            className="pl-10 text-lg h-12"
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Valor mínimo: R$ 5,00
-                        </p>
-                      </div>
-
-                      {/* Total */}
-                      {(selectedAmount || parseFloat(customAmount) > 0) && (
-                        <div className="p-4 rounded-lg bg-muted">
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground">Valor a adicionar:</span>
-                            <span className="text-2xl font-bold text-primary">
-                              R$ {(selectedAmount || parseFloat(customAmount) || 0).toFixed(2)}
-                            </span>
+                        <div className="space-y-6 py-4">
+                          {/* Valores pré-definidos */}
+                          <div className="grid grid-cols-3 gap-3">
+                            {CREDIT_OPTIONS.map((amount) => (
+                              <Button
+                                key={amount}
+                                variant={selectedAmount === amount ? 'default' : 'outline'}
+                                className="h-16 text-lg font-semibold"
+                                onClick={() => {
+                                  setSelectedAmount(amount);
+                                  setCustomAmount('');
+                                }}
+                              >
+                                R$ {amount}
+                              </Button>
+                            ))}
                           </div>
-                        </div>
-                      )}
-                    </div>
 
-                    <DialogFooter>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setDialogOpen(false)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button 
-                        onClick={handleAddCredits}
-                        disabled={isProcessing || (!selectedAmount && !parseFloat(customAmount))}
-                        className="gap-2"
-                      >
-                        {isProcessing ? (
-                          'Processando...'
-                        ) : (
-                          <>
-                            <Plus className="h-4 w-4" />
-                            Adicionar
-                          </>
-                        )}
-                      </Button>
-                    </DialogFooter>
+                          {/* Valor customizado */}
+                          <div className="space-y-2">
+                            <Label htmlFor="customAmount">Ou digite outro valor</Label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                R$
+                              </span>
+                              <Input
+                                id="customAmount"
+                                type="number"
+                                min="5"
+                                step="0.01"
+                                placeholder="0,00"
+                                value={customAmount}
+                                onChange={(e) => {
+                                  setCustomAmount(e.target.value);
+                                  setSelectedAmount(null);
+                                }}
+                                className="pl-10 text-lg h-12"
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Valor mínimo: R$ 5,00
+                            </p>
+                          </div>
+
+                          {/* Total */}
+                          {(selectedAmount || parseFloat(customAmount) > 0) && (
+                            <div className="p-4 rounded-lg bg-muted">
+                              <div className="flex justify-between items-center">
+                                <span className="text-muted-foreground">Valor a adicionar:</span>
+                                <span className="text-2xl font-bold text-primary">
+                                  R$ {(selectedAmount || parseFloat(customAmount) || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Botão continuar */}
+                          <Button 
+                            onClick={handleContinueToPayment}
+                            disabled={!selectedAmount && !parseFloat(customAmount)}
+                            className="w-full gap-2 bg-[#32BCAD] hover:bg-[#2aa99b]"
+                            size="lg"
+                          >
+                            <QrCode className="h-5 w-5" />
+                            Continuar com PIX
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <PixPayment
+                        amount={getPaymentAmount()}
+                        onSuccess={handlePaymentSuccess}
+                        onCancel={handlePaymentCancel}
+                      />
+                    )}
                   </DialogContent>
                 </Dialog>
               </CardContent>

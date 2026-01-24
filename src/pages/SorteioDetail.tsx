@@ -6,6 +6,7 @@ import { useRaffle } from '@/hooks/useRaffles';
 import { useWallet } from '@/hooks/useWallet';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ export default function SorteioDetail() {
   const { balance, purchase } = useWallet();
   const { addNotification } = useNotifications();
   const { toast } = useToast();
+  const { playPurchase, playSuccess, playClick, playError } = useSoundEffects();
   
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [isBuying, setIsBuying] = useState(false);
@@ -55,6 +57,7 @@ export default function SorteioDetail() {
   const toggleNumber = (num: number) => {
     if (soldNumbers.includes(num)) return;
     
+    playClick();
     setSelectedNumbers(prev => 
       prev.includes(num) 
         ? prev.filter(n => n !== num)
@@ -66,6 +69,7 @@ export default function SorteioDetail() {
 
   const handleBuyTickets = async () => {
     if (!user) {
+      playError();
       toast({
         title: 'Faça login',
         description: 'Você precisa estar logado para comprar números',
@@ -75,6 +79,7 @@ export default function SorteioDetail() {
     }
 
     if (balance < totalPrice) {
+      playError();
       toast({
         title: 'Saldo insuficiente',
         description: 'Adicione mais créditos à sua carteira',
@@ -84,6 +89,7 @@ export default function SorteioDetail() {
     }
 
     setIsBuying(true);
+    playPurchase();
 
     // Primeiro debitar da carteira
     const { error: walletError } = await purchase(
@@ -93,6 +99,7 @@ export default function SorteioDetail() {
     );
 
     if (walletError) {
+      playError();
       toast({
         title: 'Erro',
         description: walletError.message,
@@ -106,6 +113,7 @@ export default function SorteioDetail() {
     const { error } = await buyMultipleTickets(selectedNumbers);
 
     if (error) {
+      playError();
       toast({
         title: 'Erro',
         description: 'Não foi possível comprar os números. Tente novamente.',
@@ -113,6 +121,7 @@ export default function SorteioDetail() {
       });
     } else {
       // Animação de sucesso
+      playSuccess();
       confetti({
         particleCount: 50,
         spread: 60,
