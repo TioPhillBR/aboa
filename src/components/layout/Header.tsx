@@ -10,7 +10,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Trophy, Ticket, LayoutDashboard } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Trophy, Ticket, LayoutDashboard, Menu } from 'lucide-react';
+import { ThemeToggle } from './ThemeToggle';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 export function Header() {
   const { user, profile, isAdmin, signOut, isLoading } = useAuth();
@@ -36,46 +44,60 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center space-x-2">
-          <Trophy className="h-8 w-8 text-primary" />
+          <div className="p-1.5 rounded-lg bg-gradient-primary">
+            <Trophy className="h-5 w-5 text-white" />
+          </div>
           <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
             Sorteio
           </span>
         </Link>
 
-        {/* Navigation */}
-        <nav className="hidden md:flex items-center space-x-6">
-          <Link to="/sorteios" className="text-sm font-medium hover:text-primary transition-colors">
+        {/* Navigation - Desktop */}
+        <nav className="hidden md:flex items-center space-x-1">
+          <Link 
+            to="/sorteios" 
+            className="px-4 py-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors"
+          >
             Sorteios
           </Link>
-          <Link to="/raspadinhas" className="text-sm font-medium hover:text-primary transition-colors">
+          <Link 
+            to="/raspadinhas" 
+            className="px-4 py-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors"
+          >
             Raspadinhas
           </Link>
-          <Link to="/ganhadores" className="text-sm font-medium hover:text-primary transition-colors">
+          <Link 
+            to="/ganhadores" 
+            className="px-4 py-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors"
+          >
             Ganhadores
           </Link>
         </nav>
 
-        {/* User Section */}
-        <div className="flex items-center space-x-4">
+        {/* Right Section */}
+        <div className="flex items-center space-x-2">
+          {/* Theme Toggle */}
+          <ThemeToggle />
+          
           {isLoading ? (
             <div className="h-10 w-24 bg-muted animate-pulse rounded-md" />
           ) : user && profile ? (
             <>
               {/* Saldo da Carteira */}
-              <Link to="/carteira">
-                <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-2">
+              <Link to="/carteira" className="hidden sm:block">
+                <Button variant="outline" size="sm" className="gap-2 font-semibold">
                   <Wallet className="h-4 w-4" />
-                  <span className="font-semibold">R$ {balance.toFixed(2)}</span>
+                  <span>R$ {balance.toFixed(2)}</span>
                 </Button>
               </Link>
 
               {/* Menu do Usuário */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                    <Avatar className="h-10 w-10">
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
+                    <Avatar className="h-9 w-9">
                       <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name} />
-                      <AvatarFallback className="bg-primary text-primary-foreground">
+                      <AvatarFallback className="bg-gradient-primary text-white text-sm">
                         {getInitials(profile.full_name)}
                       </AvatarFallback>
                     </Avatar>
@@ -145,14 +167,63 @@ export function Header() {
             </>
           ) : (
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" asChild>
+              <Button variant="ghost" asChild className="hidden sm:flex">
                 <Link to="/login">Entrar</Link>
               </Button>
-              <Button asChild>
+              <Button asChild className="bg-gradient-primary hover:opacity-90">
                 <Link to="/cadastro">Cadastrar</Link>
               </Button>
             </div>
           )}
+
+          {/* Mobile Menu Button */}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-72">
+              <SheetHeader>
+                <SheetTitle>Menu</SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-2 mt-6">
+                <Link 
+                  to="/sorteios" 
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                >
+                  <Ticket className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Sorteios</span>
+                </Link>
+                <Link 
+                  to="/raspadinhas" 
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                >
+                  <span className="text-xl">✨</span>
+                  <span className="font-medium">Raspadinhas</span>
+                </Link>
+                <Link 
+                  to="/ganhadores" 
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                >
+                  <Trophy className="h-5 w-5 text-warning" />
+                  <span className="font-medium">Ganhadores</span>
+                </Link>
+                {!user && (
+                  <>
+                    <div className="h-px bg-border my-2" />
+                    <Link 
+                      to="/login" 
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                    >
+                      <User className="h-5 w-5" />
+                      <span className="font-medium">Entrar</span>
+                    </Link>
+                  </>
+                )}
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>
