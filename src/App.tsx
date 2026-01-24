@@ -15,6 +15,7 @@ import RaspadinhaDetail from "./pages/RaspadinhaDetail";
 import Carteira from "./pages/Carteira";
 import Perfil from "./pages/Perfil";
 import Ganhadores from "./pages/Ganhadores";
+import MeusTickets from "./pages/MeusTickets";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/carteira" element={<ProtectedRoute><Carteira /></ProtectedRoute>} />
             <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
             <Route path="/ganhadores" element={<Ganhadores />} />
+            <Route path="/meus-tickets" element={<ProtectedRoute><MeusTickets /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
