@@ -38,9 +38,9 @@ export function ImageUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const aspectRatioClass = {
-    square: 'aspect-square',
-    video: 'aspect-video',
-    auto: 'aspect-auto min-h-[120px]',
+    square: 'aspect-square max-h-32',
+    video: 'aspect-video max-h-24',
+    auto: 'aspect-auto h-20',
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,10 +155,10 @@ export function ImageUpload({
             type="button"
             size="icon"
             variant="destructive"
-            className="absolute top-2 right-2 h-8 w-8"
+            className="absolute top-1 right-1 h-6 w-6"
             onClick={handleClear}
           >
-            <X className="h-4 w-4" />
+            <X className="h-3 w-3" />
           </Button>
         </div>
       )}
@@ -166,39 +166,36 @@ export function ImageUpload({
       {/* Área de upload/URL */}
       {!value && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="upload" className="gap-2">
-              <Upload className="h-4 w-4" />
+          <TabsList className="grid w-full grid-cols-2 h-8">
+            <TabsTrigger value="upload" className="gap-1.5 text-xs h-7">
+              <Upload className="h-3 w-3" />
               Upload
             </TabsTrigger>
-            <TabsTrigger value="url" className="gap-2">
-              <Link className="h-4 w-4" />
+            <TabsTrigger value="url" className="gap-1.5 text-xs h-7">
+              <Link className="h-3 w-3" />
               URL
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="upload" className="mt-3">
+          <TabsContent value="upload" className="mt-2">
             <div
               className={cn(
-                'relative rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 transition-colors hover:border-primary/50 hover:bg-muted',
+                'relative rounded-md border-2 border-dashed border-muted-foreground/25 bg-muted/50 transition-colors hover:border-primary/50 hover:bg-muted',
                 aspectRatioClass[aspectRatio],
-                'flex flex-col items-center justify-center cursor-pointer'
+                'flex items-center justify-center gap-2 cursor-pointer px-3'
               )}
               onClick={() => fileInputRef.current?.click()}
             >
               {isUploading ? (
                 <>
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  <p className="mt-2 text-sm text-muted-foreground">Carregando...</p>
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">Carregando...</p>
                 </>
               ) : (
                 <>
-                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Clique para selecionar
-                  </p>
-                  <p className="text-xs text-muted-foreground/70">
-                    Máx. {maxSizeMB}MB
+                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">
+                    Clique para selecionar (máx. {maxSizeMB}MB)
                   </p>
                 </>
               )}
@@ -213,21 +210,24 @@ export function ImageUpload({
             </div>
           </TabsContent>
 
-          <TabsContent value="url" className="mt-3 space-y-3">
-            <Input
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              placeholder={placeholder}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={handleUrlSubmit}
-              disabled={!urlInput.trim()}
-            >
-              Usar esta URL
-            </Button>
+          <TabsContent value="url" className="mt-2 space-y-2">
+            <div className="flex gap-2">
+              <Input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder={placeholder}
+                className="h-8 text-sm"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleUrlSubmit}
+                disabled={!urlInput.trim()}
+              >
+                Usar
+              </Button>
+            </div>
           </TabsContent>
         </Tabs>
       )}
@@ -239,11 +239,12 @@ export function ImageUpload({
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder={placeholder}
-            className="flex-1"
+            className="flex-1 h-8 text-sm"
           />
           <Button
             type="button"
             variant="outline"
+            size="sm"
             onClick={handleUrlSubmit}
             disabled={!urlInput.trim() || urlInput === value}
           >
