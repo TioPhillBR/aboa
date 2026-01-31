@@ -26,6 +26,14 @@ import AdminSorteios from "./pages/admin/Sorteios";
 import AdminRaspadinhas from "./pages/admin/Raspadinhas";
 import AdminUsuarios from "./pages/admin/Usuarios";
 import AdminGanhadores from "./pages/admin/Ganhadores";
+import AdminVendas from "./pages/admin/Vendas";
+import AdminFinanceiro from "./pages/admin/Financeiro";
+import AdminAfiliados from "./pages/admin/Afiliados";
+import AdminCompartilhamentos from "./pages/admin/Compartilhamentos";
+import AdminPremios from "./pages/admin/Premios";
+import AdminRelatorios from "./pages/admin/Relatorios";
+import AfiliadoDashboard from "./pages/afiliado/Index";
+import AfiliadoCadastro from "./pages/afiliado/Cadastro";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -56,10 +64,19 @@ const App = () => (
                 <Route path="/indicacoes" element={<ProtectedRoute><Indicacoes /></ProtectedRoute>} />
                 {/* Admin Routes */}
                 <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
+                <Route path="/admin/vendas" element={<ProtectedRoute requireAdmin><AdminVendas /></ProtectedRoute>} />
+                <Route path="/admin/financeiro" element={<ProtectedRoute requireAdmin><AdminFinanceiro /></ProtectedRoute>} />
                 <Route path="/admin/sorteios" element={<ProtectedRoute requireAdmin><AdminSorteios /></ProtectedRoute>} />
                 <Route path="/admin/raspadinhas" element={<ProtectedRoute requireAdmin><AdminRaspadinhas /></ProtectedRoute>} />
+                <Route path="/admin/premios" element={<ProtectedRoute requireAdmin><AdminPremios /></ProtectedRoute>} />
+                <Route path="/admin/afiliados" element={<ProtectedRoute requireAdmin><AdminAfiliados /></ProtectedRoute>} />
+                <Route path="/admin/compartilhamentos" element={<ProtectedRoute requireAdmin><AdminCompartilhamentos /></ProtectedRoute>} />
                 <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><AdminUsuarios /></ProtectedRoute>} />
                 <Route path="/admin/ganhadores" element={<ProtectedRoute requireAdmin><AdminGanhadores /></ProtectedRoute>} />
+                <Route path="/admin/relatorios" element={<ProtectedRoute requireAdmin><AdminRelatorios /></ProtectedRoute>} />
+                {/* Affiliate Routes */}
+                <Route path="/afiliado" element={<ProtectedRoute><AfiliadoDashboard /></ProtectedRoute>} />
+                <Route path="/afiliado/cadastro" element={<ProtectedRoute><AfiliadoCadastro /></ProtectedRoute>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

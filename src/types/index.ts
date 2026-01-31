@@ -2,6 +2,11 @@
 export type AppRole = 'admin' | 'user';
 export type RaffleStatus = 'open' | 'drawing' | 'completed' | 'cancelled';
 export type TransactionType = 'deposit' | 'purchase' | 'prize' | 'refund';
+export type AffiliateStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+export type CommissionStatus = 'pending' | 'approved' | 'paid';
+export type WithdrawalStatus = 'pending' | 'approved' | 'paid' | 'rejected';
+export type PaymentStatus = 'pending' | 'approved' | 'cancelled' | 'refunded';
+export type PrizeStatus = 'pending' | 'processing' | 'delivered';
 
 // Perfil do usuário
 export interface Profile {
@@ -9,6 +14,9 @@ export interface Profile {
   full_name: string;
   avatar_url: string | null;
   phone: string | null;
+  last_login_at: string | null;
+  registration_source: string | null;
+  source_code: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -129,4 +137,150 @@ export interface ScratchCardWithSymbols extends ScratchCard {
 export interface WalletTransactionWithDetails extends WalletTransaction {
   raffle?: Raffle;
   scratch_card?: ScratchCard;
+  source_type?: string | null;
+  source_id?: string | null;
+}
+
+// Afiliado
+export interface Affiliate {
+  id: string;
+  user_id: string;
+  full_name: string;
+  cpf: string;
+  phone: string | null;
+  email: string | null;
+  address_street: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  avatar_url: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  commission_percentage: number;
+  affiliate_code: string;
+  status: AffiliateStatus;
+  total_sales: number;
+  total_commission: number;
+  pending_commission: number;
+  paid_commission: number;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Venda via afiliado
+export interface AffiliateSale {
+  id: string;
+  affiliate_id: string;
+  buyer_id: string;
+  product_type: string;
+  product_id: string;
+  sale_amount: number;
+  commission_amount: number;
+  commission_status: CommissionStatus;
+  paid_at: string | null;
+  created_at: string;
+}
+
+// Saque de afiliado
+export interface AffiliateWithdrawal {
+  id: string;
+  affiliate_id: string;
+  amount: number;
+  status: WithdrawalStatus;
+  pix_key: string | null;
+  processed_by: string | null;
+  processed_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+// Transação de pagamento
+export interface PaymentTransaction {
+  id: string;
+  user_id: string;
+  transaction_type: string;
+  amount: number;
+  gateway_fee: number;
+  net_amount: number;
+  payment_method: string;
+  gateway_transaction_id: string | null;
+  status: PaymentStatus;
+  product_type: string | null;
+  product_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Rastreamento de compartilhamento
+export interface ShareTracking {
+  id: string;
+  sharer_id: string;
+  share_code: string;
+  clicks: number;
+  signups: number;
+  purchases: number;
+  credits_earned: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Evento de compartilhamento
+export interface ShareEvent {
+  id: string;
+  share_tracking_id: string;
+  event_type: string;
+  visitor_ip: string | null;
+  user_agent: string | null;
+  referred_user_id: string | null;
+  purchase_amount: number | null;
+  created_at: string;
+}
+
+// Localização do usuário
+export interface UserLocation {
+  id: string;
+  user_id: string;
+  latitude: number | null;
+  longitude: number | null;
+  city: string | null;
+  state: string | null;
+  country: string;
+  last_login_at: string;
+  created_at: string;
+}
+
+// Prêmio de rifa
+export interface RafflePrize {
+  id: string;
+  raffle_id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  estimated_value: number | null;
+  status: PrizeStatus;
+  winner_id: string | null;
+  delivery_notes: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Lote de raspadinha
+export interface ScratchCardBatch {
+  id: string;
+  scratch_card_id: string;
+  batch_name: string;
+  total_cards: number;
+  cards_sold: number;
+  total_prizes: number;
+  prizes_distributed: number;
+  prize_config: { quantity: number; value: number }[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

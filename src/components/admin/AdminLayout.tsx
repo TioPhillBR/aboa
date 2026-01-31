@@ -18,7 +18,13 @@ import {
   Settings,
   LogOut,
   Moon,
-  Sun
+  Sun,
+  ShoppingCart,
+  Wallet,
+  Gift,
+  UserCheck,
+  Share2,
+  FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -33,10 +39,16 @@ import {
 
 const adminLinks = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { href: '/admin/vendas', label: 'Vendas', icon: ShoppingCart },
+  { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet },
   { href: '/admin/sorteios', label: 'Sorteios', icon: Ticket },
   { href: '/admin/raspadinhas', label: 'Raspadinhas', icon: Sparkles },
+  { href: '/admin/premios', label: 'Prêmios', icon: Gift },
+  { href: '/admin/afiliados', label: 'Afiliados', icon: UserCheck },
+  { href: '/admin/compartilhamentos', label: 'Compartilhamentos', icon: Share2 },
   { href: '/admin/usuarios', label: 'Usuários', icon: Users },
   { href: '/admin/ganhadores', label: 'Ganhadores', icon: Trophy },
+  { href: '/admin/relatorios', label: 'Relatórios', icon: FileText },
 ];
 
 function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {

@@ -14,13 +14,279 @@ export type Database = {
   }
   public: {
     Tables: {
+      affiliate_sales: {
+        Row: {
+          affiliate_id: string
+          buyer_id: string
+          commission_amount: number
+          commission_status: Database["public"]["Enums"]["commission_status"]
+          created_at: string | null
+          id: string
+          paid_at: string | null
+          product_id: string
+          product_type: string
+          sale_amount: number
+        }
+        Insert: {
+          affiliate_id: string
+          buyer_id: string
+          commission_amount: number
+          commission_status?: Database["public"]["Enums"]["commission_status"]
+          created_at?: string | null
+          id?: string
+          paid_at?: string | null
+          product_id: string
+          product_type: string
+          sale_amount: number
+        }
+        Update: {
+          affiliate_id?: string
+          buyer_id?: string
+          commission_amount?: number
+          commission_status?: Database["public"]["Enums"]["commission_status"]
+          created_at?: string | null
+          id?: string
+          paid_at?: string | null
+          product_id?: string
+          product_type?: string
+          sale_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_sales_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_sales_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_withdrawals: {
+        Row: {
+          affiliate_id: string
+          amount: number
+          created_at: string | null
+          id: string
+          notes: string | null
+          pix_key: string | null
+          processed_at: string | null
+          processed_by: string | null
+          status: Database["public"]["Enums"]["withdrawal_status"]
+        }
+        Insert: {
+          affiliate_id: string
+          amount: number
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          pix_key?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["withdrawal_status"]
+        }
+        Update: {
+          affiliate_id?: string
+          amount?: number
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          pix_key?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["withdrawal_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_withdrawals_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_withdrawals_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliates: {
+        Row: {
+          address_city: string | null
+          address_state: string | null
+          address_street: string | null
+          address_zip: string | null
+          affiliate_code: string
+          approved_at: string | null
+          approved_by: string | null
+          avatar_url: string | null
+          commission_percentage: number
+          cpf: string
+          created_at: string | null
+          email: string | null
+          facebook: string | null
+          full_name: string
+          id: string
+          instagram: string | null
+          paid_commission: number | null
+          pending_commission: number | null
+          phone: string | null
+          status: Database["public"]["Enums"]["affiliate_status"]
+          tiktok: string | null
+          total_commission: number | null
+          total_sales: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          address_city?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          affiliate_code: string
+          approved_at?: string | null
+          approved_by?: string | null
+          avatar_url?: string | null
+          commission_percentage?: number
+          cpf: string
+          created_at?: string | null
+          email?: string | null
+          facebook?: string | null
+          full_name: string
+          id?: string
+          instagram?: string | null
+          paid_commission?: number | null
+          pending_commission?: number | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["affiliate_status"]
+          tiktok?: string | null
+          total_commission?: number | null
+          total_sales?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          address_city?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          affiliate_code?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          avatar_url?: string | null
+          commission_percentage?: number
+          cpf?: string
+          created_at?: string | null
+          email?: string | null
+          facebook?: string | null
+          full_name?: string
+          id?: string
+          instagram?: string | null
+          paid_commission?: number | null
+          pending_commission?: number | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["affiliate_status"]
+          tiktok?: string | null
+          total_commission?: number | null
+          total_sales?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliates_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_transactions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          gateway_fee: number | null
+          gateway_transaction_id: string | null
+          id: string
+          metadata: Json | null
+          net_amount: number
+          payment_method: string
+          product_id: string | null
+          product_type: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          transaction_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          gateway_fee?: number | null
+          gateway_transaction_id?: string | null
+          id?: string
+          metadata?: Json | null
+          net_amount: number
+          payment_method: string
+          product_id?: string | null
+          product_type?: string | null
+          status?: Database["public"]["Enums"]["payment_status"]
+          transaction_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          gateway_fee?: number | null
+          gateway_transaction_id?: string | null
+          id?: string
+          metadata?: Json | null
+          net_amount?: number
+          payment_method?: string
+          product_id?: string | null
+          product_type?: string | null
+          status?: Database["public"]["Enums"]["payment_status"]
+          transaction_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           full_name: string
           id: string
+          last_login_at: string | null
           phone: string | null
+          registration_source: string | null
+          source_code: string | null
           updated_at: string
         }
         Insert: {
@@ -28,7 +294,10 @@ export type Database = {
           created_at?: string
           full_name: string
           id: string
+          last_login_at?: string | null
           phone?: string | null
+          registration_source?: string | null
+          source_code?: string | null
           updated_at?: string
         }
         Update: {
@@ -36,10 +305,73 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          last_login_at?: string | null
           phone?: string | null
+          registration_source?: string | null
+          source_code?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      raffle_prizes: {
+        Row: {
+          created_at: string | null
+          delivered_at: string | null
+          delivery_notes: string | null
+          description: string | null
+          estimated_value: number | null
+          id: string
+          image_url: string | null
+          name: string
+          raffle_id: string
+          status: Database["public"]["Enums"]["prize_status"]
+          updated_at: string | null
+          winner_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          delivered_at?: string | null
+          delivery_notes?: string | null
+          description?: string | null
+          estimated_value?: number | null
+          id?: string
+          image_url?: string | null
+          name: string
+          raffle_id: string
+          status?: Database["public"]["Enums"]["prize_status"]
+          updated_at?: string | null
+          winner_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          delivered_at?: string | null
+          delivery_notes?: string | null
+          description?: string | null
+          estimated_value?: number | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          raffle_id?: string
+          status?: Database["public"]["Enums"]["prize_status"]
+          updated_at?: string | null
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raffle_prizes_raffle_id_fkey"
+            columns: ["raffle_id"]
+            isOneToOne: false
+            referencedRelation: "raffles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "raffle_prizes_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       raffle_tickets: {
         Row: {
@@ -233,6 +565,56 @@ export type Database = {
           },
         ]
       }
+      scratch_card_batches: {
+        Row: {
+          batch_name: string
+          cards_sold: number | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          prize_config: Json
+          prizes_distributed: number | null
+          scratch_card_id: string
+          total_cards: number
+          total_prizes: number
+          updated_at: string | null
+        }
+        Insert: {
+          batch_name: string
+          cards_sold?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          prize_config: Json
+          prizes_distributed?: number | null
+          scratch_card_id: string
+          total_cards: number
+          total_prizes: number
+          updated_at?: string | null
+        }
+        Update: {
+          batch_name?: string
+          cards_sold?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          prize_config?: Json
+          prizes_distributed?: number | null
+          scratch_card_id?: string
+          total_cards?: number
+          total_prizes?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scratch_card_batches_scratch_card_id_fkey"
+            columns: ["scratch_card_id"]
+            isOneToOne: false
+            referencedRelation: "scratch_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scratch_cards: {
         Row: {
           cover_image_url: string | null
@@ -379,6 +761,145 @@ export type Database = {
           },
         ]
       }
+      share_events: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          purchase_amount: number | null
+          referred_user_id: string | null
+          share_tracking_id: string
+          user_agent: string | null
+          visitor_ip: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          purchase_amount?: number | null
+          referred_user_id?: string | null
+          share_tracking_id: string
+          user_agent?: string | null
+          visitor_ip?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          purchase_amount?: number | null
+          referred_user_id?: string | null
+          share_tracking_id?: string
+          user_agent?: string | null
+          visitor_ip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_events_referred_user_id_fkey"
+            columns: ["referred_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_events_share_tracking_id_fkey"
+            columns: ["share_tracking_id"]
+            isOneToOne: false
+            referencedRelation: "share_tracking"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      share_tracking: {
+        Row: {
+          clicks: number | null
+          created_at: string | null
+          credits_earned: number | null
+          id: string
+          is_active: boolean | null
+          purchases: number | null
+          share_code: string
+          sharer_id: string
+          signups: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          clicks?: number | null
+          created_at?: string | null
+          credits_earned?: number | null
+          id?: string
+          is_active?: boolean | null
+          purchases?: number | null
+          share_code: string
+          sharer_id: string
+          signups?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          clicks?: number | null
+          created_at?: string | null
+          credits_earned?: number | null
+          id?: string
+          is_active?: boolean | null
+          purchases?: number | null
+          share_code?: string
+          sharer_id?: string
+          signups?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_tracking_sharer_id_fkey"
+            columns: ["sharer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_locations: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string | null
+          id: string
+          last_login_at: string | null
+          latitude: number | null
+          longitude: number | null
+          state: string | null
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          last_login_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          state?: string | null
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          last_login_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          state?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_locations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -425,6 +946,8 @@ export type Database = {
           description: string | null
           id: string
           reference_id: string | null
+          source_id: string | null
+          source_type: string | null
           type: Database["public"]["Enums"]["transaction_type"]
           wallet_id: string
         }
@@ -434,6 +957,8 @@ export type Database = {
           description?: string | null
           id?: string
           reference_id?: string | null
+          source_id?: string | null
+          source_type?: string | null
           type: Database["public"]["Enums"]["transaction_type"]
           wallet_id: string
         }
@@ -443,6 +968,8 @@ export type Database = {
           description?: string | null
           id?: string
           reference_id?: string | null
+          source_id?: string | null
+          source_type?: string | null
           type?: Database["public"]["Enums"]["transaction_type"]
           wallet_id?: string
         }
@@ -493,7 +1020,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_affiliate_code: { Args: never; Returns: string }
       generate_referral_code: { Args: never; Returns: string }
+      generate_share_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -504,9 +1033,14 @@ export type Database = {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      affiliate_status: "pending" | "approved" | "rejected" | "suspended"
       app_role: "admin" | "user"
+      commission_status: "pending" | "approved" | "paid"
+      payment_status: "pending" | "approved" | "cancelled" | "refunded"
+      prize_status: "pending" | "processing" | "delivered"
       raffle_status: "open" | "drawing" | "completed" | "cancelled"
       transaction_type: "deposit" | "purchase" | "prize" | "refund"
+      withdrawal_status: "pending" | "approved" | "paid" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -634,9 +1168,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      affiliate_status: ["pending", "approved", "rejected", "suspended"],
       app_role: ["admin", "user"],
+      commission_status: ["pending", "approved", "paid"],
+      payment_status: ["pending", "approved", "cancelled", "refunded"],
+      prize_status: ["pending", "processing", "delivered"],
       raffle_status: ["open", "drawing", "completed", "cancelled"],
       transaction_type: ["deposit", "purchase", "prize", "refund"],
+      withdrawal_status: ["pending", "approved", "paid", "rejected"],
     },
   },
 } as const
