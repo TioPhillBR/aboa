@@ -1,208 +1,146 @@
 
-# Plano: Sistema de Lotes e Premios para Raspadinhas e Sorteios ✅ CONCLUÍDO
 
-## Contexto Atual
+# Plano: Rebranding para "A Boa"
 
-O sistema atual possui:
-- **Raspadinhas**: formulario com titulo, descricao, preco, imagem de capa, e simbolos individuais
-- **Sorteios**: formulario com titulo, descricao, preco por numero, total de numeros, data do sorteio e imagem
-- **Tabelas existentes**: `scratch_card_batches` (lotes) e `raffle_prizes` (premios de rifas) ja existem no banco mas nao estao integradas aos formularios
+## Resumo
+Renomear o aplicativo de "Sorteio" para "A Boa", adicionar o logotipo fornecido no cabecalho (ocupando o maximo de espaco possivel) e ajustar a paleta de cores do tema claro para combinar com as cores do logotipo (verde e dourado/laranja).
 
-## Objetivo
+---
 
-Modificar os formularios de criacao para permitir:
+## Analise do Logotipo
 
-### Raspadinhas
-1. Definir quantidade total de raspadinhas no lote (ex: 1000 unidades)
-2. Configurar premios do lote com:
-   - Nome/descricao do premio
-   - Valor do premio (R$)
-   - Quantidade de vezes que este premio sera sorteado
-   - Probabilidade de aparecer
-
-### Sorteios (Rifas)
-1. Manter preco e total de numeros
-2. Adicionar sistema de premios multiplos:
-   - Nome do premio
-   - Descricao
-   - Imagem
-   - Valor estimado
-   - Quantidade de vezes que sera sorteado
-   - Probabilidade de ser o premio principal
+O logotipo apresenta:
+- **Verde escuro/esmeralda** como cor principal (texto "A Boa")
+- **Dourado/Laranja** como cor de destaque (trevo de 4 folhas e slogan)
+- Estilo moderno e limpo
 
 ---
 
 ## Mudancas Necessarias
 
-### 1. Alteracao no Formulario de Raspadinhas
+### 1. Adicionar a Imagem do Logotipo
 
-**Arquivo**: `src/pages/admin/Raspadinhas.tsx`
+**Acao**: Copiar o arquivo do logotipo para a pasta de assets do projeto.
 
-#### Adicionar campos ao formData:
-- `total_cards`: quantidade total de raspadinhas no lote
-- `prizes`: array de objetos com `{ name, value, quantity, probability, image_url }`
-
-#### Novo fluxo de criacao:
-1. Admin define dados basicos (titulo, preco, imagem)
-2. Admin define quantidade total de raspadinhas (ex: 1000)
-3. Admin adiciona premios dinamicamente na mesma tela:
-   - Adicionar linha de premio
-   - Definir nome, valor, quantidade, probabilidade
-   - Remover premio se necessario
-4. Sistema valida que a soma das probabilidades faz sentido
-5. Ao criar, insere:
-   - Registro em `scratch_cards`
-   - Lote em `scratch_card_batches` com `prize_config`
-   - Simbolos em `scratch_symbols` para cada premio
-
-### 2. Alteracao no Formulario de Sorteios
-
-**Arquivo**: `src/pages/admin/Sorteios.tsx`
-
-#### Adicionar campos ao formData:
-- `prizes`: array de objetos com `{ name, description, image_url, estimated_value, quantity, probability }`
-
-#### Novo fluxo de criacao:
-1. Admin define dados basicos (titulo, preco, numeros, data)
-2. Admin adiciona premios dinamicamente:
-   - 1o Premio, 2o Premio, etc.
-   - Cada premio pode aparecer X vezes
-   - Probabilidade de ser sorteado
-3. Ao criar, insere:
-   - Registro em `raffles`
-   - Premios em `raffle_prizes` (um registro para cada quantidade)
+| De | Para |
+|---|---|
+| `user-uploads://LOGO_A_BOA_-_CABEÇALHO.png` | `src/assets/logo-a-boa.png` |
 
 ---
 
-## Detalhes Tecnicos
+### 2. Atualizar Metadados da Aplicacao
 
-### Componente Reutilizavel: PrizeConfigList
+**Arquivo**: `index.html`
 
-Criar um componente para configurar lista de premios que sera usado tanto em raspadinhas quanto sorteios.
+| Campo | Antes | Depois |
+|---|---|---|
+| `<title>` | Lovable App | A Boa - Vai na Certa, Vai na Boa |
+| `og:title` | Lovable App | A Boa - Sorteios e Raspadinhas |
+| `description` | Lovable Generated Project | Participe de sorteios e raspadinhas. Premios reais, diversao garantida! |
 
-**Props**:
-```typescript
-interface PrizeConfigListProps {
-  prizes: PrizeConfig[];
-  onChange: (prizes: PrizeConfig[]) => void;
-  type: 'scratch' | 'raffle';
-  showImage?: boolean;
-}
+---
 
-interface PrizeConfig {
-  id: string; // temporario para React keys
-  name: string;
-  value: number;
-  quantity: number;
-  probability: number;
-  image_url?: string;
-  description?: string;
-}
+### 3. Atualizar Cabecalho Principal
+
+**Arquivo**: `src/components/layout/Header.tsx`
+
+Mudancas no componente:
+- Remover o icone `Trophy` e o texto "Sorteio"
+- Importar e exibir a imagem do logotipo
+- Aplicar altura maxima de `h-10` ou `h-12` para ocupar o maior espaco possivel sem desconfigurar
+- Manter o logotipo responsivo
+
+**Exemplo do novo codigo**:
+```tsx
+import logoABoa from '@/assets/logo-a-boa.png';
+
+// No JSX:
+<Link to="/" className="flex items-center">
+  <img 
+    src={logoABoa} 
+    alt="A Boa - Vai na Certa, Vai na Boa" 
+    className="h-10 md:h-12 w-auto"
+  />
+</Link>
 ```
 
-### Mudancas no Hook useScratchCards
+---
 
-Atualizar `generateSymbols()` para respeitar:
-- Probabilidades configuradas por premio
-- Quantidade maxima de cada premio
-- Decrementar `remaining_quantity` ao sortear
+### 4. Atualizar Paleta de Cores (Tema Claro)
 
-### Validacoes
+**Arquivo**: `src/index.css`
 
-1. **Raspadinhas**:
-   - Total de premios nao pode exceder quantidade de raspadinhas
-   - Soma das probabilidades deve estar entre 0% e 100%
+Ajustar as variaveis CSS do `:root` (tema claro) para refletir as cores do logotipo:
 
-2. **Sorteios**:
-   - Pelo menos 1 premio deve ser configurado
-   - Soma das probabilidades dos premios principais = 100%
+| Variavel | Antes (HSL) | Depois (HSL) | Cor |
+|---|---|---|---|
+| `--primary` | 262 83% 58% (roxo) | 152 70% 35% | Verde esmeralda |
+| `--primary-foreground` | 0 0% 100% | 0 0% 100% | Branco (manter) |
+| `--accent` | 45 100% 51% | 38 95% 50% | Dourado/laranja |
+| `--accent-foreground` | 0 0% 10% | 0 0% 10% | Preto (manter) |
+| `--ring` | 262 83% 58% | 152 70% 35% | Verde esmeralda |
+| `--sidebar-primary` | 262 83% 58% | 152 70% 35% | Verde esmeralda |
+| `--sidebar-ring` | 262 83% 58% | 152 70% 35% | Verde esmeralda |
+
+Atualizar os gradientes:
+| Variavel | Antes | Depois |
+|---|---|---|
+| `--gradient-primary` | roxo/magenta | Verde escuro para verde claro |
+| `--gradient-gold` | (manter) | Dourado/laranja (ajustar tonalidade) |
+| `--shadow-glow-primary` | roxo | Verde esmeralda |
+
+**Nota**: O tema escuro (`.dark`) NAO sera alterado para manter a experiencia noturna.
 
 ---
 
-## Arquivos a Modificar
+### 5. Atualizar Pagina Inicial
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/admin/Raspadinhas.tsx` | Adicionar campos de lote e premios no formulario de criacao |
-| `src/pages/admin/Sorteios.tsx` | Adicionar secao de premios no formulario de criacao |
-| `src/components/admin/PrizeConfigList.tsx` | Novo componente para lista de premios |
-| `src/hooks/useScratchCards.tsx` | Atualizar logica de geracao de simbolos baseada em probabilidade |
-| `src/types/index.ts` | Adicionar interface PrizeConfig |
+**Arquivo**: `src/pages/Index.tsx`
+
+Mudancas pontuais:
+- Alterar o titulo hero de "Sorteios & Raspadinhas" para "A Boa" com subtitulo
+- Ajustar gradientes de texto para usar as novas cores (verde/dourado)
 
 ---
 
-## Interface do Usuario
+### 6. Atualizar Menu Mobile
 
-### Formulario de Nova Raspadinha (Redesenhado)
+**Arquivo**: `src/components/layout/MobileNav.tsx`
+
+Nenhuma mudanca estrutural necessaria - as cores serao atualizadas automaticamente via CSS.
+
+---
+
+## Resumo de Arquivos
+
+| Arquivo | Tipo de Mudanca |
+|---|---|
+| `src/assets/logo-a-boa.png` | Novo arquivo (copia do upload) |
+| `index.html` | Atualizar titulo e meta tags |
+| `src/components/layout/Header.tsx` | Substituir icone/texto por imagem do logo |
+| `src/index.css` | Ajustar paleta de cores do tema claro |
+| `src/pages/Index.tsx` | Atualizar textos do hero |
+
+---
+
+## Preview Visual das Cores
 
 ```text
-+------------------------------------------+
-| CRIAR NOVA RASPADINHA                    |
-+------------------------------------------+
-| Titulo*: [___________________________]   |
-| Descricao: [________________________]    |
-| Preco (R$)*: [____]                      |
-| [Imagem de Capa]                         |
-+------------------------------------------+
-| CONFIGURACAO DO LOTE                     |
-| Quantidade de Raspadinhas*: [1000]       |
-+------------------------------------------+
-| PREMIOS DO LOTE                          |
-| +--------------------------------------+ |
-| | Premio      | Valor  | Qtd  | Prob % | |
-| +--------------------------------------+ |
-| | Diamante    | 1000   | 2    | 0.2%   | |
-| | Ouro        | 500    | 5    | 0.5%   | |
-| | Prata       | 100    | 20   | 2.0%   | |
-| | Bronze      | 50     | 50   | 5.0%   | |
-| +--------------------------------------+ |
-| [+ Adicionar Premio]                     |
-|                                          |
-| Resumo: 77 premios de 1000 raspadinhas   |
-| Total em premios: R$ 9.500,00            |
-+------------------------------------------+
-| [Cancelar]              [Criar]          |
-+------------------------------------------+
-```
-
-### Formulario de Novo Sorteio (Redesenhado)
-
-```text
-+------------------------------------------+
-| CRIAR NOVO SORTEIO                       |
-+------------------------------------------+
-| Titulo*: [___________________________]   |
-| Descricao: [________________________]    |
-| Preco por Numero (R$)*: [____]           |
-| Total de Numeros*: [____]                |
-| Data do Sorteio*: [__/__/____]           |
-| [Imagem do Sorteio]                      |
-+------------------------------------------+
-| PREMIOS DO SORTEIO                       |
-| +--------------------------------------+ |
-| | Premio           | Valor    | Qtd   | |
-| +--------------------------------------+ |
-| | iPhone 15 Pro    | 8000     | 1     | |
-| | Apple Watch      | 3000     | 2     | |
-| | AirPods Pro      | 1500     | 3     | |
-| +--------------------------------------+ |
-| [+ Adicionar Premio]                     |
-|                                          |
-| Total de premios: 6                      |
-| Valor total: R$ 18.500,00                |
-+------------------------------------------+
-| [Cancelar]              [Criar]          |
-+------------------------------------------+
+ANTES (Tema Claro)              DEPOIS (Tema Claro)
++------------------+            +------------------+
+|  Roxo/Magenta    |    -->     |  Verde Esmeralda |
+|  Primary Color   |            |  Primary Color   |
++------------------+            +------------------+
+|  Amarelo         |    -->     |  Dourado/Laranja |
+|  Accent Color    |            |  Accent Color    |
++------------------+            +------------------+
 ```
 
 ---
 
-## Ordem de Implementacao
+## Consideracoes
 
-1. Criar componente `PrizeConfigList`
-2. Atualizar formulario de Raspadinhas com novo layout
-3. Integrar criacao de lotes (`scratch_card_batches`)
-4. Atualizar formulario de Sorteios com premios
-5. Integrar criacao de premios (`raffle_prizes`)
-6. Atualizar hook de geracao de simbolos
-7. Adicionar validacoes
+1. **Apenas o tema claro sera alterado** - o tema escuro permanece igual para manter contraste noturno
+2. **Estrutura das paginas nao sera modificada** - apenas cores e branding
+3. **O logotipo usara altura maxima que nao quebre o layout do header** (h-10 a h-12)
+
