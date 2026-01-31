@@ -21,6 +21,7 @@ import {
   Play
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import logoABoa from '@/assets/logo-a-boa.png';
 
 interface Stats {
   totalPrizes: number;
@@ -602,14 +603,15 @@ export default function Index() {
       <footer className="border-t py-12 bg-muted/30">
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center space-x-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Trophy className="h-6 w-6 text-primary" />
-              </div>
-              <span className="font-bold text-xl">Sorteio Mania</span>
-            </div>
+            <Link to="/" className="flex items-center">
+              <img 
+                src={logoABoa} 
+                alt="A Boa - Vai na Certa, Vai na Boa" 
+                className="h-10 w-auto"
+              />
+            </Link>
             <p className="text-sm text-muted-foreground">
-              © 2025 Sorteio Mania. Todos os direitos reservados.
+              © 2025 A Boa. Todos os direitos reservados.
             </p>
           </div>
         </div>

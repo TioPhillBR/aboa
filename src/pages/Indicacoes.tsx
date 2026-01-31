@@ -75,7 +75,7 @@ export default function Indicacoes() {
     if (navigator.share && link) {
       try {
         await navigator.share({
-          title: 'Sorteio Mania - Convite',
+          title: 'A Boa - Convite',
           text: `Use meu código ${referralCode?.code} e ganhe bônus! 🎉`,
           url: link,
         });
