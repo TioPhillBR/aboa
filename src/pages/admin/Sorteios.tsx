@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ImageUpload } from '@/components/ui/image-upload';
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,7 @@ export default function AdminSorteios() {
     price: '',
     total_numbers: '',
     draw_date: '',
+    image_url: '',
   });
 
   useEffect(() => {
@@ -139,6 +141,7 @@ export default function AdminSorteios() {
         price: parseFloat(formData.price),
         total_numbers: parseInt(formData.total_numbers),
         draw_date: new Date(formData.draw_date).toISOString(),
+        image_url: formData.image_url || null,
         status: 'open',
         created_by: user.id,
       });
@@ -151,7 +154,7 @@ export default function AdminSorteios() {
       });
 
       setCreateDialogOpen(false);
-      setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '' });
+      setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '', image_url: '' });
       fetchRaffles();
     } catch (error) {
       console.error('Error creating raffle:', error);
@@ -307,6 +310,15 @@ export default function AdminSorteios() {
                     onChange={(e) => setFormData({ ...formData, draw_date: e.target.value })}
                   />
                 </div>
+
+                <ImageUpload
+                  label="Imagem do Sorteio"
+                  value={formData.image_url}
+                  onChange={(url) => setFormData({ ...formData, image_url: url })}
+                  bucket="raffle-images"
+                  folder="covers"
+                  aspectRatio="video"
+                />
               </div>
 
               <DialogFooter>

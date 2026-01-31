@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
+import { ImageUpload } from '@/components/ui/image-upload';
 import { 
   Table, 
   TableBody, 
@@ -85,6 +86,7 @@ export default function AdminPremios() {
     name: '',
     description: '',
     estimated_value: 0,
+    image_url: '',
   });
 
   useEffect(() => {
@@ -145,13 +147,14 @@ export default function AdminPremios() {
           name: newPrize.name,
           description: newPrize.description || null,
           estimated_value: newPrize.estimated_value || null,
+          image_url: newPrize.image_url || null,
         });
 
       if (error) throw error;
 
       toast.success('Prêmio criado com sucesso');
       setIsDialogOpen(false);
-      setNewPrize({ raffle_id: '', name: '', description: '', estimated_value: 0 });
+      setNewPrize({ raffle_id: '', name: '', description: '', estimated_value: 0, image_url: '' });
       fetchPrizes();
     } catch (error) {
       console.error('Error creating prize:', error);
@@ -302,6 +305,15 @@ export default function AdminPremios() {
                     placeholder="0.00"
                   />
                 </div>
+
+                <ImageUpload
+                  label="Imagem do Prêmio"
+                  value={newPrize.image_url}
+                  onChange={(url) => setNewPrize({ ...newPrize, image_url: url })}
+                  bucket="raffle-images"
+                  folder="prizes"
+                  aspectRatio="square"
+                />
               </div>
 
               <DialogFooter>
