@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { PrizeConfigList, PrizeConfig } from '@/components/admin/PrizeConfigList';
 import {
   Dialog,
   DialogContent,
@@ -38,7 +39,8 @@ import {
   Edit,
   Trash2,
   Eye,
-  Loader2
+  Loader2,
+  Gift
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,6 +48,7 @@ import { ptBR } from 'date-fns/locale';
 interface RaffleWithStats extends Raffle {
   tickets_sold: number;
   participants: Profile[];
+  prizes_count?: number;
 }
 
 export default function AdminSorteios() {
@@ -67,6 +70,9 @@ export default function AdminSorteios() {
     draw_date: '',
     image_url: '',
   });
+
+  // Prizes state for the new raffle
+  const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
 
   useEffect(() => {
     fetchRaffles();
@@ -132,29 +138,64 @@ export default function AdminSorteios() {
       return;
     }
 
+    if (prizes.length === 0) {
+      toast({
+        title: 'Adicione ao menos um prêmio',
+        description: 'Configure pelo menos um prêmio para o sorteio',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsCreating(true);
 
     try {
-      const { error } = await supabase.from('raffles').insert({
-        title: formData.title,
-        description: formData.description || null,
-        price: parseFloat(formData.price),
-        total_numbers: parseInt(formData.total_numbers),
-        draw_date: new Date(formData.draw_date).toISOString(),
-        image_url: formData.image_url || null,
-        status: 'open',
-        created_by: user.id,
-      });
+      // 1. Criar o sorteio
+      const { data: raffleData, error: raffleError } = await supabase
+        .from('raffles')
+        .insert({
+          title: formData.title,
+          description: formData.description || null,
+          price: parseFloat(formData.price),
+          total_numbers: parseInt(formData.total_numbers),
+          draw_date: new Date(formData.draw_date).toISOString(),
+          image_url: formData.image_url || null,
+          status: 'open',
+          created_by: user.id,
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (raffleError) throw raffleError;
+
+      // 2. Criar os prêmios
+      const prizesToInsert = prizes.flatMap(prize => 
+        Array.from({ length: prize.quantity }, () => ({
+          raffle_id: raffleData.id,
+          name: prize.name,
+          description: prize.description || null,
+          image_url: prize.image_url || null,
+          estimated_value: prize.value,
+          status: 'pending' as const,
+        }))
+      );
+
+      if (prizesToInsert.length > 0) {
+        const { error: prizesError } = await supabase
+          .from('raffle_prizes')
+          .insert(prizesToInsert);
+
+        if (prizesError) throw prizesError;
+      }
 
       toast({
         title: 'Sorteio criado!',
-        description: 'O sorteio foi criado com sucesso.',
+        description: `${prizesToInsert.length} prêmio(s) configurado(s).`,
       });
 
       setCreateDialogOpen(false);
       setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '', image_url: '' });
+      setPrizes([]);
       fetchRaffles();
     } catch (error) {
       console.error('Error creating raffle:', error);
@@ -245,87 +286,108 @@ export default function AdminSorteios() {
                 Novo Sorteio
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Criar Novo Sorteio</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Ticket className="h-5 w-5" />
+                  Criar Novo Sorteio
+                </DialogTitle>
                 <DialogDescription>
-                  Preencha os dados do sorteio
+                  Configure o sorteio e os prêmios que serão sorteados
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Título</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Ex: Sorteio iPhone 15"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição (opcional)</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Descrição do sorteio..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-6 py-4">
+                {/* Dados Básicos */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                    Dados do Sorteio
+                  </h3>
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="price">Preço por número (R$)</Label>
+                    <Label htmlFor="title">Título *</Label>
                     <Input
-                      id="price"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      placeholder="10.00"
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="Ex: Sorteio iPhone 15"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="total_numbers">Total de números</Label>
-                    <Input
-                      id="total_numbers"
-                      type="number"
-                      min="1"
-                      value={formData.total_numbers}
-                      onChange={(e) => setFormData({ ...formData, total_numbers: e.target.value })}
-                      placeholder="100"
+                    <Label htmlFor="description">Descrição (opcional)</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Descrição do sorteio..."
+                      rows={2}
                     />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="draw_date">Data do Sorteio</Label>
-                  <Input
-                    id="draw_date"
-                    type="datetime-local"
-                    value={formData.draw_date}
-                    onChange={(e) => setFormData({ ...formData, draw_date: e.target.value })}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Preço por Número (R$) *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        placeholder="10.00"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="total_numbers">Total de Números *</Label>
+                      <Input
+                        id="total_numbers"
+                        type="number"
+                        min="1"
+                        value={formData.total_numbers}
+                        onChange={(e) => setFormData({ ...formData, total_numbers: e.target.value })}
+                        placeholder="100"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="draw_date">Data do Sorteio *</Label>
+                    <Input
+                      id="draw_date"
+                      type="datetime-local"
+                      value={formData.draw_date}
+                      onChange={(e) => setFormData({ ...formData, draw_date: e.target.value })}
+                    />
+                  </div>
+
+                  <ImageUpload
+                    label="Imagem do Sorteio"
+                    value={formData.image_url}
+                    onChange={(url) => setFormData({ ...formData, image_url: url })}
+                    bucket="raffle-images"
+                    folder="covers"
+                    aspectRatio="video"
                   />
                 </div>
 
-                <ImageUpload
-                  label="Imagem do Sorteio"
-                  value={formData.image_url}
-                  onChange={(url) => setFormData({ ...formData, image_url: url })}
-                  bucket="raffle-images"
-                  folder="covers"
-                  aspectRatio="video"
-                />
+                {/* Prêmios */}
+                <div className="border-t pt-4">
+                  <PrizeConfigList
+                    prizes={prizes}
+                    onChange={setPrizes}
+                    type="raffle"
+                    showImage={true}
+                  />
+                </div>
               </div>
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateRaffle} disabled={isCreating}>
+                <Button onClick={handleCreateRaffle} disabled={isCreating || prizes.length === 0}>
                   {isCreating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />

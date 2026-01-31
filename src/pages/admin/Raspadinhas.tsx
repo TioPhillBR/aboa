@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { PrizeConfigList, PrizeConfig } from '@/components/admin/PrizeConfigList';
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,8 @@ import {
   Image as ImageIcon,
   Coins,
   Settings2,
-  X
+  X,
+  Package
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -47,6 +49,12 @@ interface ScratchCardWithStats extends ScratchCard {
   symbols: ScratchSymbol[];
   total_sold: number;
   total_prizes: number;
+  batch?: {
+    id: string;
+    batch_name: string;
+    total_cards: number;
+    cards_sold: number;
+  };
 }
 
 export default function AdminRaspadinhas() {
@@ -66,9 +74,13 @@ export default function AdminRaspadinhas() {
     description: '',
     price: '',
     cover_image_url: '',
+    total_cards: '100',
   });
 
-  // Form state for symbols
+  // Prizes state for the new scratch card
+  const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
+
+  // Form state for symbols (legacy - for existing cards)
   const [symbolForm, setSymbolForm] = useState({
     name: '',
     image_url: '',
@@ -133,10 +145,41 @@ export default function AdminRaspadinhas() {
   const handleCreateScratchCard = async () => {
     if (!user) return;
 
-    if (!formData.title || !formData.price) {
+    if (!formData.title || !formData.price || !formData.total_cards) {
       toast({
         title: 'Preencha os campos obrigatórios',
-        description: 'Título e preço são obrigatórios',
+        description: 'Título, preço e quantidade de raspadinhas são obrigatórios',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (prizes.length === 0) {
+      toast({
+        title: 'Adicione ao menos um prêmio',
+        description: 'Configure pelo menos um prêmio para a raspadinha',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validar prêmios
+    const totalPrizes = prizes.reduce((sum, p) => sum + p.quantity, 0);
+    const totalCards = parseInt(formData.total_cards);
+    if (totalPrizes > totalCards) {
+      toast({
+        title: 'Quantidade de prêmios inválida',
+        description: 'O total de prêmios não pode ser maior que a quantidade de raspadinhas',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const totalProbability = prizes.reduce((sum, p) => sum + p.probability, 0);
+    if (totalProbability > 100) {
+      toast({
+        title: 'Probabilidade inválida',
+        description: 'A soma das probabilidades não pode ultrapassar 100%',
         variant: 'destructive',
       });
       return;
@@ -145,24 +188,69 @@ export default function AdminRaspadinhas() {
     setIsCreating(true);
 
     try {
-      const { error } = await supabase.from('scratch_cards').insert({
-        title: formData.title,
-        description: formData.description || null,
-        price: parseFloat(formData.price),
-        cover_image_url: formData.cover_image_url || null,
-        is_active: false, // Começa inativa até adicionar símbolos
-        created_by: user.id,
-      });
+      // 1. Criar a raspadinha
+      const { data: scratchCardData, error: scratchError } = await supabase
+        .from('scratch_cards')
+        .insert({
+          title: formData.title,
+          description: formData.description || null,
+          price: parseFloat(formData.price),
+          cover_image_url: formData.cover_image_url || null,
+          is_active: false,
+          created_by: user.id,
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (scratchError) throw scratchError;
+
+      // 2. Criar o lote
+      const prizeConfig = prizes.map(p => ({
+        name: p.name,
+        value: p.value,
+        quantity: p.quantity,
+        probability: p.probability,
+        image_url: p.image_url || '',
+      }));
+
+      const { error: batchError } = await supabase
+        .from('scratch_card_batches')
+        .insert({
+          scratch_card_id: scratchCardData.id,
+          batch_name: `Lote ${formData.title}`,
+          total_cards: parseInt(formData.total_cards),
+          total_prizes: totalPrizes,
+          prize_config: prizeConfig,
+          is_active: true,
+        });
+
+      if (batchError) throw batchError;
+
+      // 3. Criar os símbolos baseados nos prêmios
+      const symbolsToInsert = prizes.map(prize => ({
+        scratch_card_id: scratchCardData.id,
+        name: prize.name,
+        image_url: prize.image_url || '/placeholder.svg',
+        prize_value: prize.value,
+        probability: prize.probability / 100,
+        total_quantity: prize.quantity,
+        remaining_quantity: prize.quantity,
+      }));
+
+      const { error: symbolsError } = await supabase
+        .from('scratch_symbols')
+        .insert(symbolsToInsert);
+
+      if (symbolsError) throw symbolsError;
 
       toast({
         title: 'Raspadinha criada!',
-        description: 'Agora adicione os símbolos e prêmios.',
+        description: `${prizes.length} prêmios configurados para ${formData.total_cards} raspadinhas.`,
       });
 
       setCreateDialogOpen(false);
-      setFormData({ title: '', description: '', price: '', cover_image_url: '' });
+      setFormData({ title: '', description: '', price: '', cover_image_url: '', total_cards: '100' });
+      setPrizes([]);
       fetchScratchCards();
     } catch (error) {
       console.error('Error creating scratch card:', error);
@@ -372,6 +460,7 @@ export default function AdminRaspadinhas() {
       description: card.description || '',
       price: card.price.toString(),
       cover_image_url: card.cover_image_url || '',
+      total_cards: card.batch?.total_cards?.toString() || '100',
     });
     setEditDialogOpen(true);
   };
@@ -398,63 +487,102 @@ export default function AdminRaspadinhas() {
                 Nova Raspadinha
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Criar Nova Raspadinha</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Criar Nova Raspadinha
+                </DialogTitle>
                 <DialogDescription>
-                  Preencha os dados básicos. Depois adicione os símbolos.
+                  Configure a raspadinha, quantidade do lote e os prêmios
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Título *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Ex: Raspadinha da Sorte"
+              <div className="space-y-6 py-4">
+                {/* Dados Básicos */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                    Dados Básicos
+                  </h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="title">Título *</Label>
+                      <Input
+                        id="title"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        placeholder="Ex: Raspadinha da Sorte"
+                      />
+                    </div>
+
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="description">Descrição (opcional)</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        placeholder="Descrição da raspadinha..."
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Preço por Raspadinha (R$) *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        placeholder="5.00"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="total_cards" className="flex items-center gap-1">
+                        <Package className="h-3 w-3" />
+                        Quantidade do Lote *
+                      </Label>
+                      <Input
+                        id="total_cards"
+                        type="number"
+                        min="1"
+                        value={formData.total_cards}
+                        onChange={(e) => setFormData({ ...formData, total_cards: e.target.value })}
+                        placeholder="100"
+                      />
+                    </div>
+                  </div>
+
+                  <ImageUpload
+                    label="Imagem de Capa"
+                    value={formData.cover_image_url}
+                    onChange={(url) => setFormData({ ...formData, cover_image_url: url })}
+                    bucket="scratch-images"
+                    folder="covers"
+                    aspectRatio="video"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição (opcional)</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Descrição da raspadinha..."
+                {/* Prêmios */}
+                <div className="border-t pt-4">
+                  <PrizeConfigList
+                    prizes={prizes}
+                    onChange={setPrizes}
+                    type="scratch"
+                    showImage={true}
+                    totalItems={parseInt(formData.total_cards) || 0}
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="price">Preço (R$) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    placeholder="5.00"
-                  />
-                </div>
-
-                <ImageUpload
-                  label="Imagem de Capa"
-                  value={formData.cover_image_url}
-                  onChange={(url) => setFormData({ ...formData, cover_image_url: url })}
-                  bucket="scratch-images"
-                  folder="covers"
-                  aspectRatio="video"
-                />
               </div>
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateScratchCard} disabled={isCreating}>
+                <Button onClick={handleCreateScratchCard} disabled={isCreating || prizes.length === 0}>
                   {isCreating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
