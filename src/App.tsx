@@ -17,6 +17,7 @@ import Raspadinhas from "./pages/Raspadinhas";
 import RaspadinhaDetail from "./pages/RaspadinhaDetail";
 import Carteira from "./pages/Carteira";
 import Perfil from "./pages/Perfil";
+import Configuracoes from "./pages/Configuracoes";
 import Ganhadores from "./pages/Ganhadores";
 import MeusTickets from "./pages/MeusTickets";
 import Estatisticas from "./pages/Estatisticas";
@@ -58,6 +59,7 @@ const App = () => (
                 <Route path="/raspadinha/:id" element={<RaspadinhaDetail />} />
                 <Route path="/carteira" element={<ProtectedRoute><Carteira /></ProtectedRoute>} />
                 <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
+                <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
                 <Route path="/ganhadores" element={<Ganhadores />} />
                 <Route path="/meus-tickets" element={<ProtectedRoute><MeusTickets /></ProtectedRoute>} />
                 <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
