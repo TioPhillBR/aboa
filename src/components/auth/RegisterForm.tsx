@@ -1,14 +1,18 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Mail, Lock, User, Trophy, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, Lock, User, Trophy, CheckCircle2, Eye, EyeOff, Gift } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 export function RegisterForm() {
+  const [searchParams] = useSearchParams();
+  const referralCodeFromUrl = searchParams.get('ref');
+  
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,9 +22,39 @@ export function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [bonusMessage, setBonusMessage] = useState<string | null>(null);
 
   const { signUp } = useAuth();
   const navigate = useNavigate();
+  
+  // Store referral code in localStorage to persist across signup flow
+  useEffect(() => {
+    if (referralCodeFromUrl) {
+      localStorage.setItem('pending_referral_code', referralCodeFromUrl.toUpperCase());
+    }
+  }, [referralCodeFromUrl]);
+
+  const processReferral = async (session: { access_token: string }) => {
+    const pendingCode = localStorage.getItem('pending_referral_code');
+    if (!pendingCode) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('process-referral', {
+        body: { referralCode: pendingCode },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!error && data?.success) {
+        setBonusMessage(data.message);
+      }
+    } catch (err) {
+      console.error('Error processing referral:', err);
+    } finally {
+      localStorage.removeItem('pending_referral_code');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,12 +72,16 @@ export function RegisterForm() {
 
     setIsLoading(true);
 
-    const { error } = await signUp(email, password, fullName);
+    const { error, session } = await signUp(email, password, fullName);
 
     if (error) {
       setError(error.message || 'Erro ao criar conta. Tente novamente.');
       setIsLoading(false);
     } else {
+      // Process referral if we have a session (immediate login after signup)
+      if (session) {
+        await processReferral(session);
+      }
       setIsSuccess(true);
     }
   };
@@ -63,7 +101,15 @@ export function RegisterForm() {
               Verifique seu email para confirmar sua conta e começar a participar dos sorteios.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {bonusMessage && (
+              <Alert className="bg-green-500/10 border-green-500/30">
+                <Gift className="h-4 w-4 text-green-500" />
+                <AlertDescription className="text-green-600 dark:text-green-400 font-medium">
+                  🎉 {bonusMessage}
+                </AlertDescription>
+              </Alert>
+            )}
             <Button onClick={() => navigate('/login')} className="w-full">
               Ir para Login
             </Button>
@@ -72,6 +118,8 @@ export function RegisterForm() {
       </div>
     );
   }
+
+  const pendingCode = referralCodeFromUrl || localStorage.getItem('pending_referral_code');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
@@ -90,6 +138,15 @@ export function RegisterForm() {
 
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+          {pendingCode && (
+              <Alert className="bg-primary/10 border-primary/30">
+                <Gift className="h-4 w-4 text-primary" />
+                <AlertDescription className="text-primary font-medium">
+                  🎁 Código de indicação: <strong>{pendingCode}</strong> - Você ganhará R$ 5,00 de bônus!
+                </AlertDescription>
+              </Alert>
+            )}
+            
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>

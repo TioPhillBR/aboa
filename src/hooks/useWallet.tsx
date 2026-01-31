@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Wallet, WalletTransaction, TransactionType } from '@/types';
@@ -54,10 +54,10 @@ export function useWallet() {
 
       const { data, error } = await supabase
         .from('wallet_transactions')
-        .select('*')
+        .select('*, source_type')
         .eq('wallet_id', walletData.id)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (error) throw error;
       setTransactions((data || []) as WalletTransaction[]);
@@ -65,6 +65,13 @@ export function useWallet() {
       console.error('Error fetching transactions:', error);
     }
   };
+
+  // Calculate bonus balance from referral transactions
+  const bonusBalance = useMemo(() => {
+    return transactions
+      .filter(tx => tx.source_type === 'referral' && tx.amount > 0)
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [transactions]);
 
   const addTransaction = async (
     amount: number,
@@ -128,6 +135,7 @@ export function useWallet() {
     transactions,
     isLoading,
     balance: wallet?.balance ?? 0,
+    bonusBalance,
     deposit,
     purchase,
     awardPrize,
