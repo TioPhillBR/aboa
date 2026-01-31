@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { ImageUpload } from '@/components/ui/image-upload';
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,6 @@ import {
   Eye,
   Loader2,
   Image as ImageIcon,
-  Upload,
   Coins,
   Settings2,
   X
@@ -440,15 +440,14 @@ export default function AdminRaspadinhas() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="cover_image_url">URL da Imagem de Capa</Label>
-                  <Input
-                    id="cover_image_url"
-                    value={formData.cover_image_url}
-                    onChange={(e) => setFormData({ ...formData, cover_image_url: e.target.value })}
-                    placeholder="https://..."
-                  />
-                </div>
+                <ImageUpload
+                  label="Imagem de Capa"
+                  value={formData.cover_image_url}
+                  onChange={(url) => setFormData({ ...formData, cover_image_url: url })}
+                  bucket="scratch-images"
+                  folder="covers"
+                  aspectRatio="video"
+                />
               </div>
 
               <DialogFooter>
@@ -656,12 +655,14 @@ export default function AdminRaspadinhas() {
                       placeholder="Ex: Diamante"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>URL da Imagem *</Label>
-                    <Input
+                  <div className="space-y-2 col-span-2">
+                    <ImageUpload
+                      label="Imagem do Símbolo *"
                       value={symbolForm.image_url}
-                      onChange={(e) => setSymbolForm({ ...symbolForm, image_url: e.target.value })}
-                      placeholder="https://..."
+                      onChange={(url) => setSymbolForm({ ...symbolForm, image_url: url })}
+                      bucket="scratch-images"
+                      folder="symbols"
+                      aspectRatio="square"
                     />
                   </div>
                   <div className="space-y-2">
@@ -758,14 +759,14 @@ export default function AdminRaspadinhas() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit-cover">URL da Imagem de Capa</Label>
-                <Input
-                  id="edit-cover"
-                  value={formData.cover_image_url}
-                  onChange={(e) => setFormData({ ...formData, cover_image_url: e.target.value })}
-                />
-              </div>
+              <ImageUpload
+                label="Imagem de Capa"
+                value={formData.cover_image_url}
+                onChange={(url) => setFormData({ ...formData, cover_image_url: url })}
+                bucket="scratch-images"
+                folder="covers"
+                aspectRatio="video"
+              />
             </div>
 
             <DialogFooter>

@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ImageUpload } from '@/components/ui/image-upload';
 import { 
   Users, 
   ArrowLeft,
   Loader2,
   Instagram,
-  Facebook,
-  Upload
+  Facebook
 } from 'lucide-react';
 import { useAffiliates } from '@/hooks/useAffiliates';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,6 +35,7 @@ export default function AfiliadoCadastro() {
     instagram: '',
     facebook: '',
     tiktok: '',
+    avatar_url: '',
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
@@ -96,6 +97,7 @@ export default function AfiliadoCadastro() {
         instagram: formData.instagram || undefined,
         facebook: formData.facebook || undefined,
         tiktok: formData.tiktok || undefined,
+        avatar_url: formData.avatar_url || undefined,
       });
       navigate('/afiliado');
     } catch (error) {
@@ -130,6 +132,19 @@ export default function AfiliadoCadastro() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Avatar */}
+                <div className="flex justify-center">
+                  <ImageUpload
+                    label="Foto de Perfil"
+                    value={formData.avatar_url}
+                    onChange={(url) => handleChange('avatar_url', url)}
+                    bucket="avatars"
+                    folder="affiliates"
+                    aspectRatio="square"
+                    className="max-w-[200px]"
+                  />
+                </div>
+
                 {/* Personal Info */}
                 <div className="space-y-4">
                   <h3 className="font-semibold text-lg">Dados Pessoais</h3>
