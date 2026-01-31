@@ -70,8 +70,8 @@ serve(async (req) => {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     
     // Simulated PIX copy-paste code (EMV format simulation)
-    const pixKey = "sorteiomania@pix.com";
-    const merchantName = "SORTEIO MANIA";
+    const pixKey = "aboa@pix.com";
+    const merchantName = "A BOA";
     const city = "SAO PAULO";
     const txId = transactionId.replace(/-/g, "").substring(0, 25);
     
