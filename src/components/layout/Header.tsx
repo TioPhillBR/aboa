@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Trophy, Ticket, LayoutDashboard, Menu } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Ticket, LayoutDashboard, Menu, Trophy } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
@@ -20,6 +20,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import logoABoa from '@/assets/logo-a-boa.png';
 
 export function Header() {
   const { user, profile, isAdmin, signOut, isLoading } = useAuth();
@@ -44,13 +45,12 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-center space-x-2">
-          <div className="p-1.5 rounded-lg bg-gradient-primary">
-            <Trophy className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Sorteio
-          </span>
+        <Link to="/" className="flex items-center">
+          <img 
+            src={logoABoa} 
+            alt="A Boa - Vai na Certa, Vai na Boa" 
+            className="h-10 md:h-12 w-auto"
+          />
         </Link>
 
         {/* Navigation - Desktop */}
