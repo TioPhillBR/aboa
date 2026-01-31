@@ -279,8 +279,18 @@ export interface ScratchCardBatch {
   cards_sold: number;
   total_prizes: number;
   prizes_distributed: number;
-  prize_config: { quantity: number; value: number }[];
+  prize_config: PrizeConfigItem[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// Configuração de prêmio (usado em lotes e formulários)
+export interface PrizeConfigItem {
+  name: string;
+  value: number;
+  quantity: number;
+  probability: number;
+  image_url?: string;
+  description?: string;
 }
