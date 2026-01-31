@@ -1,414 +1,208 @@
 
-# Plano de Implementação: Painel Administrativo Completo para Plataforma de Rifas e Raspadinhas
+# Plano: Sistema de Lotes e Premios para Raspadinhas e Sorteios
 
-## Visão Geral
+## Contexto Atual
 
-Este plano aborda a criação de um painel administrativo completo com sistema de afiliados, analytics avançados e controle financeiro. O sistema atual já possui uma base sólida com dashboard, gestão de sorteios, raspadinhas e usuários. Iremos expandir significativamente suas funcionalidades.
+O sistema atual possui:
+- **Raspadinhas**: formulario com titulo, descricao, preco, imagem de capa, e simbolos individuais
+- **Sorteios**: formulario com titulo, descricao, preco por numero, total de numeros, data do sorteio e imagem
+- **Tabelas existentes**: `scratch_card_batches` (lotes) e `raffle_prizes` (premios de rifas) ja existem no banco mas nao estao integradas aos formularios
 
----
+## Objetivo
 
-## 1. Mudanças no Banco de Dados
+Modificar os formularios de criacao para permitir:
 
-### 1.1 Novas Tabelas
+### Raspadinhas
+1. Definir quantidade total de raspadinhas no lote (ex: 1000 unidades)
+2. Configurar premios do lote com:
+   - Nome/descricao do premio
+   - Valor do premio (R$)
+   - Quantidade de vezes que este premio sera sorteado
+   - Probabilidade de aparecer
 
-#### Tabela: `affiliates` (Sistema de Afiliados)
-```sql
-CREATE TABLE affiliates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id),
-  full_name TEXT NOT NULL,
-  cpf TEXT NOT NULL,
-  phone TEXT,
-  email TEXT,
-  address_street TEXT,
-  address_city TEXT,
-  address_state TEXT,
-  address_zip TEXT,
-  avatar_url TEXT,
-  instagram TEXT,
-  facebook TEXT,
-  tiktok TEXT,
-  commission_percentage NUMERIC NOT NULL DEFAULT 10,
-  affiliate_code VARCHAR(10) NOT NULL UNIQUE,
-  status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, rejected, suspended
-  total_sales NUMERIC DEFAULT 0,
-  total_commission NUMERIC DEFAULT 0,
-  pending_commission NUMERIC DEFAULT 0,
-  paid_commission NUMERIC DEFAULT 0,
-  approved_by UUID,
-  approved_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `affiliate_sales` (Vendas via Afiliados)
-```sql
-CREATE TABLE affiliate_sales (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  affiliate_id UUID NOT NULL REFERENCES affiliates(id),
-  buyer_id UUID NOT NULL,
-  product_type TEXT NOT NULL, -- raffle, scratch_card
-  product_id UUID NOT NULL,
-  sale_amount NUMERIC NOT NULL,
-  commission_amount NUMERIC NOT NULL,
-  commission_status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, paid
-  paid_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `affiliate_withdrawals` (Saques de Afiliados)
-```sql
-CREATE TABLE affiliate_withdrawals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  affiliate_id UUID NOT NULL REFERENCES affiliates(id),
-  amount NUMERIC NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, paid, rejected
-  pix_key TEXT,
-  processed_by UUID,
-  processed_at TIMESTAMP WITH TIME ZONE,
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `payment_transactions` (Transações de Pagamento)
-```sql
-CREATE TABLE payment_transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  transaction_type TEXT NOT NULL, -- deposit, purchase, refund
-  amount NUMERIC NOT NULL,
-  gateway_fee NUMERIC DEFAULT 0,
-  net_amount NUMERIC NOT NULL,
-  payment_method TEXT NOT NULL, -- pix, credit_card
-  gateway_transaction_id TEXT,
-  status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, cancelled, refunded
-  product_type TEXT, -- raffle, scratch_card
-  product_id UUID,
-  metadata JSONB,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `share_tracking` (Rastreamento de Compartilhamentos)
-```sql
-CREATE TABLE share_tracking (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sharer_id UUID NOT NULL,
-  share_code VARCHAR(20) NOT NULL UNIQUE,
-  clicks INTEGER DEFAULT 0,
-  signups INTEGER DEFAULT 0,
-  purchases INTEGER DEFAULT 0,
-  credits_earned NUMERIC DEFAULT 0,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `share_events` (Eventos de Compartilhamento)
-```sql
-CREATE TABLE share_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  share_tracking_id UUID NOT NULL REFERENCES share_tracking(id),
-  event_type TEXT NOT NULL, -- click, signup, purchase
-  visitor_ip TEXT,
-  user_agent TEXT,
-  referred_user_id UUID,
-  purchase_amount NUMERIC,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `user_locations` (Localização de Usuários para Mapa)
-```sql
-CREATE TABLE user_locations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  latitude NUMERIC,
-  longitude NUMERIC,
-  city TEXT,
-  state TEXT,
-  country TEXT DEFAULT 'BR',
-  last_login_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `raffle_prizes` (Gestão de Prêmios de Rifas)
-```sql
-CREATE TABLE raffle_prizes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  raffle_id UUID NOT NULL REFERENCES raffles(id),
-  name TEXT NOT NULL,
-  description TEXT,
-  image_url TEXT,
-  estimated_value NUMERIC,
-  status TEXT NOT NULL DEFAULT 'pending', -- pending, processing, delivered
-  winner_id UUID,
-  delivery_notes TEXT,
-  delivered_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-#### Tabela: `scratch_card_batches` (Lotes de Raspadinhas)
-```sql
-CREATE TABLE scratch_card_batches (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  scratch_card_id UUID NOT NULL REFERENCES scratch_cards(id),
-  batch_name TEXT NOT NULL,
-  total_cards INTEGER NOT NULL,
-  cards_sold INTEGER DEFAULT 0,
-  total_prizes INTEGER NOT NULL,
-  prizes_distributed INTEGER DEFAULT 0,
-  prize_config JSONB NOT NULL, -- Array de {quantity, value}
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-### 1.2 Alterações em Tabelas Existentes
-
-#### Adicionar à tabela `profiles`:
-```sql
-ALTER TABLE profiles ADD COLUMN last_login_at TIMESTAMP WITH TIME ZONE;
-ALTER TABLE profiles ADD COLUMN registration_source TEXT; -- direct, share, affiliate
-ALTER TABLE profiles ADD COLUMN source_code TEXT; -- código de referência usado
-```
-
-#### Adicionar à tabela `wallet_transactions`:
-```sql
-ALTER TABLE wallet_transactions ADD COLUMN source_type TEXT; -- direct, share, affiliate
-ALTER TABLE wallet_transactions ADD COLUMN source_id UUID;
-```
+### Sorteios (Rifas)
+1. Manter preco e total de numeros
+2. Adicionar sistema de premios multiplos:
+   - Nome do premio
+   - Descricao
+   - Imagem
+   - Valor estimado
+   - Quantidade de vezes que sera sorteado
+   - Probabilidade de ser o premio principal
 
 ---
 
-## 2. Novas Páginas do Painel Admin
+## Mudancas Necessarias
 
-### 2.1 Dashboard Aprimorado (`/admin`)
-- **Gráficos de vendas** usando Recharts (dia/mês/ano)
-- **KPIs principais**: vendas totais, valor arrecadado, prêmios entregues, usuários ativos
-- **Gráfico de receita por canal** (direto, compartilhamento, afiliado)
-- **Taxa de conversão de cliques em vendas**
-- **Novos cadastros por período**
+### 1. Alteracao no Formulario de Raspadinhas
 
-### 2.2 Mapa de Usuários (`/admin/mapa`)
-- Integração com Google Maps API
-- Pins mostrando localização dos logins
-- Filtros por dia, mês e ano
-- Heatmap de concentração de usuários
+**Arquivo**: `src/pages/admin/Raspadinhas.tsx`
 
-### 2.3 Módulo de Vendas (`/admin/vendas`)
-- Lista de todas as vendas (rifas + raspadinhas)
-- Filtros: data, status de pagamento, tipo de produto
-- Métricas: quantidade vendida, valor total, ticket médio
-- Exportação CSV/Excel/PDF
+#### Adicionar campos ao formData:
+- `total_cards`: quantidade total de raspadinhas no lote
+- `prizes`: array de objetos com `{ name, value, quantity, probability, image_url }`
 
-### 2.4 Módulo Financeiro (`/admin/financeiro`)
-- Total arrecadado por período
-- Valores pendentes de processamento
-- Taxas do gateway de pagamento
-- Saldo líquido
-- Gráfico de fluxo de caixa
+#### Novo fluxo de criacao:
+1. Admin define dados basicos (titulo, preco, imagem)
+2. Admin define quantidade total de raspadinhas (ex: 1000)
+3. Admin adiciona premios dinamicamente na mesma tela:
+   - Adicionar linha de premio
+   - Definir nome, valor, quantidade, probabilidade
+   - Remover premio se necessario
+4. Sistema valida que a soma das probabilidades faz sentido
+5. Ao criar, insere:
+   - Registro em `scratch_cards`
+   - Lote em `scratch_card_batches` com `prize_config`
+   - Simbolos em `scratch_symbols` para cada premio
 
-### 2.5 Gestão de Prêmios de Rifas (`/admin/premios`)
-- CRUD de prêmios por rifa
-- Status: pendente, em processamento, entregue
-- Associação com ganhadores
-- Histórico completo de entregas
+### 2. Alteracao no Formulario de Sorteios
 
-### 2.6 Sistema de Raspadinhas Aprimorado (`/admin/raspadinhas`)
-- Configuração de lotes (ex: 1000 raspadinhas)
-- Definição de prêmios por lote (2x R$1000, 5x R$500, etc.)
-- Controle de prêmios disponíveis vs resgatados
-- Relatório de distribuição de prêmios
+**Arquivo**: `src/pages/admin/Sorteios.tsx`
 
-### 2.7 Sistema de Afiliados (`/admin/afiliados`)
-- Lista de afiliados com status
-- Aprovação/rejeição de novos afiliados
-- Ajuste de percentual de comissão
-- Dashboard de desempenho por afiliado
-- Gestão de saques de comissões
+#### Adicionar campos ao formData:
+- `prizes`: array de objetos com `{ name, description, image_url, estimated_value, quantity, probability }`
 
-### 2.8 Sistema de Compartilhamento (`/admin/compartilhamentos`)
-- Painel de quem compartilhou
-- Cadastros/vendas gerados por compartilhamento
-- Total de créditos concedidos
-- Métricas de conversão
-
-### 2.9 Relatórios e Exportação (`/admin/relatorios`)
-- Geração de relatórios em CSV/Excel/PDF
-- Vendas, comissões, prêmios, usuários
-- Filtros por período e tipo de produto
+#### Novo fluxo de criacao:
+1. Admin define dados basicos (titulo, preco, numeros, data)
+2. Admin adiciona premios dinamicamente:
+   - 1o Premio, 2o Premio, etc.
+   - Cada premio pode aparecer X vezes
+   - Probabilidade de ser sorteado
+3. Ao criar, insere:
+   - Registro em `raffles`
+   - Premios em `raffle_prizes` (um registro para cada quantidade)
 
 ---
 
-## 3. Novas Páginas para Afiliados
+## Detalhes Tecnicos
 
-### 3.1 Cadastro de Afiliado (`/afiliado/cadastro`)
-- Formulário completo com dados pessoais
-- Upload de foto de perfil
-- Redes sociais
-- Termos e condições
+### Componente Reutilizavel: PrizeConfigList
 
-### 3.2 Painel do Afiliado (`/afiliado`)
-- Dashboard com vendas e comissões
-- Histórico de transações
-- Status de pagamentos
-- Link único de afiliado
-- Solicitação de saque
+Criar um componente para configurar lista de premios que sera usado tanto em raspadinhas quanto sorteios.
 
----
+**Props**:
+```typescript
+interface PrizeConfigListProps {
+  prizes: PrizeConfig[];
+  onChange: (prizes: PrizeConfig[]) => void;
+  type: 'scratch' | 'raffle';
+  showImage?: boolean;
+}
 
-## 4. Novos Hooks e Serviços
+interface PrizeConfig {
+  id: string; // temporario para React keys
+  name: string;
+  value: number;
+  quantity: number;
+  probability: number;
+  image_url?: string;
+  description?: string;
+}
+```
 
-### 4.1 Hooks
-- `useAffiliates.tsx` - Gestão de afiliados
-- `useFinancial.tsx` - Dados financeiros e relatórios
-- `useShareTracking.tsx` - Rastreamento de compartilhamentos
-- `useExport.tsx` - Exportação de relatórios
-- `useUserLocations.tsx` - Dados de localização
+### Mudancas no Hook useScratchCards
 
-### 4.2 Edge Functions
-- `track-share-click` - Registrar clique em link compartilhado
-- `process-affiliate-sale` - Processar venda via afiliado
-- `generate-report` - Gerar relatórios PDF/Excel
-- `update-user-location` - Atualizar localização do usuário
+Atualizar `generateSymbols()` para respeitar:
+- Probabilidades configuradas por premio
+- Quantidade maxima de cada premio
+- Decrementar `remaining_quantity` ao sortear
 
----
+### Validacoes
 
-## 5. Componentes Reutilizáveis
+1. **Raspadinhas**:
+   - Total de premios nao pode exceder quantidade de raspadinhas
+   - Soma das probabilidades deve estar entre 0% e 100%
 
-### 5.1 Componentes de UI
-- `DateRangeFilter` - Filtro de período
-- `DataTable` - Tabela com paginação e filtros
-- `ExportButton` - Botão de exportação
-- `StatCard` - Card de estatística
-- `ChartCard` - Card com gráfico
-- `StatusBadge` - Badge de status
-
-### 5.2 Componentes de Gráficos
-- `SalesChart` - Gráfico de vendas
-- `RevenueByChannelChart` - Receita por canal
-- `ConversionFunnelChart` - Funil de conversão
-- `UserGrowthChart` - Crescimento de usuários
-
-### 5.3 Componentes de Mapas
-- `UserMapView` - Mapa com pins de usuários
-- `LocationFilter` - Filtros de localização
+2. **Sorteios**:
+   - Pelo menos 1 premio deve ser configurado
+   - Soma das probabilidades dos premios principais = 100%
 
 ---
 
-## 6. Integrações Necessárias
+## Arquivos a Modificar
 
-### 6.1 Google Maps API
-- Será necessário configurar uma API key do Google Maps
-- O sistema solicitará a key via ferramenta de secrets
-
-### 6.2 Exportação de Relatórios
-- Utilizaremos bibliotecas client-side para CSV/Excel (xlsx)
-- Para PDF, usaremos jspdf + jspdf-autotable
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/pages/admin/Raspadinhas.tsx` | Adicionar campos de lote e premios no formulario de criacao |
+| `src/pages/admin/Sorteios.tsx` | Adicionar secao de premios no formulario de criacao |
+| `src/components/admin/PrizeConfigList.tsx` | Novo componente para lista de premios |
+| `src/hooks/useScratchCards.tsx` | Atualizar logica de geracao de simbolos baseada em probabilidade |
+| `src/types/index.ts` | Adicionar interface PrizeConfig |
 
 ---
 
-## 7. Estrutura de Arquivos
+## Interface do Usuario
+
+### Formulario de Nova Raspadinha (Redesenhado)
 
 ```text
-src/
-├── pages/
-│   └── admin/
-│       ├── Dashboard.tsx (aprimorar)
-│       ├── Vendas.tsx (novo)
-│       ├── Financeiro.tsx (novo)
-│       ├── Mapa.tsx (novo)
-│       ├── Premios.tsx (novo)
-│       ├── Afiliados.tsx (novo)
-│       ├── Compartilhamentos.tsx (novo)
-│       ├── Relatorios.tsx (novo)
-│       ├── Raspadinhas.tsx (aprimorar)
-│       └── Sorteios.tsx (aprimorar)
-│   └── afiliado/
-│       ├── Index.tsx (novo)
-│       └── Cadastro.tsx (novo)
-├── components/
-│   └── admin/
-│       ├── AdminLayout.tsx (aprimorar)
-│       ├── charts/ (novo diretório)
-│       ├── tables/ (novo diretório)
-│       └── maps/ (novo diretório)
-├── hooks/
-│   ├── useAffiliates.tsx (novo)
-│   ├── useFinancial.tsx (novo)
-│   ├── useShareTracking.tsx (novo)
-│   └── useExport.tsx (novo)
-└── types/
-    └── index.ts (aprimorar)
++------------------------------------------+
+| CRIAR NOVA RASPADINHA                    |
++------------------------------------------+
+| Titulo*: [___________________________]   |
+| Descricao: [________________________]    |
+| Preco (R$)*: [____]                      |
+| [Imagem de Capa]                         |
++------------------------------------------+
+| CONFIGURACAO DO LOTE                     |
+| Quantidade de Raspadinhas*: [1000]       |
++------------------------------------------+
+| PREMIOS DO LOTE                          |
+| +--------------------------------------+ |
+| | Premio      | Valor  | Qtd  | Prob % | |
+| +--------------------------------------+ |
+| | Diamante    | 1000   | 2    | 0.2%   | |
+| | Ouro        | 500    | 5    | 0.5%   | |
+| | Prata       | 100    | 20   | 2.0%   | |
+| | Bronze      | 50     | 50   | 5.0%   | |
+| +--------------------------------------+ |
+| [+ Adicionar Premio]                     |
+|                                          |
+| Resumo: 77 premios de 1000 raspadinhas   |
+| Total em premios: R$ 9.500,00            |
++------------------------------------------+
+| [Cancelar]              [Criar]          |
++------------------------------------------+
+```
+
+### Formulario de Novo Sorteio (Redesenhado)
+
+```text
++------------------------------------------+
+| CRIAR NOVO SORTEIO                       |
++------------------------------------------+
+| Titulo*: [___________________________]   |
+| Descricao: [________________________]    |
+| Preco por Numero (R$)*: [____]           |
+| Total de Numeros*: [____]                |
+| Data do Sorteio*: [__/__/____]           |
+| [Imagem do Sorteio]                      |
++------------------------------------------+
+| PREMIOS DO SORTEIO                       |
+| +--------------------------------------+ |
+| | Premio           | Valor    | Qtd   | |
+| +--------------------------------------+ |
+| | iPhone 15 Pro    | 8000     | 1     | |
+| | Apple Watch      | 3000     | 2     | |
+| | AirPods Pro      | 1500     | 3     | |
+| +--------------------------------------+ |
+| [+ Adicionar Premio]                     |
+|                                          |
+| Total de premios: 6                      |
+| Valor total: R$ 18.500,00                |
++------------------------------------------+
+| [Cancelar]              [Criar]          |
++------------------------------------------+
 ```
 
 ---
 
-## 8. Ordem de Implementação
+## Ordem de Implementacao
 
-### Fase 1: Banco de Dados e Tipos
-1. Criar migrações SQL para novas tabelas
-2. Atualizar tipos TypeScript
-3. Configurar RLS policies
-
-### Fase 2: Dashboard e Analytics
-4. Aprimorar Dashboard com gráficos Recharts
-5. Criar componentes de gráficos reutilizáveis
-6. Implementar filtros de período
-
-### Fase 3: Módulos Financeiros
-7. Criar página de Vendas
-8. Criar página Financeiro
-9. Implementar exportação de relatórios
-
-### Fase 4: Sistema de Afiliados
-10. Criar tabelas e RLS de afiliados
-11. Criar página de gestão de afiliados (admin)
-12. Criar painel do afiliado (usuário)
-13. Implementar processamento de comissões
-
-### Fase 5: Sistema de Compartilhamento
-14. Criar tracking de compartilhamentos
-15. Implementar edge function de rastreamento
-16. Criar painel de acompanhamento
-
-### Fase 6: Mapa de Usuários
-17. Configurar Google Maps API
-18. Implementar coleta de localização
-19. Criar visualização do mapa
-
-### Fase 7: Gestão de Prêmios
-20. Criar gestão de prêmios de rifas
-21. Aprimorar sistema de lotes de raspadinhas
-22. Implementar controle de entrega
-
----
-
-## 9. Considerações Técnicas
-
-### Suposições Feitas:
-1. **Gateway de Pagamento**: Será simulado conforme solicitado, mas estruturado para fácil integração futura
-2. **Geolocalização**: Usaremos IP geolocation como fallback caso o usuário não permita GPS
-3. **Percentual de Afiliado**: Configurável por afiliado (padrão 10%)
-4. **Crédito de Compartilhamento**: Padrão R$ 5,00 por cadastro, configurável
-
-### Dependências a Adicionar:
-- `xlsx` - Exportação Excel
-- `jspdf` + `jspdf-autotable` - Exportação PDF
-- `@react-google-maps/api` - Integração Google Maps
-
-### Segurança:
-- Todas as novas tabelas terão RLS policies
-- Afiliados só podem ver seus próprios dados
-- Admin tem acesso total
-- Logs de auditoria para ações críticas
+1. Criar componente `PrizeConfigList`
+2. Atualizar formulario de Raspadinhas com novo layout
+3. Integrar criacao de lotes (`scratch_card_batches`)
+4. Atualizar formulario de Sorteios com premios
+5. Integrar criacao de premios (`raffle_prizes`)
+6. Atualizar hook de geracao de simbolos
+7. Adicionar validacoes
