@@ -126,22 +126,22 @@ export default function Index() {
       {/* Hero Section - Impactante */}
       <section className="relative overflow-hidden">
         {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-purple-500/20 to-pink-500/20" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-emerald-500/20 to-amber-500/20" />
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-50" />
         
         {/* Floating Elements */}
         <motion.div 
-          className="absolute top-20 left-10 w-20 h-20 bg-yellow-400/20 rounded-full blur-xl hidden lg:block"
+          className="absolute top-20 left-10 w-20 h-20 bg-amber-400/20 rounded-full blur-xl hidden lg:block"
           animate={{ y: [0, 20, 0], scale: [1, 1.1, 1] }}
           transition={{ duration: 4, repeat: Infinity }}
         />
         <motion.div 
-          className="absolute bottom-20 right-10 w-32 h-32 bg-purple-500/20 rounded-full blur-xl hidden lg:block"
+          className="absolute bottom-20 right-10 w-32 h-32 bg-emerald-500/20 rounded-full blur-xl hidden lg:block"
           animate={{ y: [0, -20, 0], scale: [1, 1.2, 1] }}
           transition={{ duration: 5, repeat: Infinity }}
         />
         <motion.div 
-          className="absolute top-40 right-20 w-16 h-16 bg-pink-400/20 rounded-full blur-xl hidden lg:block"
+          className="absolute top-40 right-20 w-16 h-16 bg-green-400/20 rounded-full blur-xl hidden lg:block"
           animate={{ x: [0, 10, 0], y: [0, -10, 0] }}
           transition={{ duration: 3, repeat: Infinity }}
         />
@@ -156,7 +156,7 @@ export default function Index() {
               className="inline-flex items-center rounded-full border border-primary/30 px-4 py-2 text-sm font-medium bg-primary/10 text-primary backdrop-blur-sm"
             >
               <Sparkles className="mr-2 h-4 w-4 animate-pulse" />
-              🔥 Mais de {stats.totalUsers > 0 ? stats.totalUsers : '100'}+ usuários já ganharam!
+              🍀 Mais de {stats.totalUsers > 0 ? stats.totalUsers : '100'}+ usuários já ganharam!
             </motion.div>
 
             {/* Título Principal */}
@@ -166,12 +166,12 @@ export default function Index() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-5xl px-2"
             >
-              <span className="bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                Sorteios & Raspadinhas
+              <span className="bg-gradient-to-r from-primary via-emerald-600 to-accent bg-clip-text text-transparent">
+                Vai na Certa
               </span>
               <br />
               <span className="text-foreground">
-                Sua sorte está aqui!
+                Vai na Boa! 🍀
               </span>
             </motion.h1>
 
@@ -196,7 +196,7 @@ export default function Index() {
               <Button 
                 size="lg" 
                 asChild 
-                className="w-full sm:w-auto text-lg h-14 px-8 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-lg shadow-primary/25"
+                className="w-full sm:w-auto text-lg h-14 px-8 bg-gradient-to-r from-primary to-emerald-600 hover:from-primary/90 hover:to-emerald-600/90 shadow-lg shadow-primary/25"
               >
                 <Link to="/sorteios">
                   <Ticket className="mr-2 h-5 w-5" />

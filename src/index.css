@@ -8,25 +8,25 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 240 20% 98%;
-    --foreground: 240 10% 10%;
+    --background: 140 20% 98%;
+    --foreground: 152 10% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 152 10% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover-foreground: 152 10% 10%;
 
-    --primary: 262 83% 58%;
+    --primary: 152 70% 35%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 10%;
+    --secondary: 140 5% 96%;
+    --secondary-foreground: 152 10% 10%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 5% 45%;
+    --muted: 140 5% 96%;
+    --muted-foreground: 140 5% 45%;
 
-    --accent: 45 100% 51%;
+    --accent: 38 95% 50%;
     --accent-foreground: 0 0% 10%;
 
     --success: 142 76% 36%;
@@ -38,33 +38,33 @@ All colors MUST be HSL.
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 262 83% 58%;
+    --border: 140 6% 90%;
+    --input: 140 6% 90%;
+    --ring: 152 70% 35%;
 
     --radius: 0.75rem;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(262, 83%, 58%) 0%, hsl(290, 80%, 50%) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(45, 100%, 51%) 0%, hsl(35, 100%, 50%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(152, 70%, 35%) 0%, hsl(152, 60%, 45%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(38, 95%, 50%) 0%, hsl(30, 100%, 45%) 100%);
     --gradient-success: linear-gradient(135deg, hsl(142, 76%, 36%) 0%, hsl(160, 70%, 40%) 100%);
-    --gradient-fire: linear-gradient(135deg, hsl(0, 100%, 60%) 0%, hsl(30, 100%, 50%) 50%, hsl(45, 100%, 51%) 100%);
-    --gradient-ocean: linear-gradient(135deg, hsl(200, 80%, 50%) 0%, hsl(262, 83%, 58%) 100%);
-    --gradient-sunset: linear-gradient(135deg, hsl(340, 80%, 55%) 0%, hsl(20, 90%, 55%) 50%, hsl(45, 100%, 55%) 100%);
+    --gradient-fire: linear-gradient(135deg, hsl(0, 100%, 60%) 0%, hsl(30, 100%, 50%) 50%, hsl(38, 95%, 50%) 100%);
+    --gradient-ocean: linear-gradient(135deg, hsl(180, 70%, 45%) 0%, hsl(152, 70%, 35%) 100%);
+    --gradient-sunset: linear-gradient(135deg, hsl(38, 95%, 50%) 0%, hsl(25, 90%, 55%) 50%, hsl(152, 70%, 35%) 100%);
 
     /* Shadows */
-    --shadow-glow-primary: 0 0 40px -10px hsl(262, 83%, 58%);
-    --shadow-glow-gold: 0 0 40px -10px hsl(45, 100%, 51%);
+    --shadow-glow-primary: 0 0 40px -10px hsl(152, 70%, 35%);
+    --shadow-glow-gold: 0 0 40px -10px hsl(38, 95%, 50%);
     --shadow-glow-success: 0 0 40px -10px hsl(142, 76%, 36%);
 
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 262 83% 58%;
+    --sidebar-foreground: 152 5.3% 26.1%;
+    --sidebar-primary: 152 70% 35%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 262 83% 58%;
+    --sidebar-accent: 140 4.8% 95.9%;
+    --sidebar-accent-foreground: 152 5.9% 10%;
+    --sidebar-border: 140 13% 91%;
+    --sidebar-ring: 152 70% 35%;
   }
 
   .dark {
