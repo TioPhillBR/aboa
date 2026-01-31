@@ -506,8 +506,8 @@ export default function AdminSorteios() {
   );
 }
 
-// Componente do diálogo de sorteio
-import { RouletteWheel } from '@/components/games/RouletteWheel';
+// Componente do diálogo de sorteio em tela cheia
+import { FullscreenRaffleDraw } from '@/components/games/FullscreenRaffleDraw';
 
 interface DrawRaffleDialogProps {
   raffle: RaffleWithStats;
@@ -518,22 +518,16 @@ interface DrawRaffleDialogProps {
 
 function DrawRaffleDialog({ raffle, open, onOpenChange, onComplete }: DrawRaffleDialogProps) {
   const { toast } = useToast();
-  const [isDrawing, setIsDrawing] = useState(false);
   const [winner, setWinner] = useState<Profile | null>(null);
-  const [winnerTicket, setWinnerTicket] = useState<number | null>(null);
 
-  const handleStartDraw = async () => {
-    setIsDrawing(true);
+  const handleWinnerSelected = async (selectedWinner: Profile) => {
+    setWinner(selectedWinner);
 
-    // Atualizar status para 'drawing'
+    // Atualizar status para 'drawing' primeiro
     await supabase
       .from('raffles')
       .update({ status: 'drawing' })
       .eq('id', raffle.id);
-  };
-
-  const handleWinnerSelected = async (selectedWinner: Profile) => {
-    setWinner(selectedWinner);
 
     // Buscar um ticket aleatório do vencedor
     const { data: tickets } = await supabase
@@ -543,7 +537,6 @@ function DrawRaffleDialog({ raffle, open, onOpenChange, onComplete }: DrawRaffle
       .eq('user_id', selectedWinner.id);
 
     const winningTicket = tickets?.[Math.floor(Math.random() * (tickets?.length || 1))]?.ticket_number || 1;
-    setWinnerTicket(winningTicket);
 
     // Atualizar o sorteio com o vencedor
     const { error } = await supabase
@@ -568,72 +561,25 @@ function DrawRaffleDialog({ raffle, open, onOpenChange, onComplete }: DrawRaffle
         description: `${selectedWinner.full_name} foi o vencedor!`,
       });
     }
-
-    setIsDrawing(false);
   };
 
   const handleClose = () => {
-    if (!isDrawing) {
-      onOpenChange(false);
-      if (winner) {
-        onComplete();
-      }
+    onOpenChange(false);
+    if (winner) {
+      onComplete();
     }
+    setWinner(null);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Play className="h-5 w-5 text-green-500" />
-            Realizar Sorteio: {raffle.title}
-          </DialogTitle>
-          <DialogDescription>
-            {raffle.participants.length} participantes • {raffle.tickets_sold} tickets vendidos
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="py-6">
-          {!isDrawing && !winner ? (
-            <div className="text-center space-y-6">
-              <div className="p-8 rounded-xl bg-muted/50">
-                <Users className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                <p className="text-lg font-medium mb-2">
-                  Pronto para sortear!
-                </p>
-                <p className="text-muted-foreground">
-                  {raffle.participants.length} participantes estão concorrendo
-                </p>
-              </div>
-
-              <Button
-                size="lg"
-                onClick={handleStartDraw}
-                className="gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
-              >
-                <Play className="h-5 w-5" />
-                Iniciar Sorteio Ao Vivo
-              </Button>
-            </div>
-          ) : (
-            <RouletteWheel
-              participants={raffle.participants}
-              onWinnerSelected={handleWinnerSelected}
-              autoSpin={isDrawing && !winner}
-              winner={winner}
-            />
-          )}
-        </div>
-
-        {winner && (
-          <DialogFooter>
-            <Button onClick={handleClose}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        )}
-      </DialogContent>
-    </Dialog>
+    <FullscreenRaffleDraw
+      participants={raffle.participants}
+      raffleTitle={raffle.title}
+      ticketsSold={raffle.tickets_sold}
+      open={open}
+      onClose={handleClose}
+      onWinnerSelected={handleWinnerSelected}
+      winner={winner}
+    />
   );
 }
