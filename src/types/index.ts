@@ -47,6 +47,8 @@ export interface WalletTransaction {
   type: TransactionType;
   description: string | null;
   reference_id: string | null;
+  source_type: string | null;
+  source_id: string | null;
   created_at: string;
 }
 
@@ -137,8 +139,6 @@ export interface ScratchCardWithSymbols extends ScratchCard {
 export interface WalletTransactionWithDetails extends WalletTransaction {
   raffle?: Raffle;
   scratch_card?: ScratchCard;
-  source_type?: string | null;
-  source_id?: string | null;
 }
 
 // Afiliado

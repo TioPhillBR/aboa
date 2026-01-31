@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Ticket, LayoutDashboard, Menu, Trophy } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Ticket, LayoutDashboard, Menu, Trophy, Gift } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
@@ -24,7 +24,7 @@ import logoABoa from '@/assets/logo-a-boa.png';
 
 export function Header() {
   const { user, profile, isAdmin, signOut, isLoading } = useAuth();
-  const { balance } = useWallet();
+  const { balance, bonusBalance } = useWallet();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -87,11 +87,17 @@ export function Header() {
           ) : user && profile ? (
             <>
               {/* Saldo da Carteira */}
-              <Link to="/carteira" className="hidden sm:block">
+              <Link to="/carteira" className="hidden sm:flex items-center gap-1">
                 <Button variant="outline" size="sm" className="gap-2 font-semibold">
                   <Wallet className="h-4 w-4" />
                   <span>R$ {balance.toFixed(2)}</span>
                 </Button>
+                {bonusBalance > 0 && (
+                  <Button variant="ghost" size="sm" className="gap-1 text-primary font-semibold px-2">
+                    <Gift className="h-4 w-4" />
+                    <span>+R$ {bonusBalance.toFixed(2)}</span>
+                  </Button>
+                )}
               </Link>
 
               {/* Menu do Usuário */}
