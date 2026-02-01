@@ -35,6 +35,7 @@ import AdminPremios from "./pages/admin/Premios";
 import AdminRelatorios from "./pages/admin/Relatorios";
 import AfiliadoDashboard from "./pages/afiliado/Index";
 import AfiliadoCadastro from "./pages/afiliado/Cadastro";
+import SorteioAoVivo from "./pages/SorteioAoVivo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +56,7 @@ const App = () => (
                 <Route path="/cadastro" element={<Cadastro />} />
                 <Route path="/sorteios" element={<Sorteios />} />
                 <Route path="/sorteio/:id" element={<SorteioDetail />} />
+                <Route path="/ao-vivo/:id" element={<SorteioAoVivo />} />
                 <Route path="/raspadinhas" element={<Raspadinhas />} />
                 <Route path="/raspadinha/:id" element={<RaspadinhaDetail />} />
                 <Route path="/carteira" element={<ProtectedRoute><Carteira /></ProtectedRoute>} />
