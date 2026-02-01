@@ -256,7 +256,7 @@ export default function SorteioDetail() {
             <div className="flex items-center justify-between text-sm text-white/70 mb-2">
               <span className="flex items-center gap-1.5">
                 <Users className="h-4 w-4" />
-                Números disponíveis
+                {soldNumbers.length} de {raffle.total_numbers} vendidos
               </span>
               <span>{progress.toFixed(0)}%</span>
             </div>
