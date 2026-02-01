@@ -38,7 +38,7 @@ export function FullscreenRaffleDraw({
   const [phase, setPhase] = useState<'idle' | 'accelerating' | 'spinning' | 'slowing' | 'countdown' | 'reveal'>('idle');
   const [glowIntensity, setGlowIntensity] = useState(0);
   const animationRef = useRef<number>();
-  const { playClick, playBigWin, playNotification } = useSoundEffects();
+  const { playClick, playBigWin, playDrumHit } = useSoundEffects();
 
   const extendedParticipants = [...participants, ...participants, ...participants, ...participants, ...participants];
   const totalHeight = participants.length * ITEM_HEIGHT;
@@ -147,7 +147,7 @@ export function FullscreenRaffleDraw({
         const remaining = Math.ceil((totalDuration - elapsed) / 1000);
         if (remaining !== countdown) {
           setCountdown(remaining);
-          playNotification();
+          playDrumHit(); // Som de tambor na contagem regressiva
         }
         
         const countdownProgress = (elapsed - countdownStart) / (totalDuration - countdownStart);
@@ -185,7 +185,7 @@ export function FullscreenRaffleDraw({
     };
 
     animationRef.current = requestAnimationFrame(animate);
-  }, [participants, offset, totalHeight, countdown, phase, triggerEpicConfetti, playClick, playNotification, playBigWin, onWinnerSelected]);
+  }, [participants, offset, totalHeight, countdown, phase, triggerEpicConfetti, playClick, playDrumHit, playBigWin, onWinnerSelected]);
 
   useEffect(() => {
     return () => {

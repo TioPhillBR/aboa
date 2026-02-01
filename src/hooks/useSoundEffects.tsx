@@ -56,6 +56,18 @@ const SOUNDS = {
     type: 'sawtooth' as OscillatorType,
     volume: 0.15,
   },
+  drumroll: {
+    frequencies: [80, 100, 80, 100, 80, 100, 80, 100],
+    durations: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+    type: 'triangle' as OscillatorType,
+    volume: 0.25,
+  },
+  drumHit: {
+    frequencies: [60, 80, 50],
+    durations: [0.08, 0.1, 0.15],
+    type: 'triangle' as OscillatorType,
+    volume: 0.4,
+  },
 };
 
 type SoundType = keyof typeof SOUNDS;
@@ -131,6 +143,8 @@ export function useSoundEffects() {
   const playScratch = useCallback(() => playSound('scratch'), [playSound]);
   const playReveal = useCallback(() => playSound('reveal'), [playSound]);
   const playError = useCallback(() => playSound('error'), [playSound]);
+  const playDrumroll = useCallback(() => playSound('drumroll'), [playSound]);
+  const playDrumHit = useCallback(() => playSound('drumHit'), [playSound]);
 
   const setEnabled = useCallback((enabled: boolean) => {
     enabledRef.current = enabled;
@@ -149,6 +163,8 @@ export function useSoundEffects() {
     playScratch,
     playReveal,
     playError,
+    playDrumroll,
+    playDrumHit,
     setEnabled,
     isEnabled,
   };
