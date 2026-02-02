@@ -163,27 +163,66 @@ export function useScratchCard(scratchCardId: string) {
         winningSymbolId: winningSymbol.id 
       };
     } else {
-      // Gerar sem 3 iguais
-      const symbolCounts: Record<string, number> = {};
+      // Gerar sem 3 iguais (derrota)
+      // Para 9 posições com máximo 2 de cada, precisamos de pelo menos 5 símbolos diferentes
+      // Se tivermos menos, usamos estratégia de distribuição controlada
       
+      const symbolCounts: Record<string, number> = {};
+      const maxPerSymbol = 2; // Máximo de repetições permitidas
+      
+      // Criar pool de símbolos disponíveis (cada um pode aparecer até 2x)
+      const availablePool: typeof symbols = [];
+      for (const symbol of symbols) {
+        availablePool.push(symbol, symbol); // Cada símbolo pode aparecer até 2x
+      }
+      
+      // Se o pool for menor que 9, não conseguimos evitar 3 iguais
+      // Nesse caso, precisamos de mais símbolos cadastrados
+      if (availablePool.length < 9) {
+        console.warn(`Aviso: Poucos símbolos cadastrados (${symbols.length}). Mínimo recomendado: 5 símbolos para garantir derrotas válidas.`);
+        // Fallback: adicionar mais do pool mesmo repetindo
+        while (availablePool.length < 9) {
+          availablePool.push(symbols[Math.floor(Math.random() * symbols.length)]);
+        }
+      }
+      
+      // Embaralhar o pool
+      for (let i = availablePool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [availablePool[i], availablePool[j]] = [availablePool[j], availablePool[i]];
+      }
+      
+      // Selecionar 9 símbolos do pool embaralhado, respeitando limite de 2 por símbolo
       for (let i = 0; i < 9; i++) {
+        let selectedSymbol = availablePool[i % availablePool.length];
         let attempts = 0;
-        let randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
         
-        // Garantir que nenhum símbolo apareça 3 vezes
-        while (symbolCounts[randomSymbol.id] >= 2 && attempts < 10) {
-          randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+        // Garantir que não exceda 2 repetições
+        while ((symbolCounts[selectedSymbol.id] || 0) >= maxPerSymbol && attempts < 50) {
+          const randomIndex = Math.floor(Math.random() * symbols.length);
+          selectedSymbol = symbols[randomIndex];
           attempts++;
         }
         
-        symbolCounts[randomSymbol.id] = (symbolCounts[randomSymbol.id] || 0) + 1;
+        symbolCounts[selectedSymbol.id] = (symbolCounts[selectedSymbol.id] || 0) + 1;
         
         result.push({
           position: i,
-          symbol_id: randomSymbol.id,
-          image_url: randomSymbol.image_url,
-          name: randomSymbol.name,
+          symbol_id: selectedSymbol.id,
+          image_url: selectedSymbol.image_url,
+          name: selectedSymbol.name,
         });
+      }
+      
+      // Verificar se realmente não há 3 iguais (validação final)
+      const finalCounts: Record<string, number> = {};
+      for (const s of result) {
+        finalCounts[s.symbol_id] = (finalCounts[s.symbol_id] || 0) + 1;
+      }
+      const hasThreeOrMore = Object.values(finalCounts).some(count => count >= 3);
+      
+      if (hasThreeOrMore) {
+        console.warn('Não foi possível gerar uma derrota válida. Verifique a quantidade de símbolos cadastrados.');
       }
       
       return { symbols: result, isWinner: false, prize: 0, winningSymbolId: null };

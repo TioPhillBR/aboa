@@ -41,8 +41,11 @@ import {
   Coins,
   Settings2,
   X,
-  Package
+  Package,
+  AlertTriangle,
+  TrendingUp
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
 
 interface ScratchCardWithStats extends ScratchCard {
@@ -606,6 +609,7 @@ export default function AdminRaspadinhas() {
                   <TableHead>Título</TableHead>
                   <TableHead>Preço</TableHead>
                   <TableHead>Símbolos</TableHead>
+                  <TableHead>Chance de Vitória</TableHead>
                   <TableHead>Vendas</TableHead>
                   <TableHead>Prêmios Pagos</TableHead>
                   <TableHead>Status</TableHead>
@@ -615,13 +619,13 @@ export default function AdminRaspadinhas() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                     </TableCell>
                   </TableRow>
                 ) : scratchCards.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Nenhuma raspadinha criada ainda
                     </TableCell>
                   </TableRow>
@@ -650,6 +654,51 @@ export default function AdminRaspadinhas() {
                           <ImageIcon className="h-3 w-3" />
                           {card.symbols.length}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const totalProbability = card.symbols.reduce((sum, s) => sum + s.probability, 0) * 100;
+                          const isHighRisk = totalProbability > 30;
+                          const isVeryHighRisk = totalProbability > 50;
+                          const needsMoreSymbols = card.symbols.length < 5;
+                          
+                          return (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className={`flex items-center gap-1.5 font-medium ${
+                                    isVeryHighRisk ? 'text-red-600' : 
+                                    isHighRisk ? 'text-amber-600' : 
+                                    'text-green-600'
+                                  }`}>
+                                    <TrendingUp className="h-3.5 w-3.5" />
+                                    {totalProbability.toFixed(1)}%
+                                    {(isHighRisk || needsMoreSymbols) && (
+                                      <AlertTriangle className="h-3.5 w-3.5" />
+                                    )}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <div className="space-y-1 text-xs">
+                                    <p className="font-medium">Chance total de vitória: {totalProbability.toFixed(1)}%</p>
+                                    {isVeryHighRisk && (
+                                      <p className="text-red-500">⚠️ Muito alta! Recomendado: até 15%</p>
+                                    )}
+                                    {isHighRisk && !isVeryHighRisk && (
+                                      <p className="text-amber-500">⚠️ Alta. Recomendado: até 15%</p>
+                                    )}
+                                    {needsMoreSymbols && (
+                                      <p className="text-amber-500">⚠️ Poucos símbolos ({card.symbols.length}). Mínimo: 5</p>
+                                    )}
+                                    {!isHighRisk && !needsMoreSymbols && (
+                                      <p className="text-green-500">✓ Configuração adequada</p>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>{card.total_sold}</TableCell>
                       <TableCell>
