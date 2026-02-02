@@ -96,6 +96,7 @@ export function useScratchCard(scratchCardId: string) {
   };
 
   // Gerar símbolos aleatórios para uma nova chance
+  // Usa as probabilidades cadastradas de cada símbolo
   const generateSymbols = (): { symbols: ScratchSymbolResult[], isWinner: boolean, prize: number, winningSymbolId: string | null } => {
     if (symbols.length === 0) {
       return { symbols: [], isWinner: false, prize: 0, winningSymbolId: null };
@@ -103,12 +104,27 @@ export function useScratchCard(scratchCardId: string) {
 
     const result: ScratchSymbolResult[] = [];
     
-    // Decidir se vai ganhar (baseado na probabilidade)
-    const willWin = Math.random() < 0.15; // 15% de chance de ganhar
+    // Calcular probabilidade total de ganhar (soma das probabilidades dos símbolos)
+    // Cada símbolo tem uma probabilidade individual de ser o vencedor
+    const totalWinProbability = symbols.reduce((sum, s) => sum + s.probability, 0);
+    
+    // Decidir se vai ganhar baseado na probabilidade total cadastrada
+    const winRoll = Math.random();
+    const willWin = winRoll < totalWinProbability;
     
     if (willWin && symbols.length > 0) {
-      // Escolher um símbolo vencedor aleatório baseado na probabilidade
-      const winningSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+      // Escolher qual símbolo será o vencedor baseado nas probabilidades individuais
+      let cumulativeProbability = 0;
+      let winningSymbol = symbols[0];
+      const symbolRoll = Math.random() * totalWinProbability;
+      
+      for (const symbol of symbols) {
+        cumulativeProbability += symbol.probability;
+        if (symbolRoll <= cumulativeProbability) {
+          winningSymbol = symbol;
+          break;
+        }
+      }
       
       // Preencher 9 posições
       for (let i = 0; i < 9; i++) {

@@ -48,6 +48,23 @@ export function ScratchCard({
   const lastScratchSoundRef = useRef(0);
   const { playScratch, playReveal, playWin, playBigWin } = useSoundEffects();
 
+  // Sincronizar estado quando uma nova chance é carregada (props mudam)
+  useEffect(() => {
+    setIsRevealed(externalRevealed);
+    setScratchPercentage(0);
+    setHasCalledOnReveal(externalRevealed);
+    onRevealCalledRef.current = externalRevealed;
+    
+    // Re-inicializar o canvas quando não revelado
+    if (!externalRevealed && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        // Limpar e redesenhar
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }, [externalRevealed, symbols]);
+
   // Verificar se há 3 símbolos iguais
   const checkWin = useCallback(() => {
     if (symbols.length !== 9) return { isWinner: false, prize: 0 };
@@ -75,6 +92,7 @@ export function ScratchCard({
   }, [symbols, prizeWon]);
 
   // Inicializar canvas com cobertura
+  // Adicionamos `symbols` como dependência para reinicializar quando uma nova chance é comprada
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || isRevealed) return;
@@ -82,11 +100,15 @@ export function ScratchCard({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Resetar composite operation para desenhar normalmente
+    ctx.globalCompositeOperation = 'source-over';
+
     // Preencher com cor/pattern de cobertura
     if (coverImage) {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        ctx.globalCompositeOperation = 'source-over';
         ctx.drawImage(img, 0, 0, CARD_WIDTH, CARD_HEIGHT);
       };
       img.src = coverImage;
@@ -123,7 +145,7 @@ export function ScratchCard({
         ctx.fill();
       }
     }
-  }, [coverImage, isRevealed]);
+  }, [coverImage, isRevealed, symbols]);
 
   // Calcular porcentagem raspada
   const calculateScratchPercentage = useCallback(() => {
