@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { NotificationProvider } from "@/hooks/useNotifications";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
@@ -49,6 +50,7 @@ const App = () => (
             <Toaster />
             <Sonner />
           <BrowserRouter>
+            <ScrollToTop />
             <div className="pb-16 md:pb-0">
               <Routes>
                 <Route path="/" element={<Index />} />
