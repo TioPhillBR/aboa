@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { PrizeConfigList, PrizeConfig } from '@/components/admin/PrizeConfigList';
+import { SymbolProbabilityEditor } from '@/components/admin/SymbolProbabilityEditor';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { ScratchCard, ScratchSymbol } from '@/types';
 import { 
@@ -43,7 +45,8 @@ import {
   X,
   Package,
   AlertTriangle,
-  TrendingUp
+  TrendingUp,
+  Percent
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
@@ -753,148 +756,174 @@ export default function AdminRaspadinhas() {
           </CardContent>
         </Card>
 
-        {/* Symbols Dialog */}
         <Dialog open={symbolsDialogOpen} onOpenChange={setSymbolsDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Settings2 className="h-5 w-5" />
-                Símbolos - {selectedCard?.title}
+                Configurar - {selectedCard?.title}
               </DialogTitle>
               <DialogDescription>
-                Configure os símbolos e prêmios desta raspadinha
+                Gerencie os símbolos, prêmios e probabilidades
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-6">
-              {/* Existing Symbols */}
-              <div>
-                <h4 className="text-sm font-medium mb-3">Símbolos Configurados</h4>
-                {selectedCard?.symbols.length === 0 ? (
-                  <div className="text-center py-6 bg-muted/50 rounded-lg">
-                    <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum símbolo configurado
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3">
-                    {selectedCard?.symbols.map((symbol) => (
-                      <div 
-                        key={symbol.id}
-                        className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg"
-                      >
-                        <img 
-                          src={symbol.image_url} 
-                          alt={symbol.name}
-                          className="h-12 w-12 rounded object-cover"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium">{symbol.name}</p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Coins className="h-3 w-3" />
-                              R$ {symbol.prize_value.toFixed(2)}
-                            </span>
-                            <span>
-                              Prob: {(symbol.probability * 100).toFixed(1)}%
-                            </span>
-                            {symbol.total_quantity && (
-                              <span>
-                                Qtd: {symbol.remaining_quantity}/{symbol.total_quantity}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteSymbol(symbol.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <Tabs defaultValue="probabilities" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="probabilities" className="gap-2">
+                  <Percent className="h-4 w-4" />
+                  Probabilidades
+                </TabsTrigger>
+                <TabsTrigger value="symbols" className="gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Adicionar Símbolos
+                </TabsTrigger>
+              </TabsList>
 
-              {/* Add New Symbol */}
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-medium mb-3">Adicionar Novo Símbolo</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Nome *</Label>
-                    <Input
-                      value={symbolForm.name}
-                      onChange={(e) => setSymbolForm({ ...symbolForm, name: e.target.value })}
-                      placeholder="Ex: Diamante"
-                    />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <ImageUpload
-                      label="Imagem do Símbolo *"
-                      value={symbolForm.image_url}
-                      onChange={(url) => setSymbolForm({ ...symbolForm, image_url: url })}
-                      bucket="scratch-images"
-                      folder="symbols"
-                      aspectRatio="square"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Valor do Prêmio (R$)</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={symbolForm.prize_value}
-                      onChange={(e) => setSymbolForm({ ...symbolForm, prize_value: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Probabilidade (%)</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      value={symbolForm.probability}
-                      onChange={(e) => setSymbolForm({ ...symbolForm, probability: e.target.value })}
-                      placeholder="10"
-                    />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Quantidade Total (opcional - limita prêmios)</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={symbolForm.total_quantity}
-                      onChange={(e) => setSymbolForm({ ...symbolForm, total_quantity: e.target.value })}
-                      placeholder="Ilimitado se vazio"
-                    />
-                  </div>
-                </div>
-                <Button 
-                  onClick={handleAddSymbol} 
-                  disabled={isAddingSymbol}
-                  className="mt-4 w-full gap-2"
-                >
-                  {isAddingSymbol ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Adicionando...
-                    </>
+              <TabsContent value="probabilities" className="mt-4">
+                {selectedCard && (
+                  <SymbolProbabilityEditor 
+                    symbols={selectedCard.symbols}
+                    onUpdate={() => {
+                      fetchScratchCards();
+                      // Atualizar símbolos do card selecionado
+                      supabase
+                        .from('scratch_symbols')
+                        .select('*')
+                        .eq('scratch_card_id', selectedCard.id)
+                        .then(({ data }) => {
+                          if (data) {
+                            setSelectedCard({
+                              ...selectedCard,
+                              symbols: data as ScratchSymbol[],
+                            });
+                          }
+                        });
+                    }}
+                  />
+                )}
+              </TabsContent>
+
+              <TabsContent value="symbols" className="mt-4 space-y-6">
+                {/* Existing Symbols */}
+                <div>
+                  <h4 className="text-sm font-medium mb-3">Símbolos Configurados</h4>
+                  {selectedCard?.symbols.length === 0 ? (
+                    <div className="text-center py-6 bg-muted/50 rounded-lg">
+                      <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum símbolo configurado
+                      </p>
+                    </div>
                   ) : (
-                    <>
-                      <Plus className="h-4 w-4" />
-                      Adicionar Símbolo
-                    </>
+                    <div className="grid gap-3 max-h-[200px] overflow-y-auto">
+                      {selectedCard?.symbols.map((symbol) => (
+                        <div 
+                          key={symbol.id}
+                          className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg"
+                        >
+                          <img 
+                            src={symbol.image_url} 
+                            alt={symbol.name}
+                            className="h-10 w-10 rounded object-cover"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">{symbol.name}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>R$ {symbol.prize_value.toFixed(2)}</span>
+                              <span>{(symbol.probability * 100).toFixed(1)}%</span>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteSymbol(symbol.id)}
+                            className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </Button>
-              </div>
-            </div>
+                </div>
+
+                {/* Add New Symbol */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3">Adicionar Novo Símbolo</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Nome *</Label>
+                      <Input
+                        value={symbolForm.name}
+                        onChange={(e) => setSymbolForm({ ...symbolForm, name: e.target.value })}
+                        placeholder="Ex: Diamante"
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <ImageUpload
+                        label="Imagem do Símbolo *"
+                        value={symbolForm.image_url}
+                        onChange={(url) => setSymbolForm({ ...symbolForm, image_url: url })}
+                        bucket="scratch-images"
+                        folder="symbols"
+                        aspectRatio="square"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Valor do Prêmio (R$)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={symbolForm.prize_value}
+                        onChange={(e) => setSymbolForm({ ...symbolForm, prize_value: e.target.value })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Probabilidade (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={symbolForm.probability}
+                        onChange={(e) => setSymbolForm({ ...symbolForm, probability: e.target.value })}
+                        placeholder="10"
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <Label>Quantidade Total (opcional - limita prêmios)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={symbolForm.total_quantity}
+                        onChange={(e) => setSymbolForm({ ...symbolForm, total_quantity: e.target.value })}
+                        placeholder="Ilimitado se vazio"
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={handleAddSymbol} 
+                    disabled={isAddingSymbol}
+                    className="mt-4 w-full gap-2"
+                  >
+                    {isAddingSymbol ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Adicionando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        Adicionar Símbolo
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
           </DialogContent>
         </Dialog>
 
