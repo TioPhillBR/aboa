@@ -222,130 +222,17 @@ export default function RaspadinhaDetail() {
               </CardHeader>
               <CardContent className="flex flex-col items-center">
                 {activeChance ? (
-                  <div className="space-y-6">
-                    <ScratchCard
-                      symbols={activeChance.symbols}
-                      coverImage={scratchCard.cover_image_url || undefined}
-                      onReveal={handleReveal}
-                      isRevealed={activeChance.is_revealed}
-                      prizeWon={activeChance.prize_won}
-                    />
-
-                    {activeChance.is_revealed && (
-                      <div className="w-full">
-                        {/* Resultado - estilo conforme referência */}
-                        <div className={`text-center px-4 py-5 rounded-xl ${activeChance.prize_won ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted/50'}`}>
-                          {activeChance.prize_won ? (
-                            <div className="space-y-4">
-                              <div>
-                                <p className="text-lg font-semibold flex items-center justify-center gap-2">
-                                  <Sparkles className="h-5 w-5" />
-                                  Parabéns!
-                                  <Sparkles className="h-5 w-5" />
-                                </p>
-                                <p className="text-3xl font-bold text-primary mt-2">
-                                  R$ {activeChance.prize_won.toFixed(2)}
-                                </p>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  Prêmio creditado na carteira
-                                </p>
-                              </div>
-
-                              {/* Botão Comprar Novamente após vitória */}
-                              {user && scratchCard && (
-                                <motion.div
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ delay: 0.5, duration: 0.4 }}
-                                  className="space-y-3 pt-2"
-                                >
-                                  <motion.div
-                                    animate={{ scale: [1, 1.02, 1] }}
-                                    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                                  >
-                                    <Button
-                                      onClick={handleBuyChance}
-                                      disabled={isBuying || balance < scratchCard.price}
-                                      className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 shadow-lg"
-                                      size="lg"
-                                    >
-                                      {isBuying ? (
-                                        'Comprando...'
-                                      ) : (
-                                        <>
-                                          <Plus className="h-5 w-5" />
-                                          Comprar Novamente - R$ {scratchCard.price.toFixed(2)}
-                                        </>
-                                      )}
-                                    </Button>
-                                  </motion.div>
-
-                                  {balance < scratchCard.price && (
-                                    <Button variant="outline" className="w-full" asChild>
-                                      <Link to="/carteira">
-                                        <Wallet className="h-4 w-4 mr-2" />
-                                        Adicionar Créditos
-                                      </Link>
-                                    </Button>
-                                  )}
-                                </motion.div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-4">
-                              {/* Mensagem de derrota - conforme referência */}
-                              <div>
-                                <p className="font-semibold text-foreground">Não foi dessa vez...</p>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  Tente novamente! A sorte pode estar no próximo!
-                                </p>
-                              </div>
-
-                              {/* Botão Comprar Novamente com animação pulse */}
-                              {user && scratchCard && (
-                                <motion.div
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ delay: 0.3, duration: 0.4 }}
-                                  className="space-y-3 pt-2"
-                                >
-                                  <motion.div
-                                    animate={{ scale: [1, 1.02, 1] }}
-                                    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                                  >
-                                    <Button
-                                      onClick={handleBuyChance}
-                                      disabled={isBuying || balance < scratchCard.price}
-                                      className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 shadow-lg"
-                                      size="lg"
-                                    >
-                                      {isBuying ? (
-                                        'Comprando...'
-                                      ) : (
-                                        <>
-                                          <Plus className="h-5 w-5" />
-                                          Comprar Novamente - R$ {scratchCard.price.toFixed(2)}
-                                        </>
-                                      )}
-                                    </Button>
-                                  </motion.div>
-
-                                  {balance < scratchCard.price && (
-                                    <Button variant="outline" className="w-full" asChild>
-                                      <Link to="/carteira">
-                                        <Wallet className="h-4 w-4 mr-2" />
-                                        Adicionar Créditos
-                                      </Link>
-                                    </Button>
-                                  )}
-                                </motion.div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <ScratchCard
+                    symbols={activeChance.symbols}
+                    coverImage={scratchCard.cover_image_url || undefined}
+                    onReveal={handleReveal}
+                    isRevealed={activeChance.is_revealed}
+                    prizeWon={activeChance.prize_won}
+                    onBuyAgain={handleBuyChance}
+                    isBuying={isBuying}
+                    canBuyAgain={balance >= scratchCard.price}
+                    price={scratchCard.price}
+                  />
                 ) : (
                   <div className="text-center space-y-6 py-8">
                     <div className="w-[300px] h-[300px] rounded-xl bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 flex items-center justify-center">

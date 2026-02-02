@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScratchSymbolResult } from '@/types';
-import { Trophy, RotateCcw, Sparkles } from 'lucide-react';
+import { Trophy, RotateCcw, Sparkles, Plus, Wallet } from 'lucide-react';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 interface ScratchCardProps {
@@ -11,6 +13,11 @@ interface ScratchCardProps {
   onReveal?: (isWinner: boolean, prize: number) => void;
   isRevealed?: boolean;
   prizeWon?: number | null;
+  // Props para o botão "Comprar Novamente"
+  onBuyAgain?: () => void;
+  isBuying?: boolean;
+  canBuyAgain?: boolean;
+  price?: number;
 }
 
 const CARD_WIDTH = 300;
@@ -26,6 +33,10 @@ export function ScratchCard({
   onReveal,
   isRevealed: externalRevealed = false,
   prizeWon,
+  onBuyAgain,
+  isBuying = false,
+  canBuyAgain = true,
+  price,
 }: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isScratching, setIsScratching] = useState(false);
@@ -392,6 +403,46 @@ export function ScratchCard({
             </div>
           )}
         </Card>
+      )}
+
+      {/* Botão Comprar Novamente - aparece após revelar */}
+      {isRevealed && onBuyAgain && price !== undefined && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.4 }}
+          className="w-full max-w-[300px] space-y-3"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.02, 1] }}
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+          >
+            <Button
+              onClick={onBuyAgain}
+              disabled={isBuying || !canBuyAgain}
+              className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 shadow-lg"
+              size="lg"
+            >
+              {isBuying ? (
+                'Comprando...'
+              ) : (
+                <>
+                  <Plus className="h-5 w-5" />
+                  Comprar Novamente - R$ {price.toFixed(2)}
+                </>
+              )}
+            </Button>
+          </motion.div>
+
+          {!canBuyAgain && (
+            <Button variant="outline" className="w-full" asChild>
+              <Link to="/carteira">
+                <Wallet className="h-4 w-4 mr-2" />
+                Adicionar Créditos
+              </Link>
+            </Button>
+          )}
+        </motion.div>
       )}
 
       {/* Botão revelar tudo */}
