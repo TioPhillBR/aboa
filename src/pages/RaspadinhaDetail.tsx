@@ -231,14 +231,67 @@ export default function RaspadinhaDetail() {
                     />
 
                     {activeChance.is_revealed && (
-                      <Button 
-                        onClick={handlePlayAgain}
-                        className="w-full gap-2"
-                        size="lg"
-                      >
-                        <Plus className="h-5 w-5" />
-                        Jogar Novamente
-                      </Button>
+                      <div className="w-full space-y-3">
+                        {/* Resultado */}
+                        <div className={`text-center p-4 rounded-xl ${activeChance.prize_won ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted/50'}`}>
+                          <p className="text-lg font-semibold flex items-center justify-center gap-2">
+                            <Sparkles className="h-5 w-5" />
+                            {activeChance.prize_won ? 'Parabéns!' : 'Tente novamente!'}
+                            <Sparkles className="h-5 w-5" />
+                          </p>
+                          {activeChance.prize_won ? (
+                            <>
+                              <p className="text-3xl font-bold text-primary mt-2">
+                                R$ {activeChance.prize_won.toFixed(2)}
+                              </p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Prêmio creditado na carteira
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Não foi dessa vez, mas a sorte pode mudar!
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Botão Comprar Novamente */}
+                        {user && (
+                          <Button 
+                            onClick={handleBuyChance}
+                            disabled={isBuying || balance < scratchCard.price}
+                            className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600"
+                            size="lg"
+                          >
+                            {isBuying ? (
+                              'Comprando...'
+                            ) : (
+                              <>
+                                <Plus className="h-5 w-5" />
+                                Comprar Novamente - R$ {scratchCard.price.toFixed(2)}
+                              </>
+                            )}
+                          </Button>
+                        )}
+
+                        {user && balance < scratchCard.price && (
+                          <Button variant="outline" className="w-full" asChild>
+                            <Link to="/carteira">
+                              <Wallet className="h-4 w-4 mr-2" />
+                              Adicionar Créditos
+                            </Link>
+                          </Button>
+                        )}
+
+                        {/* Botão Nova Raspadinha (para voltar ao estado inicial) */}
+                        <Button 
+                          onClick={handlePlayAgain}
+                          variant="ghost"
+                          className="w-full"
+                        >
+                          Voltar
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ) : (
