@@ -65,30 +65,27 @@ export function ScratchCard({
     }
   }, [externalRevealed, symbols]);
 
-  // Verificar se há 3 símbolos iguais
+  // Verificar vitória
+  // IMPORTANTE: o resultado (ganhou/perdeu) é definido no sorteio ao comprar a chance.
+  // Se a gente inferir vitória apenas por contagem de símbolos, com poucos símbolos cadastrados
+  // fica impossível montar uma grade 3x3 sem repetir 3+ vezes algum símbolo, dando “vitória” sempre.
   const checkWin = useCallback(() => {
-    if (symbols.length !== 9) return { isWinner: false, prize: 0 };
+    if (symbols.length !== 9) return { isWinner: false, prize: 0, symbolId: undefined as string | undefined };
 
-    // Contar ocorrências de cada símbolo
-    const symbolCounts: Record<string, { count: number; prize: number }> = {};
-    
-    symbols.forEach(s => {
-      if (!symbolCounts[s.symbol_id]) {
-        symbolCounts[s.symbol_id] = { count: 0, prize: 0 };
-      }
-      symbolCounts[s.symbol_id].count++;
-    });
-
-    // Verificar se algum símbolo aparece 3+ vezes
-    for (const [symbolId, data] of Object.entries(symbolCounts)) {
-      if (data.count >= 3) {
-        const symbol = symbols.find(s => s.symbol_id === symbolId);
-        // Encontrar o prêmio associado (vamos assumir que está nos símbolos)
-        return { isWinner: true, prize: prizeWon || 0, symbolId };
-      }
+    // Se não há prêmio, é derrota (independente da distribuição visual dos símbolos)
+    if (!prizeWon || prizeWon <= 0) {
+      return { isWinner: false, prize: 0, symbolId: undefined as string | undefined };
     }
 
-    return { isWinner: false, prize: 0 };
+    // Para efeitos visuais (highlight), tentamos encontrar um símbolo que apareça 3+ vezes
+    // (em chances vencedoras geradas pelo sistema isso deve existir).
+    const symbolCounts: Record<string, number> = {};
+    for (const s of symbols) {
+      symbolCounts[s.symbol_id] = (symbolCounts[s.symbol_id] || 0) + 1;
+    }
+    const symbolId = Object.entries(symbolCounts).find(([, count]) => count >= 3)?.[0];
+
+    return { isWinner: true, prize: prizeWon, symbolId };
   }, [symbols, prizeWon]);
 
   // Inicializar canvas com cobertura
