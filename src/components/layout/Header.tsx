@@ -86,8 +86,8 @@ export function Header() {
             <div className="h-10 w-24 bg-muted animate-pulse rounded-md" />
           ) : user && profile ? (
             <>
-              {/* Saldo da Carteira */}
-              <Link to="/carteira" className="hidden sm:flex items-center gap-1">
+              {/* Saldo da Carteira - Desktop */}
+              <Link to="/carteira" className="hidden md:flex items-center gap-1">
                 <Button variant="outline" size="sm" className="gap-2 font-semibold">
                   <Wallet className="h-4 w-4" />
                   <span>R$ {balance.toFixed(2)}</span>
@@ -100,9 +100,9 @@ export function Header() {
                 )}
               </Link>
 
-              {/* Menu do Usuário */}
+              {/* Menu do Usuário - Desktop */}
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild className="hidden md:flex">
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
                     <Avatar className="h-9 w-9">
                       <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name} />
@@ -175,15 +175,12 @@ export function Header() {
               </DropdownMenu>
             </>
           ) : (
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" asChild className="hidden sm:flex">
+            <div className="hidden md:flex items-center space-x-2">
+              <Button variant="ghost" asChild>
                 <Link to="/login">Entrar</Link>
               </Button>
-              <Button asChild className="hidden sm:flex bg-gradient-primary hover:opacity-90">
+              <Button asChild className="bg-gradient-primary hover:opacity-90">
                 <Link to="/cadastro">Cadastrar</Link>
-              </Button>
-              <Button asChild className="sm:hidden bg-gradient-primary hover:opacity-90">
-                <Link to="/login">Entrar</Link>
               </Button>
             </div>
           )}
@@ -192,14 +189,65 @@ export function Header() {
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
+                {user && profile ? (
+                  <Avatar className="h-8 w-8 ring-2 ring-primary/20">
+                    <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name} />
+                    <AvatarFallback className="bg-gradient-primary text-white text-xs">
+                      {getInitials(profile.full_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <Menu className="h-5 w-5" />
+                )}
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
               <SheetHeader>
-                <SheetTitle>Menu</SheetTitle>
+                <SheetTitle>
+                  {user && profile ? (
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name} />
+                        <AvatarFallback className="bg-gradient-primary text-white text-sm">
+                          {getInitials(profile.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="text-left">
+                        <p className="font-medium text-sm">{profile.full_name}</p>
+                        <p className="text-xs text-muted-foreground truncate max-w-[160px]">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    'Menu'
+                  )}
+                </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-2 mt-6">
+                {/* Saldo - Apenas logado */}
+                {user && profile && (
+                  <>
+                    <Link 
+                      to="/carteira" 
+                      className="flex items-center justify-between px-4 py-3 rounded-xl bg-primary/10 border border-primary/20"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Wallet className="h-5 w-5 text-primary" />
+                        <span className="font-medium">Carteira</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-primary">R$ {balance.toFixed(2)}</span>
+                        {bonusBalance > 0 && (
+                          <p className="text-xs text-muted-foreground">+R$ {bonusBalance.toFixed(2)} bônus</p>
+                        )}
+                      </div>
+                    </Link>
+                    <div className="h-px bg-border my-2" />
+                  </>
+                )}
+
+                {/* Links principais */}
                 <Link 
                   to="/sorteios" 
                   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
@@ -221,7 +269,56 @@ export function Header() {
                   <Trophy className="h-5 w-5 text-warning" />
                   <span className="font-medium">Ganhadores</span>
                 </Link>
-                {!user && (
+
+                {/* Menu do usuário logado */}
+                {user && profile ? (
+                  <>
+                    <div className="h-px bg-border my-2" />
+                    <Link 
+                      to="/meus-tickets" 
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                    >
+                      <Ticket className="h-5 w-5" />
+                      <span className="font-medium">Meus Tickets</span>
+                    </Link>
+                    <Link 
+                      to="/perfil" 
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                    >
+                      <User className="h-5 w-5" />
+                      <span className="font-medium">Meu Perfil</span>
+                    </Link>
+                    <Link 
+                      to="/configuracoes" 
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                    >
+                      <Settings className="h-5 w-5" />
+                      <span className="font-medium">Configurações</span>
+                    </Link>
+
+                    {isAdmin && (
+                      <>
+                        <div className="h-px bg-border my-2" />
+                        <Link 
+                          to="/admin" 
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors text-primary"
+                        >
+                          <LayoutDashboard className="h-5 w-5" />
+                          <span className="font-medium">Painel Admin</span>
+                        </Link>
+                      </>
+                    )}
+
+                    <div className="h-px bg-border my-2" />
+                    <button 
+                      onClick={handleSignOut}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-destructive/10 transition-colors text-destructive w-full text-left"
+                    >
+                      <LogOut className="h-5 w-5" />
+                      <span className="font-medium">Sair</span>
+                    </button>
+                  </>
+                ) : (
                   <>
                     <div className="h-px bg-border my-2" />
                     <Link 
@@ -231,6 +328,9 @@ export function Header() {
                       <User className="h-5 w-5" />
                       <span className="font-medium">Entrar</span>
                     </Link>
+                    <Button asChild className="mx-4 bg-gradient-primary hover:opacity-90">
+                      <Link to="/cadastro">Criar conta</Link>
+                    </Button>
                   </>
                 )}
               </nav>
