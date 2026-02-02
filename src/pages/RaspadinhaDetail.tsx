@@ -249,9 +249,41 @@ export default function RaspadinhaDetail() {
                               </p>
                             </>
                           ) : (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Não foi dessa vez, mas a sorte pode mudar!
-                            </p>
+                            <div className="mt-1 space-y-4">
+                              <p className="text-sm text-muted-foreground">
+                                Não foi dessa vez... Tente novamente! A sorte pode estar no próximo!
+                              </p>
+
+                              {/* Comprar novamente (dentro do card, abaixo da mensagem) */}
+                              {user && scratchCard && (
+                                <div className="space-y-3">
+                                  <Button
+                                    onClick={handleBuyChance}
+                                    disabled={isBuying || balance < scratchCard.price}
+                                    className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600"
+                                    size="lg"
+                                  >
+                                    {isBuying ? (
+                                      'Comprando...'
+                                    ) : (
+                                      <>
+                                        <Plus className="h-5 w-5" />
+                                        Comprar Novamente - R$ {scratchCard.price.toFixed(2)}
+                                      </>
+                                    )}
+                                  </Button>
+
+                                  {balance < scratchCard.price && (
+                                    <Button variant="outline" className="w-full" asChild>
+                                      <Link to="/carteira">
+                                        <Wallet className="h-4 w-4 mr-2" />
+                                        Adicionar Créditos
+                                      </Link>
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -305,44 +337,6 @@ export default function RaspadinhaDetail() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Botão Comprar Novamente - Fora do card para destaque */}
-            {activeChance?.is_revealed && user && (
-              <div className="space-y-3">
-                <Button 
-                  onClick={handleBuyChance}
-                  disabled={isBuying || balance < scratchCard.price}
-                  className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 h-14 text-lg font-semibold shadow-lg"
-                  size="lg"
-                >
-                  {isBuying ? (
-                    'Comprando...'
-                  ) : (
-                    <>
-                      <Plus className="h-6 w-6" />
-                      Comprar Novamente - R$ {scratchCard.price.toFixed(2)}
-                    </>
-                  )}
-                </Button>
-
-                {balance < scratchCard.price && (
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link to="/carteira">
-                      <Wallet className="h-4 w-4 mr-2" />
-                      Adicionar Créditos
-                    </Link>
-                  </Button>
-                )}
-
-                <Button 
-                  onClick={handlePlayAgain}
-                  variant="ghost"
-                  className="w-full"
-                >
-                  Ver outras raspadinhas
-                </Button>
-              </div>
-            )}
           </div>
 
           {/* Sidebar */}
