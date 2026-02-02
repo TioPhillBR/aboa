@@ -179,8 +179,11 @@ export function Header() {
               <Button variant="ghost" asChild className="hidden sm:flex">
                 <Link to="/login">Entrar</Link>
               </Button>
-              <Button asChild className="bg-gradient-primary hover:opacity-90">
+              <Button asChild className="hidden sm:flex bg-gradient-primary hover:opacity-90">
                 <Link to="/cadastro">Cadastrar</Link>
+              </Button>
+              <Button asChild className="sm:hidden bg-gradient-primary hover:opacity-90">
+                <Link to="/login">Entrar</Link>
               </Button>
             </div>
           )}
