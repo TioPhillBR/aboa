@@ -95,167 +95,23 @@ export function useScratchCard(scratchCardId: string) {
     }
   };
 
-  // Gerar símbolos aleatórios para uma nova chance
-  // Usa as probabilidades cadastradas de cada símbolo
-  const generateSymbols = (): { symbols: ScratchSymbolResult[], isWinner: boolean, prize: number, winningSymbolId: string | null } => {
-    if (symbols.length === 0) {
-      return { symbols: [], isWinner: false, prize: 0, winningSymbolId: null };
-    }
-
-    const result: ScratchSymbolResult[] = [];
-    
-    // Calcular probabilidade total de ganhar (soma das probabilidades dos símbolos)
-    // Cada símbolo tem uma probabilidade individual de ser o vencedor
-    const totalWinProbability = symbols.reduce((sum, s) => sum + s.probability, 0);
-    
-    // Decidir se vai ganhar baseado na probabilidade total cadastrada
-    const winRoll = Math.random();
-    const willWin = winRoll < totalWinProbability;
-    
-    if (willWin && symbols.length > 0) {
-      // Escolher qual símbolo será o vencedor baseado nas probabilidades individuais
-      let cumulativeProbability = 0;
-      let winningSymbol = symbols[0];
-      const symbolRoll = Math.random() * totalWinProbability;
-      
-      for (const symbol of symbols) {
-        cumulativeProbability += symbol.probability;
-        if (symbolRoll <= cumulativeProbability) {
-          winningSymbol = symbol;
-          break;
-        }
-      }
-      
-      // Preencher 9 posições
-      for (let i = 0; i < 9; i++) {
-        if (i < 3) {
-          // Garantir 3 símbolos iguais (vencedores)
-          result.push({
-            position: i,
-            symbol_id: winningSymbol.id,
-            image_url: winningSymbol.image_url,
-            name: winningSymbol.name,
-          });
-        } else {
-          // Símbolos aleatórios para o resto
-          const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
-          result.push({
-            position: i,
-            symbol_id: randomSymbol.id,
-            image_url: randomSymbol.image_url,
-            name: randomSymbol.name,
-          });
-        }
-      }
-      
-      // Embaralhar
-      for (let i = result.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [result[i], result[j]] = [result[j], result[i]];
-        result[i].position = i;
-        result[j].position = j;
-      }
-      
-      return { 
-        symbols: result, 
-        isWinner: true, 
-        prize: winningSymbol.prize_value,
-        winningSymbolId: winningSymbol.id 
-      };
-    } else {
-      // Gerar sem 3 iguais (derrota)
-      // Para 9 posições com máximo 2 de cada, precisamos de pelo menos 5 símbolos diferentes
-      // Se tivermos menos, usamos estratégia de distribuição controlada
-      
-      const symbolCounts: Record<string, number> = {};
-      const maxPerSymbol = 2; // Máximo de repetições permitidas
-      
-      // Criar pool de símbolos disponíveis (cada um pode aparecer até 2x)
-      const availablePool: typeof symbols = [];
-      for (const symbol of symbols) {
-        availablePool.push(symbol, symbol); // Cada símbolo pode aparecer até 2x
-      }
-      
-      // Se o pool for menor que 9, não conseguimos evitar 3 iguais
-      // Nesse caso, precisamos de mais símbolos cadastrados
-      if (availablePool.length < 9) {
-        console.warn(`Aviso: Poucos símbolos cadastrados (${symbols.length}). Mínimo recomendado: 5 símbolos para garantir derrotas válidas.`);
-        // Fallback: adicionar mais do pool mesmo repetindo
-        while (availablePool.length < 9) {
-          availablePool.push(symbols[Math.floor(Math.random() * symbols.length)]);
-        }
-      }
-      
-      // Embaralhar o pool
-      for (let i = availablePool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [availablePool[i], availablePool[j]] = [availablePool[j], availablePool[i]];
-      }
-      
-      // Selecionar 9 símbolos do pool embaralhado, respeitando limite de 2 por símbolo
-      for (let i = 0; i < 9; i++) {
-        let selectedSymbol = availablePool[i % availablePool.length];
-        let attempts = 0;
-        
-        // Garantir que não exceda 2 repetições
-        while ((symbolCounts[selectedSymbol.id] || 0) >= maxPerSymbol && attempts < 50) {
-          const randomIndex = Math.floor(Math.random() * symbols.length);
-          selectedSymbol = symbols[randomIndex];
-          attempts++;
-        }
-        
-        symbolCounts[selectedSymbol.id] = (symbolCounts[selectedSymbol.id] || 0) + 1;
-        
-        result.push({
-          position: i,
-          symbol_id: selectedSymbol.id,
-          image_url: selectedSymbol.image_url,
-          name: selectedSymbol.name,
-        });
-      }
-      
-      // Verificar se realmente não há 3 iguais (validação final)
-      const finalCounts: Record<string, number> = {};
-      for (const s of result) {
-        finalCounts[s.symbol_id] = (finalCounts[s.symbol_id] || 0) + 1;
-      }
-      const hasThreeOrMore = Object.values(finalCounts).some(count => count >= 3);
-      
-      if (hasThreeOrMore) {
-        console.warn('Não foi possível gerar uma derrota válida. Verifique a quantidade de símbolos cadastrados.');
-      }
-      
-      return { symbols: result, isWinner: false, prize: 0, winningSymbolId: null };
-    }
-  };
-
   const buyChance = async () => {
     if (!user || !scratchCard) {
       return { error: new Error('Usuário não autenticado'), chance: null };
     }
 
     try {
-      const generated = generateSymbols();
-      
-      const { data, error } = await supabase
-        .from('scratch_chances')
-        .insert({
-          scratch_card_id: scratchCard.id,
-          user_id: user.id,
-          symbols: generated.symbols as unknown as any,
-          is_revealed: false,
-          prize_won: generated.isWinner ? generated.prize : null,
-          winning_symbol_id: generated.winningSymbolId,
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.functions.invoke('buy-scratch-chance', {
+        body: { scratch_card_id: scratchCard.id },
+      });
 
       if (error) throw error;
+      if (!data?.chance) throw new Error('Resposta inválida ao comprar raspadinha');
 
       const newChance: ScratchChance = {
-        ...data,
-        symbols: data.symbols as unknown as ScratchSymbolResult[],
-      };
+        ...data.chance,
+        symbols: data.chance.symbols as unknown as ScratchSymbolResult[],
+      } as ScratchChance;
       
       setMyChances(prev => [newChance, ...prev]);
       
