@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Header } from '@/components/layout/Header';
 import { ScratchCard } from '@/components/games/ScratchCard';
 import { WinCelebration } from '@/components/games/WinCelebration';
@@ -231,16 +232,16 @@ export default function RaspadinhaDetail() {
                     />
 
                     {activeChance.is_revealed && (
-                      <div className="w-full space-y-4">
-                        {/* Resultado */}
-                        <div className={`text-center p-6 rounded-xl ${activeChance.prize_won ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted/50'}`}>
-                          <p className="text-lg font-semibold flex items-center justify-center gap-2">
-                            <Sparkles className="h-5 w-5" />
-                            {activeChance.prize_won ? 'Parabéns!' : 'Tente novamente!'}
-                            <Sparkles className="h-5 w-5" />
-                          </p>
+                      <div className="w-full">
+                        {/* Resultado - estilo conforme referência */}
+                        <div className={`text-center px-4 py-5 rounded-xl ${activeChance.prize_won ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted/50'}`}>
                           {activeChance.prize_won ? (
                             <>
+                              <p className="text-lg font-semibold flex items-center justify-center gap-2">
+                                <Sparkles className="h-5 w-5" />
+                                Parabéns!
+                                <Sparkles className="h-5 w-5" />
+                              </p>
                               <p className="text-3xl font-bold text-primary mt-2">
                                 R$ {activeChance.prize_won.toFixed(2)}
                               </p>
@@ -249,29 +250,43 @@ export default function RaspadinhaDetail() {
                               </p>
                             </>
                           ) : (
-                            <div className="mt-1 space-y-4">
-                              <p className="text-sm text-muted-foreground">
-                                Não foi dessa vez... Tente novamente! A sorte pode estar no próximo!
-                              </p>
+                            <div className="space-y-4">
+                              {/* Mensagem de derrota - conforme referência */}
+                              <div>
+                                <p className="font-semibold text-foreground">Não foi dessa vez...</p>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Tente novamente! A sorte pode estar no próximo!
+                                </p>
+                              </div>
 
-                              {/* Comprar novamente (dentro do card, abaixo da mensagem) */}
+                              {/* Botão Comprar Novamente com animação pulse */}
                               {user && scratchCard && (
-                                <div className="space-y-3">
-                                  <Button
-                                    onClick={handleBuyChance}
-                                    disabled={isBuying || balance < scratchCard.price}
-                                    className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600"
-                                    size="lg"
+                                <motion.div
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: 0.3, duration: 0.4 }}
+                                  className="space-y-3 pt-2"
+                                >
+                                  <motion.div
+                                    animate={{ scale: [1, 1.02, 1] }}
+                                    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
                                   >
-                                    {isBuying ? (
-                                      'Comprando...'
-                                    ) : (
-                                      <>
-                                        <Plus className="h-5 w-5" />
-                                        Comprar Novamente - R$ {scratchCard.price.toFixed(2)}
-                                      </>
-                                    )}
-                                  </Button>
+                                    <Button
+                                      onClick={handleBuyChance}
+                                      disabled={isBuying || balance < scratchCard.price}
+                                      className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 shadow-lg"
+                                      size="lg"
+                                    >
+                                      {isBuying ? (
+                                        'Comprando...'
+                                      ) : (
+                                        <>
+                                          <Plus className="h-5 w-5" />
+                                          Comprar Novamente - R$ {scratchCard.price.toFixed(2)}
+                                        </>
+                                      )}
+                                    </Button>
+                                  </motion.div>
 
                                   {balance < scratchCard.price && (
                                     <Button variant="outline" className="w-full" asChild>
@@ -281,7 +296,7 @@ export default function RaspadinhaDetail() {
                                       </Link>
                                     </Button>
                                   )}
-                                </div>
+                                </motion.div>
                               )}
                             </div>
                           )}
