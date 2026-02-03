@@ -8,9 +8,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { ImageCropper } from '@/components/ui/image-cropper';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   Loader2, Mail, Lock, User, Trophy, Eye, EyeOff, Gift,
-  Phone, Calendar, CreditCard, ArrowRight, Upload, AlertCircle
+  Phone, Calendar, CreditCard, ArrowRight, Upload, AlertCircle, Banknote
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -173,6 +180,11 @@ export default function DadosPessoais() {
       missingFields.push('Confirmar Senha');
     } else if (personalData.password && personalData.password !== personalData.confirmPassword) {
       validationErrors.push('As senhas não coincidem');
+    }
+    
+    // Validate PIX key
+    if (!personalData.pixKey.trim()) {
+      missingFields.push('Chave PIX');
     }
     
     // Build error message
@@ -419,6 +431,55 @@ export default function DadosPessoais() {
               >
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
+            </div>
+          </div>
+
+          {/* PIX Key Section */}
+          <div className="space-y-4 pt-4 border-t">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Banknote className="h-4 w-4" />
+              Chave PIX para receber prêmios
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Tipo da chave PIX *</Label>
+              <Select 
+                value={personalData.pixKeyType} 
+                onValueChange={(value: 'cpf' | 'email' | 'phone' | 'random') => setPersonalData({ pixKeyType: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cpf">CPF</SelectItem>
+                  <SelectItem value="email">E-mail</SelectItem>
+                  <SelectItem value="phone">Telefone</SelectItem>
+                  <SelectItem value="random">Chave Aleatória</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pixKey">Chave PIX *</Label>
+              <div className="relative">
+                <Banknote className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="pixKey"
+                  value={personalData.pixKey}
+                  onChange={(e) => setPersonalData({ pixKey: e.target.value })}
+                  placeholder={
+                    personalData.pixKeyType === 'cpf' ? '000.000.000-00' :
+                    personalData.pixKeyType === 'email' ? 'seu@email.com' :
+                    personalData.pixKeyType === 'phone' ? '(00) 90000-0000' :
+                    'Sua chave aleatória'
+                  }
+                  className="pl-10"
+                  required
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Esta chave será usada para enviar seus prêmios via PIX
+              </p>
             </div>
           </div>
 

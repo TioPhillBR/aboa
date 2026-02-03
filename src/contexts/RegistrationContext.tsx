@@ -75,6 +75,8 @@ export interface PersonalData {
   confirmPassword: string;
   avatarFile: File | null;
   avatarPreview: string | null;
+  pixKey: string;
+  pixKeyType: 'cpf' | 'email' | 'phone' | 'random';
 }
 
 export interface AddressData {
@@ -121,6 +123,8 @@ const defaultPersonalData: PersonalData = {
   confirmPassword: '',
   avatarFile: null,
   avatarPreview: null,
+  pixKey: '',
+  pixKeyType: 'cpf',
 };
 
 const defaultAddressData: AddressData = {
