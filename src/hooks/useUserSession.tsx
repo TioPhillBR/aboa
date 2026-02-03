@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-const ACTIVITY_INTERVAL = 30000; // Update activity every 30 seconds (was 60)
+const ACTIVITY_INTERVAL = 30000; // Update activity every 30 seconds
 const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutes
 
 export function useUserSession() {
@@ -12,6 +12,31 @@ export function useUserSession() {
   const activityIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isCreatingSessionRef = useRef<boolean>(false);
+  const signOutRef = useRef(signOut);
+  
+  // Keep signOut ref updated
+  useEffect(() => {
+    signOutRef.current = signOut;
+  }, [signOut]);
+
+  // End session
+  const endSession = useCallback(async () => {
+    if (!sessionIdRef.current) return;
+
+    try {
+      await supabase
+        .from('user_sessions')
+        .update({ 
+          is_active: false, 
+          session_ended_at: new Date().toISOString() 
+        })
+        .eq('id', sessionIdRef.current);
+      
+      sessionIdRef.current = null;
+    } catch (err) {
+      console.error('Error ending session:', err);
+    }
+  }, []);
 
   // Create or update session
   const createSession = useCallback(async () => {
@@ -86,26 +111,7 @@ export function useUserSession() {
     }
   }, [user, createSession]);
 
-  // End session
-  const endSession = useCallback(async () => {
-    if (!sessionIdRef.current) return;
-
-    try {
-      await supabase
-        .from('user_sessions')
-        .update({ 
-          is_active: false, 
-          session_ended_at: new Date().toISOString() 
-        })
-        .eq('id', sessionIdRef.current);
-      
-      sessionIdRef.current = null;
-    } catch (err) {
-      console.error('Error ending session:', err);
-    }
-  }, []);
-
-  // Reset inactivity timer
+  // Reset inactivity timer - use ref for signOut to avoid dependency changes
   const resetInactivityTimer = useCallback(() => {
     lastActivityRef.current = Date.now();
     
@@ -116,9 +122,9 @@ export function useUserSession() {
     inactivityTimeoutRef.current = setTimeout(async () => {
       console.log('User inactive for 20 minutes, logging out...');
       await endSession();
-      await signOut();
+      await signOutRef.current();
     }, INACTIVITY_TIMEOUT);
-  }, [endSession, signOut]);
+  }, [endSession]);
 
   // Track user activity
   useEffect(() => {
@@ -154,9 +160,11 @@ export function useUserSession() {
     return () => {
       if (activityIntervalRef.current) {
         clearInterval(activityIntervalRef.current);
+        activityIntervalRef.current = null;
       }
       if (inactivityTimeoutRef.current) {
         clearTimeout(inactivityTimeoutRef.current);
+        inactivityTimeoutRef.current = null;
       }
     };
   }, [user, createSession, updateActivity, resetInactivityTimer]);
@@ -174,18 +182,13 @@ export function useUserSession() {
       if (sessionIdRef.current) {
         // Use sendBeacon for reliable session ending
         const url = `https://sarauvembzbneunhssud.supabase.co/rest/v1/user_sessions?id=eq.${sessionIdRef.current}`;
-        const headers = {
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhcmF1dmVtYnpibmV1bmhzc3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyMTc4MjEsImV4cCI6MjA4NDc5MzgyMX0.H1ww5qaVw2WGX7N9Ls6eM2q5_se8cj_J6hsw12XeNpM',
-          'Prefer': 'return=minimal'
-        };
         
         const body = JSON.stringify({
           is_active: false,
           session_ended_at: new Date().toISOString()
         });
 
-        // Try sendBeacon first
+        // Try sendBeacon
         const blob = new Blob([body], { type: 'application/json' });
         navigator.sendBeacon(url, blob);
       }
@@ -204,9 +207,17 @@ export function useUserSession() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      endSession();
     };
-  }, [user, endSession, updateActivity]);
+  }, [user, updateActivity]);
+
+  // Cleanup session on unmount
+  useEffect(() => {
+    return () => {
+      if (sessionIdRef.current) {
+        endSession();
+      }
+    };
+  }, [endSession]);
 
   return {
     endSession,
