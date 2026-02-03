@@ -227,7 +227,7 @@ export default function DadosPessoais() {
             <Alert className="bg-primary/10 border-primary/30">
               <Gift className="h-4 w-4 text-primary" />
               <AlertDescription className="text-primary font-medium">
-                🎁 Código de indicação: <strong>{referralCode}</strong> - Você ganhará R$ 5,00 de bônus!
+                🎁 Você veio por indicação! Você ganhará R$ 5,00 de bônus ao concluir o cadastro!
               </AlertDescription>
             </Alert>
           )}
