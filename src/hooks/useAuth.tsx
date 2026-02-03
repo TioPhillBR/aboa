@@ -9,6 +9,7 @@ interface AuthContextType {
   profile: Profile | null;
   roles: AppRole[];
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   isAffiliate: boolean;
   affiliateStatus: AffiliateStatus | null;
   isLoading: boolean;
@@ -28,7 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [affiliateStatus, setAffiliateStatus] = useState<AffiliateStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isAdmin = roles.includes('admin');
+  const isAdmin = roles.includes('admin') || roles.includes('super_admin');
+  const isSuperAdmin = roles.includes('super_admin');
   const isAffiliate = affiliateStatus === 'approved';
 
   useEffect(() => {
@@ -146,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         roles,
         isAdmin,
+        isSuperAdmin,
         isAffiliate,
         affiliateStatus,
         isLoading,
