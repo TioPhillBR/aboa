@@ -40,6 +40,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
 import { Profile, Wallet, WalletTransaction, UserRole } from '@/types';
 import { 
   Users, 
@@ -61,6 +62,7 @@ import {
   UserCheck,
   UserX,
   MoreHorizontal,
+  Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -97,6 +99,13 @@ export default function AdminUsuarios() {
   const [actionUser, setActionUser] = useState<UserWithDetails | null>(null);
   const [actionType, setActionType] = useState<'promote_admin' | 'remove_admin' | 'approve_affiliate' | 'reject_affiliate' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Bonus credits state
+  const [bonusDialogOpen, setBonusDialogOpen] = useState(false);
+  const [bonusUser, setBonusUser] = useState<UserWithDetails | null>(null);
+  const [bonusAmount, setBonusAmount] = useState('');
+  const [bonusDescription, setBonusDescription] = useState('');
+  const [isAddingBonus, setIsAddingBonus] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -176,6 +185,68 @@ export default function AdminUsuarios() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAddBonus = async () => {
+    try {
+      if (!bonusUser?.wallet) {
+        toast({ title: 'Usuário não possui carteira', variant: 'destructive' });
+        return;
+      }
+      
+      const amount = parseFloat(bonusAmount.replace(',', '.'));
+      if (isNaN(amount) || amount <= 0) {
+        toast({ title: 'Valor inválido', variant: 'destructive' });
+        return;
+      }
+      
+      setIsAddingBonus(true);
+      
+      // Add transaction
+      const { error: transactionError } = await supabase
+        .from('wallet_transactions')
+        .insert({
+          wallet_id: bonusUser.wallet.id,
+          type: 'deposit',
+          amount: amount,
+          description: bonusDescription.trim() || 'Crédito bônus adicionado pelo administrador',
+          source_type: 'admin_bonus',
+        });
+      
+      if (transactionError) throw transactionError;
+      
+      // Update wallet balance
+      const newBalance = bonusUser.wallet.balance + amount;
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .update({ balance: newBalance })
+        .eq('id', bonusUser.wallet.id);
+      
+      if (walletError) throw walletError;
+      
+      toast({ 
+        title: 'Créditos adicionados!', 
+        description: `R$ ${amount.toFixed(2)} adicionados à carteira de ${bonusUser.full_name}` 
+      });
+      
+      setBonusDialogOpen(false);
+      setBonusUser(null);
+      setBonusAmount('');
+      setBonusDescription('');
+      fetchUsers();
+    } catch (error) {
+      console.error('Error adding bonus:', error);
+      toast({ title: 'Erro ao adicionar créditos', variant: 'destructive' });
+    } finally {
+      setIsAddingBonus(false);
+    }
+  };
+
+  const openBonusDialog = (userDetails: UserWithDetails) => {
+    setBonusUser(userDetails);
+    setBonusAmount('');
+    setBonusDescription('');
+    setBonusDialogOpen(true);
   };
 
   const getTransactionDetails = (type: string): { label: string; icon: React.ReactNode; color: string } => {
@@ -601,6 +672,14 @@ export default function AdminUsuarios() {
                                 
                                 <DropdownMenuSeparator />
                                 
+                                {/* Bonus Credits Option */}
+                                <DropdownMenuItem onClick={() => openBonusDialog(userDetails)}>
+                                  <Plus className="h-4 w-4 mr-2 text-success" />
+                                  Adicionar Créditos Bônus
+                                </DropdownMenuItem>
+                                
+                                <DropdownMenuSeparator />
+                                
                                 {!userDetails.affiliateStatus || userDetails.affiliateStatus === 'rejected' ? (
                                   <DropdownMenuItem onClick={() => {
                                     setActionUser(userDetails);
@@ -749,6 +828,92 @@ export default function AdminUsuarios() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Bonus Credits Dialog */}
+        <Dialog open={bonusDialogOpen} onOpenChange={setBonusDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Gift className="h-5 w-5 text-success" />
+                Adicionar Créditos Bônus
+              </DialogTitle>
+              <DialogDescription>
+                Adicionar créditos bônus à carteira do usuário
+              </DialogDescription>
+            </DialogHeader>
+            
+            {bonusUser && (
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
+                <Avatar>
+                  <AvatarImage src={bonusUser.avatar_url || ''} />
+                  <AvatarFallback>{bonusUser.full_name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{bonusUser.full_name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Saldo atual: <span className="text-success font-medium">R$ {(bonusUser.wallet?.balance || 0).toFixed(2)}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="bonusAmount">Valor do Bônus (R$) *</Label>
+                <Input
+                  id="bonusAmount"
+                  type="text"
+                  placeholder="0,00"
+                  value={bonusAmount}
+                  onChange={(e) => {
+                    // Allow only numbers, comma, and dot
+                    const value = e.target.value.replace(/[^\d,\.]/g, '');
+                    setBonusAmount(value);
+                  }}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="bonusDescription">Descrição (opcional)</Label>
+                <Input
+                  id="bonusDescription"
+                  type="text"
+                  placeholder="Ex: Bônus promocional, compensação, etc."
+                  value={bonusDescription}
+                  onChange={(e) => setBonusDescription(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setBonusDialogOpen(false)} 
+                className="flex-1"
+                disabled={isAddingBonus}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleAddBonus} 
+                className="flex-1 gap-2"
+                disabled={isAddingBonus || !bonusAmount}
+              >
+                {isAddingBonus ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Adicionando...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Adicionar Créditos
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
