@@ -334,20 +334,32 @@ export default function AdminUsuarios() {
     try {
       switch (actionType) {
         case 'promote_admin':
-          await supabase.from('user_roles').insert({
-            user_id: actionUser.id,
-            role: 'admin',
-            created_by: user.id,
-          });
+          // Update existing role to admin
+          const { error: promoteError } = await supabase
+            .from('user_roles')
+            .update({ role: 'admin', created_by: user.id })
+            .eq('user_id', actionUser.id);
+          
+          if (promoteError) {
+            // If no existing role, insert new one
+            const { error: insertError } = await supabase.from('user_roles').insert({
+              user_id: actionUser.id,
+              role: 'admin',
+              created_by: user.id,
+            });
+            if (insertError) throw insertError;
+          }
           toast({ title: `${actionUser.full_name} agora é administrador!` });
           break;
           
         case 'remove_admin':
-          await supabase
+          // Downgrade to user instead of deleting
+          const { error: demoteError } = await supabase
             .from('user_roles')
-            .delete()
+            .update({ role: 'user' })
             .eq('user_id', actionUser.id)
             .eq('role', 'admin');
+          if (demoteError) throw demoteError;
           toast({ title: `Permissões de admin removidas de ${actionUser.full_name}` });
           break;
           
