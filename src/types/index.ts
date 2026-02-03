@@ -14,6 +14,20 @@ export interface Profile {
   full_name: string;
   avatar_url: string | null;
   phone: string | null;
+  cpf: string | null;
+  birth_date: string | null;
+  // Endereço
+  address_cep: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  address_neighborhood: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  // LGPD
+  lgpd_consent: boolean | null;
+  lgpd_consent_at: string | null;
+  // Metadata
   last_login_at: string | null;
   registration_source: string | null;
   source_code: string | null;
