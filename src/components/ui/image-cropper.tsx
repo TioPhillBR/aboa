@@ -1,11 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
-import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { ZoomIn, ZoomOut, RotateCcw, Check, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Check, X, RotateCw } from 'lucide-react';
 
 interface ImageCropperProps {
   imageSrc: string;
@@ -14,18 +14,19 @@ interface ImageCropperProps {
   onCropComplete: (croppedImageBlob: Blob) => void;
   aspectRatio?: number;
   circularCrop?: boolean;
+  outputSize?: number; // Tamanho final do output em pixels (width = height para ratio 1:1)
 }
 
 function centerAspectCrop(
   mediaWidth: number,
   mediaHeight: number,
   aspect: number,
-) {
+): Crop {
   return centerCrop(
     makeAspectCrop(
       {
         unit: '%',
-        width: 90,
+        width: 80,
       },
       aspect,
       mediaWidth,
@@ -41,20 +42,37 @@ export function ImageCropper({
   open,
   onClose,
   onCropComplete,
-  aspectRatio,
+  aspectRatio = 1,
   circularCrop = false,
+  outputSize = 400,
 }: ImageCropperProps) {
   const [crop, setCrop] = useState<Crop>();
-  const [completedCrop, setCompletedCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [scale, setScale] = useState(1);
   const [rotate, setRotate] = useState(0);
+  const [imgNaturalWidth, setImgNaturalWidth] = useState(0);
+  const [imgNaturalHeight, setImgNaturalHeight] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Reset state quando o dialog abre com nova imagem
+  useEffect(() => {
+    if (open && imageSrc) {
+      setScale(1);
+      setRotate(0);
+      setCrop(undefined);
+      setCompletedCrop(undefined);
+    }
+  }, [open, imageSrc]);
 
   const onImageLoad = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
-      const { width, height } = e.currentTarget;
-      const aspect = aspectRatio || 1;
-      setCrop(centerAspectCrop(width, height, aspect));
+      const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
+      setImgNaturalWidth(naturalWidth);
+      setImgNaturalHeight(naturalHeight);
+      
+      const newCrop = centerAspectCrop(width, height, aspectRatio);
+      setCrop(newCrop);
     },
     [aspectRatio],
   );
@@ -67,17 +85,139 @@ export function ImageCropper({
     setScale((prev) => Math.max(prev - 0.1, 0.5));
   };
 
+  const handleRotateLeft = () => {
+    setRotate((prev) => prev - 90);
+  };
+
+  const handleRotateRight = () => {
+    setRotate((prev) => prev + 90);
+  };
+
   const handleReset = () => {
     setScale(1);
     setRotate(0);
     if (imgRef.current) {
       const { width, height } = imgRef.current;
-      const aspect = aspectRatio || 1;
-      setCrop(centerAspectCrop(width, height, aspect));
+      setCrop(centerAspectCrop(width, height, aspectRatio));
     }
   };
 
+  // Função melhorada para gerar imagem cortada mantendo proporção
   const getCroppedImg = useCallback(async (): Promise<Blob | null> => {
+    const image = imgRef.current;
+    if (!image || !completedCrop) return null;
+
+    // Criar canvas offscreen
+    const offscreen = document.createElement('canvas');
+    const ctx = offscreen.getContext('2d');
+    if (!ctx) return null;
+
+    // Calcular escala entre imagem exibida e natural
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+
+    // Dimensões do crop na imagem natural
+    const cropX = completedCrop.x * scaleX;
+    const cropY = completedCrop.y * scaleY;
+    const cropWidth = completedCrop.width * scaleX;
+    const cropHeight = completedCrop.height * scaleY;
+
+    // Calcular dimensões finais mantendo aspect ratio
+    let finalWidth = outputSize;
+    let finalHeight = outputSize;
+    
+    if (aspectRatio !== 1) {
+      if (aspectRatio > 1) {
+        finalHeight = outputSize / aspectRatio;
+      } else {
+        finalWidth = outputSize * aspectRatio;
+      }
+    }
+
+    // Configurar canvas final
+    offscreen.width = finalWidth;
+    offscreen.height = finalHeight;
+
+    // Configurações de qualidade
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // Fundo branco para evitar transparência em JPG
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, finalWidth, finalHeight);
+
+    // Aplicar transformações
+    ctx.save();
+    
+    // Mover para o centro para rotação
+    ctx.translate(finalWidth / 2, finalHeight / 2);
+    
+    // Aplicar rotação
+    ctx.rotate((rotate * Math.PI) / 180);
+    
+    // Voltar ao canto superior esquerdo
+    ctx.translate(-finalWidth / 2, -finalHeight / 2);
+
+    // Desenhar a imagem cortada com scale aplicado
+    // Precisamos criar um canvas temporário para aplicar o crop primeiro
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return null;
+
+    // Tamanho do canvas temporário baseado no crop escalado
+    tempCanvas.width = cropWidth * scale;
+    tempCanvas.height = cropHeight * scale;
+
+    tempCtx.imageSmoothingEnabled = true;
+    tempCtx.imageSmoothingQuality = 'high';
+
+    // Aplicar scale ao desenhar no canvas temporário
+    tempCtx.save();
+    tempCtx.scale(scale, scale);
+    
+    // Desenhar a parte cortada da imagem original
+    tempCtx.drawImage(
+      image,
+      cropX / scale + (cropWidth - cropWidth / scale) / 2, // Ajustar posição X com zoom
+      cropY / scale + (cropHeight - cropHeight / scale) / 2, // Ajustar posição Y com zoom
+      cropWidth / scale,
+      cropHeight / scale,
+      0,
+      0,
+      cropWidth,
+      cropHeight
+    );
+    
+    tempCtx.restore();
+
+    // Desenhar o canvas temporário no canvas final, redimensionando
+    ctx.drawImage(
+      tempCanvas,
+      0,
+      0,
+      tempCanvas.width,
+      tempCanvas.height,
+      0,
+      0,
+      finalWidth,
+      finalHeight
+    );
+
+    ctx.restore();
+
+    return new Promise((resolve) => {
+      offscreen.toBlob(
+        (blob) => {
+          resolve(blob);
+        },
+        'image/jpeg',
+        0.92,
+      );
+    });
+  }, [completedCrop, rotate, scale, aspectRatio, outputSize]);
+
+  // Abordagem alternativa mais simples - usar a imagem visível diretamente
+  const getCroppedImgSimple = useCallback(async (): Promise<Blob | null> => {
     const image = imgRef.current;
     if (!image || !completedCrop) return null;
 
@@ -85,44 +225,63 @@ export function ImageCropper({
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
+    // Calcular dimensões finais
+    let finalWidth = outputSize;
+    let finalHeight = outputSize;
+    
+    if (aspectRatio !== 1) {
+      if (aspectRatio > 1) {
+        finalHeight = Math.round(outputSize / aspectRatio);
+      } else {
+        finalWidth = Math.round(outputSize * aspectRatio);
+      }
+    }
+
+    canvas.width = finalWidth;
+    canvas.height = finalHeight;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // Fundo branco
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, finalWidth, finalHeight);
+
+    // Calcular proporções
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
 
-    const pixelRatio = window.devicePixelRatio || 1;
+    // Área de crop em coordenadas naturais
+    const sourceX = completedCrop.x * scaleX;
+    const sourceY = completedCrop.y * scaleY;
+    const sourceWidth = completedCrop.width * scaleX;
+    const sourceHeight = completedCrop.height * scaleY;
 
-    const cropX = completedCrop.x * scaleX;
-    const cropY = completedCrop.y * scaleY;
-    const cropWidth = completedCrop.width * scaleX;
-    const cropHeight = completedCrop.height * scaleY;
+    // Aplicar rotação se necessário
+    if (rotate !== 0) {
+      ctx.translate(finalWidth / 2, finalHeight / 2);
+      ctx.rotate((rotate * Math.PI) / 180);
+      ctx.translate(-finalWidth / 2, -finalHeight / 2);
+    }
 
-    canvas.width = cropWidth * pixelRatio;
-    canvas.height = cropHeight * pixelRatio;
-
-    ctx.scale(pixelRatio, pixelRatio);
-    ctx.imageSmoothingQuality = 'high';
-
-    const centerX = cropWidth / 2;
-    const centerY = cropHeight / 2;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate((rotate * Math.PI) / 180);
-    ctx.scale(scale, scale);
-    ctx.translate(-centerX, -centerY);
+    // Ajustar pelo scale (zoom)
+    // Quando scale > 1, precisamos recortar uma área menor da imagem fonte
+    const effectiveSourceWidth = sourceWidth / scale;
+    const effectiveSourceHeight = sourceHeight / scale;
+    const offsetX = (sourceWidth - effectiveSourceWidth) / 2;
+    const offsetY = (sourceHeight - effectiveSourceHeight) / 2;
 
     ctx.drawImage(
       image,
-      cropX,
-      cropY,
-      cropWidth,
-      cropHeight,
+      sourceX + offsetX,
+      sourceY + offsetY,
+      effectiveSourceWidth,
+      effectiveSourceHeight,
       0,
       0,
-      cropWidth,
-      cropHeight,
+      finalWidth,
+      finalHeight
     );
-
-    ctx.restore();
 
     return new Promise((resolve) => {
       canvas.toBlob(
@@ -130,22 +289,31 @@ export function ImageCropper({
           resolve(blob);
         },
         'image/jpeg',
-        0.95,
+        0.92,
       );
     });
-  }, [completedCrop, rotate, scale]);
+  }, [completedCrop, rotate, scale, aspectRatio, outputSize]);
 
   const handleConfirm = async () => {
-    const croppedBlob = await getCroppedImg();
+    const croppedBlob = await getCroppedImgSimple();
     if (croppedBlob) {
       onCropComplete(croppedBlob);
-      onClose();
     }
   };
 
+  const handleClose = () => {
+    setScale(1);
+    setRotate(0);
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+    onClose();
+  };
+
+  if (!imageSrc) return null;
+
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ZoomIn className="h-5 w-5" />
@@ -153,42 +321,50 @@ export function ImageCropper({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 space-y-4 overflow-hidden">
           {/* Área de crop */}
-          <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[300px] max-h-[400px]">
+          <div 
+            className="relative bg-muted/50 rounded-lg overflow-hidden flex items-center justify-center"
+            style={{ minHeight: '280px', maxHeight: '380px' }}
+          >
             <ReactCrop
               crop={crop}
               onChange={(_, percentCrop) => setCrop(percentCrop)}
               onComplete={(c) => setCompletedCrop(c)}
               aspect={aspectRatio}
               circularCrop={circularCrop}
-              className="max-h-[400px]"
+              keepSelection
+              className="max-h-[380px]"
             >
               <img
                 ref={imgRef}
-                alt="Crop"
+                alt="Imagem para recorte"
                 src={imageSrc}
                 style={{
                   transform: `scale(${scale}) rotate(${rotate}deg)`,
-                  maxHeight: '400px',
-                  width: 'auto',
+                  maxHeight: '380px',
+                  maxWidth: '100%',
+                  display: 'block',
+                  objectFit: 'contain',
                 }}
                 onLoad={onImageLoad}
-                className="max-w-full"
+                crossOrigin="anonymous"
               />
             </ReactCrop>
           </div>
 
-          {/* Controles de zoom */}
-          <div className="space-y-3">
+          {/* Controles */}
+          <div className="space-y-3 px-1">
+            {/* Zoom */}
             <div className="flex items-center gap-3">
-              <Label className="w-16 text-sm">Zoom</Label>
+              <Label className="w-16 text-sm font-medium">Zoom</Label>
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 shrink-0"
                 onClick={handleZoomOut}
+                disabled={scale <= 0.5}
               >
                 <ZoomOut className="h-4 w-4" />
               </Button>
@@ -204,34 +380,54 @@ export function ImageCropper({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 shrink-0"
                 onClick={handleZoomIn}
+                disabled={scale >= 3}
               >
                 <ZoomIn className="h-4 w-4" />
               </Button>
-              <span className="text-sm text-muted-foreground w-12 text-right">
+              <span className="text-sm text-muted-foreground w-14 text-right tabular-nums">
                 {Math.round(scale * 100)}%
               </span>
             </div>
 
+            {/* Rotação */}
             <div className="flex items-center gap-3">
-              <Label className="w-16 text-sm">Rotação</Label>
+              <Label className="w-16 text-sm font-medium">Rotação</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={handleRotateLeft}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
               <Slider
-                value={[rotate]}
-                onValueChange={(value) => setRotate(value[0])}
-                min={-180}
-                max={180}
+                value={[rotate + 180]}
+                onValueChange={(value) => setRotate(value[0] - 180)}
+                min={0}
+                max={360}
                 step={1}
                 className="flex-1"
               />
-              <span className="text-sm text-muted-foreground w-12 text-right">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={handleRotateRight}
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground w-14 text-right tabular-nums">
                 {rotate}°
               </span>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 pt-4 border-t">
           <Button
             type="button"
             variant="outline"
@@ -241,10 +437,11 @@ export function ImageCropper({
             <RotateCcw className="h-4 w-4" />
             Resetar
           </Button>
+          <div className="flex-1" />
           <Button
             type="button"
             variant="ghost"
-            onClick={onClose}
+            onClick={handleClose}
             className="gap-2"
           >
             <X className="h-4 w-4" />
@@ -254,6 +451,7 @@ export function ImageCropper({
             type="button"
             onClick={handleConfirm}
             className="gap-2"
+            disabled={!completedCrop}
           >
             <Check className="h-4 w-4" />
             Aplicar
