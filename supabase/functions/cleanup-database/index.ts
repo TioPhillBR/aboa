@@ -36,21 +36,23 @@ serve(async (req) => {
       });
     }
 
-    const { data: adminRole, error: roleError } = await userClient
+    // Check if user has admin or super_admin role
+    const { data: userRoles, error: roleError } = await userClient
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "admin")
-      .single();
+      .in("role", ["admin", "super_admin"]);
 
-    if (roleError || !adminRole) {
+    if (roleError || !userRoles || userRoles.length === 0) {
       return new Response(JSON.stringify({ error: "Forbidden - Admin access required" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { tables, confirmPhrase, preserveAdminData = false, deleteAuthUsers = false } = await req.json();
+    const isSuperAdmin = userRoles.some((r) => r.role === "super_admin");
+
+    const { tables, confirmPhrase, preserveAdminData = false, deleteAuthUsers = false, deleteAllUsers = false } = await req.json();
 
     if (confirmPhrase !== "LIMPAR DADOS") {
       return new Response(JSON.stringify({ error: "Invalid confirmation phrase" }), {
@@ -59,20 +61,28 @@ serve(async (req) => {
       });
     }
 
-    if ((!tables || !Array.isArray(tables) || tables.length === 0) && !deleteAuthUsers) {
+    if ((!tables || !Array.isArray(tables) || tables.length === 0) && !deleteAuthUsers && !deleteAllUsers) {
       return new Response(JSON.stringify({ error: "No tables specified" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // Only super_admin can delete all users (including admins)
+    if (deleteAllUsers && !isSuperAdmin) {
+      return new Response(JSON.stringify({ error: "Forbidden - Super Admin access required to delete all users" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all admin user IDs (only used for profiles if preserveAdminData is true)
+    // Get all admin and super_admin user IDs
     const { data: adminRoles, error: adminError } = await adminClient
       .from("user_roles")
-      .select("user_id")
-      .eq("role", "admin");
+      .select("user_id, role")
+      .in("role", ["admin", "super_admin"]);
 
     if (adminError) {
       return new Response(JSON.stringify({ error: "Failed to fetch admin users" }), {
@@ -82,6 +92,7 @@ serve(async (req) => {
     }
 
     const adminUserIds = adminRoles?.map((r) => r.user_id) || [];
+    const superAdminUserIds = adminRoles?.filter((r) => r.role === "super_admin").map((r) => r.user_id) || [];
     const results: { table: string; success: boolean; message: string }[] = [];
 
     // Define table cleanup order (respect foreign keys)
@@ -259,9 +270,9 @@ serve(async (req) => {
     }
 
     // Delete auth users if requested
-    if (deleteAuthUsers) {
+    if (deleteAuthUsers || deleteAllUsers) {
       try {
-        // Get all user IDs that are NOT admins
+        // Get all user IDs
         const { data: allProfiles, error: profilesError } = await adminClient
           .from("profiles")
           .select("id");
@@ -273,16 +284,41 @@ serve(async (req) => {
             message: `Erro ao buscar perfis: ${profilesError.message}`,
           });
         } else if (allProfiles) {
-          // Filter out admin user IDs
-          const nonAdminUserIds = allProfiles
-            .map((p) => p.id)
-            .filter((id) => !adminUserIds.includes(id));
+          let usersToDelete: string[];
+          
+          if (deleteAllUsers && isSuperAdmin) {
+            // Super admin can delete ALL users except themselves
+            usersToDelete = allProfiles
+              .map((p) => p.id)
+              .filter((id) => id !== user.id); // Never delete the current super admin
+          } else {
+            // Regular admin: filter out admin user IDs
+            usersToDelete = allProfiles
+              .map((p) => p.id)
+              .filter((id) => !adminUserIds.includes(id));
+          }
 
           let deletedCount = 0;
           let errorCount = 0;
 
-          // Delete each non-admin user from auth.users
-          for (const userId of nonAdminUserIds) {
+          // First, clean up all FK references for users being deleted
+          for (const userId of usersToDelete) {
+            // Clear FK references before deleting
+            await adminClient.from("user_roles").update({ created_by: null }).eq("created_by", userId);
+            await adminClient.from("affiliates").update({ approved_by: null }).eq("approved_by", userId);
+            await adminClient.from("affiliate_withdrawals").update({ processed_by: null }).eq("processed_by", userId);
+            await adminClient.from("user_withdrawals").update({ processed_by: null }).eq("processed_by", userId);
+            await adminClient.from("raffles").update({ winner_id: null }).eq("winner_id", userId);
+            await adminClient.from("raffle_prizes").update({ winner_id: null }).eq("winner_id", userId);
+            
+            // Delete user_roles for this user (except super_admin's own roles)
+            if (deleteAllUsers) {
+              await adminClient.from("user_roles").delete().eq("user_id", userId);
+            }
+          }
+
+          // Delete each user from auth.users (this cascades to profiles)
+          for (const userId of usersToDelete) {
             const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
             if (deleteError) {
               console.error(`Error deleting user ${userId}:`, deleteError);
