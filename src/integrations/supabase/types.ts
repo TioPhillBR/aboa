@@ -306,7 +306,16 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address_cep: string | null
+          address_city: string | null
+          address_complement: string | null
+          address_neighborhood: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
           avatar_url: string | null
+          birth_date: string | null
+          cpf: string | null
           created_at: string
           full_name: string
           id: string
@@ -317,7 +326,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address_cep?: string | null
+          address_city?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
           avatar_url?: string | null
+          birth_date?: string | null
+          cpf?: string | null
           created_at?: string
           full_name: string
           id: string
@@ -328,7 +346,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address_cep?: string | null
+          address_city?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
           avatar_url?: string | null
+          birth_date?: string | null
+          cpf?: string | null
           created_at?: string
           full_name?: string
           id?: string
@@ -1293,6 +1320,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      validate_cpf: { Args: { cpf: string }; Returns: boolean }
     }
     Enums: {
       affiliate_status: "pending" | "approved" | "rejected" | "suspended"
