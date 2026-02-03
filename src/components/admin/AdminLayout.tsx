@@ -26,7 +26,8 @@ import {
   Share2,
   FileText,
   Activity,
-  MessageSquare
+  MessageSquare,
+  Banknote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -51,6 +52,7 @@ const adminLinks = [
   { href: '/admin/usuarios', label: 'Usuários', icon: Users },
   { href: '/admin/usuarios-online', label: 'Online Agora', icon: Activity },
   { href: '/admin/ganhadores', label: 'Ganhadores', icon: Trophy },
+  { href: '/admin/pagamentos-premios', label: 'Pagar Prêmios', icon: Banknote },
   { href: '/admin/suporte', label: 'Suporte', icon: MessageSquare },
   { href: '/admin/relatorios', label: 'Relatórios', icon: FileText },
 ];
