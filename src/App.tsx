@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { NotificationProvider } from "@/hooks/useNotifications";
@@ -23,6 +23,7 @@ import Ganhadores from "./pages/Ganhadores";
 import MeusTickets from "./pages/MeusTickets";
 import Estatisticas from "./pages/Estatisticas";
 import Indicacoes from "./pages/Indicacoes";
+import AdminLogin from "./pages/admin/Login";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminSorteios from "./pages/admin/Sorteios";
 import AdminRaspadinhas from "./pages/admin/Raspadinhas";
@@ -41,6 +42,18 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Component to conditionally render MobileNav (hide on admin routes)
+function ConditionalMobileNav() {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  
+  if (isAdminRoute) {
+    return null;
+  }
+  
+  return <MobileNav />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -53,6 +66,7 @@ const App = () => (
             <ScrollToTop />
             <div className="pb-16 md:pb-0">
               <Routes>
+                {/* Public Game Routes */}
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/cadastro" element={<Cadastro />} />
@@ -68,7 +82,9 @@ const App = () => (
                 <Route path="/meus-tickets" element={<ProtectedRoute><MeusTickets /></ProtectedRoute>} />
                 <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
                 <Route path="/indicacoes" element={<ProtectedRoute><Indicacoes /></ProtectedRoute>} />
-                {/* Admin Routes */}
+                
+                {/* Admin Routes - Completely Separate Area */}
+                <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
                 <Route path="/admin/vendas" element={<ProtectedRoute requireAdmin><AdminVendas /></ProtectedRoute>} />
                 <Route path="/admin/financeiro" element={<ProtectedRoute requireAdmin><AdminFinanceiro /></ProtectedRoute>} />
@@ -80,14 +96,16 @@ const App = () => (
                 <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><AdminUsuarios /></ProtectedRoute>} />
                 <Route path="/admin/ganhadores" element={<ProtectedRoute requireAdmin><AdminGanhadores /></ProtectedRoute>} />
                 <Route path="/admin/relatorios" element={<ProtectedRoute requireAdmin><AdminRelatorios /></ProtectedRoute>} />
+                
                 {/* Affiliate Routes */}
                 <Route path="/afiliado" element={<ProtectedRoute><AfiliadoDashboard /></ProtectedRoute>} />
                 <Route path="/afiliado/cadastro" element={<ProtectedRoute><AfiliadoCadastro /></ProtectedRoute>} />
+                
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
-            <MobileNav />
+            <ConditionalMobileNav />
           </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>

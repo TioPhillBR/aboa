@@ -19,11 +19,20 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
     );
   }
 
+  // Check if this is an admin route
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Redirect to admin login for admin routes, regular login for others
+    const loginPath = isAdminRoute ? '/admin/login' : '/login';
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
   if (requireAdmin && !isAdmin) {
+    // For admin routes, redirect to admin login
+    if (isAdminRoute) {
+      return <Navigate to="/admin/login" replace />;
+    }
     return <Navigate to="/" replace />;
   }
 

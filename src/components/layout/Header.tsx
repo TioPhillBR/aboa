@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Ticket, LayoutDashboard, Menu, Trophy, Gift } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
@@ -23,7 +23,7 @@ import {
 import logoABoa from '@/assets/logo-a-boa.png';
 
 export function Header() {
-  const { user, profile, isAdmin, signOut, isLoading } = useAuth();
+  const { user, profile, signOut, isLoading } = useAuth();
   const { balance, bonusBalance } = useWallet();
   const navigate = useNavigate();
 
@@ -154,17 +154,7 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
 
-                  {isAdmin && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <Link to="/admin" className="flex items-center text-primary">
-                          <LayoutDashboard className="mr-2 h-4 w-4" />
-                          Painel Admin
-                        </Link>
-                      </DropdownMenuItem>
-                    </>
-                  )}
+
 
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
@@ -296,18 +286,7 @@ export function Header() {
                       <span className="font-medium">Configurações</span>
                     </Link>
 
-                    {isAdmin && (
-                      <>
-                        <div className="h-px bg-border my-2" />
-                        <Link 
-                          to="/admin" 
-                          className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors text-primary"
-                        >
-                          <LayoutDashboard className="h-5 w-5" />
-                          <span className="font-medium">Painel Admin</span>
-                        </Link>
-                      </>
-                    )}
+
 
                     <div className="h-px bg-border my-2" />
                     <button 
