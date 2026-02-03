@@ -99,42 +99,55 @@ export default function Endereco() {
     }
   };
 
-  // Validate address
+  // Validate address - collect all missing fields
   const validateAddress = (): boolean => {
     setError(null);
+    const missingFields: string[] = [];
+    const validationErrors: string[] = [];
     
-    if (!addressData.cep || addressData.cep.replace(/[^\d]/g, '').length !== 8) {
-      setError('CEP inválido');
-      return false;
+    if (!addressData.cep) {
+      missingFields.push('CEP');
+    } else if (addressData.cep.replace(/[^\d]/g, '').length !== 8) {
+      validationErrors.push('CEP inválido');
     }
     
     if (!addressData.street.trim()) {
-      setError('Endereço é obrigatório');
-      return false;
+      missingFields.push('Endereço');
     }
     
     if (!addressData.number.trim()) {
-      setError('Número é obrigatório');
-      return false;
+      missingFields.push('Número');
     }
     
     if (!addressData.neighborhood.trim()) {
-      setError('Bairro é obrigatório');
-      return false;
+      missingFields.push('Bairro');
     }
     
     if (!addressData.city.trim()) {
-      setError('Cidade é obrigatória');
-      return false;
+      missingFields.push('Cidade');
     }
     
     if (!addressData.state.trim()) {
-      setError('Estado é obrigatório');
-      return false;
+      missingFields.push('Estado');
     }
 
     if (!addressData.lgpdConsent) {
-      setError('Você precisa aceitar os termos de uso e política de privacidade');
+      validationErrors.push('Você precisa aceitar os Termos de Uso e Política de Privacidade');
+    }
+    
+    // Build error message
+    const errorMessages: string[] = [];
+    
+    if (missingFields.length > 0) {
+      errorMessages.push(`Campos obrigatórios faltando: ${missingFields.join(', ')}`);
+    }
+    
+    if (validationErrors.length > 0) {
+      errorMessages.push(...validationErrors);
+    }
+    
+    if (errorMessages.length > 0) {
+      setError(errorMessages.join('. '));
       return false;
     }
     

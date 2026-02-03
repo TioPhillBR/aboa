@@ -96,54 +96,71 @@ export default function DadosPessoais() {
     }
   };
 
-  // Validate personal data
+  // Validate personal data - collect all missing fields
   const validatePersonalData = (): boolean => {
     setError(null);
+    const missingFields: string[] = [];
+    const validationErrors: string[] = [];
     
     if (!personalData.fullName.trim()) {
-      setError('Nome completo é obrigatório');
-      return false;
+      missingFields.push('Nome Completo');
     }
     
     if (!personalData.whatsapp || personalData.whatsapp.replace(/[^\d]/g, '').length < 10) {
-      setError('WhatsApp inválido');
-      return false;
+      if (!personalData.whatsapp) {
+        missingFields.push('WhatsApp');
+      } else {
+        validationErrors.push('WhatsApp inválido');
+      }
     }
     
     const cleanCpf = personalData.cpf.replace(/[^\d]/g, '');
-    if (!validateCPF(cleanCpf)) {
-      setError('CPF inválido');
-      return false;
-    }
-    
-    if (cpfError) {
-      setError(cpfError);
-      return false;
+    if (!cleanCpf) {
+      missingFields.push('CPF');
+    } else if (!validateCPF(cleanCpf)) {
+      validationErrors.push('CPF inválido');
+    } else if (cpfError) {
+      validationErrors.push(cpfError);
     }
     
     if (!personalData.birthDate) {
-      setError('Data de nascimento é obrigatória');
-      return false;
-    }
-    
-    const age = calculateAge(new Date(personalData.birthDate));
-    if (age < 18) {
-      setError('Você precisa ter 18 anos ou mais para se cadastrar');
-      return false;
+      missingFields.push('Data de Nascimento');
+    } else {
+      const age = calculateAge(new Date(personalData.birthDate));
+      if (age < 18) {
+        validationErrors.push('Você precisa ter 18 anos ou mais para se cadastrar');
+      }
     }
     
     if (!personalData.email) {
-      setError('Email é obrigatório');
-      return false;
+      missingFields.push('Email');
     }
     
-    if (personalData.password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres');
-      return false;
+    if (!personalData.password) {
+      missingFields.push('Senha');
+    } else if (personalData.password.length < 6) {
+      validationErrors.push('A senha deve ter pelo menos 6 caracteres');
     }
     
-    if (personalData.password !== personalData.confirmPassword) {
-      setError('As senhas não coincidem');
+    if (!personalData.confirmPassword) {
+      missingFields.push('Confirmar Senha');
+    } else if (personalData.password && personalData.password !== personalData.confirmPassword) {
+      validationErrors.push('As senhas não coincidem');
+    }
+    
+    // Build error message
+    const errorMessages: string[] = [];
+    
+    if (missingFields.length > 0) {
+      errorMessages.push(`Campos obrigatórios faltando: ${missingFields.join(', ')}`);
+    }
+    
+    if (validationErrors.length > 0) {
+      errorMessages.push(...validationErrors);
+    }
+    
+    if (errorMessages.length > 0) {
+      setError(errorMessages.join('. '));
       return false;
     }
     
