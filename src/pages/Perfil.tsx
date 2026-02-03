@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
@@ -22,33 +22,90 @@ import {
   Loader2,
   Shield,
   Trash2,
-  Crop
+  MapPin,
+  Home,
+  Building,
+  CreditCard,
+  CheckCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+// Mask functions
+function maskPhone(value: string): string {
+  const numbers = value.replace(/[^\d]/g, '').slice(0, 11);
+  if (numbers.length <= 10) {
+    return numbers
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return numbers
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+function maskCEP(value: string): string {
+  const numbers = value.replace(/[^\d]/g, '').slice(0, 8);
+  return numbers.replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+function formatCPF(cpf: string | null): string {
+  if (!cpf) return '—';
+  const numbers = cpf.replace(/[^\d]/g, '');
+  if (numbers.length !== 11) return cpf;
+  return numbers.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+interface ViaCepData {
+  cep: string;
+  logradouro: string;
+  bairro: string;
+  localidade: string;
+  uf: string;
+  erro?: boolean;
+}
 
 export default function Perfil() {
   const { user, profile, updateProfile, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [fullName, setFullName] = useState(profile?.full_name || '');
-  const [phone, setPhone] = useState(profile?.phone || '');
+  // Personal data states
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  
+  // Address states
+  const [addressCep, setAddressCep] = useState('');
+  const [addressStreet, setAddressStreet] = useState('');
+  const [addressNumber, setAddressNumber] = useState('');
+  const [addressComplement, setAddressComplement] = useState('');
+  const [addressNeighborhood, setAddressNeighborhood] = useState('');
+  const [addressCity, setAddressCity] = useState('');
+  const [addressState, setAddressState] = useState('');
+  
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingCep, setIsLoadingCep] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
   // Estados do cropper
   const [cropperOpen, setCropperOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string>('');
 
-  // Atualizar estados quando o perfil carregar
-  useState(() => {
+  // Initialize states when profile loads
+  useEffect(() => {
     if (profile) {
-      setFullName(profile.full_name);
-      setPhone(profile.phone || '');
+      setFullName(profile.full_name || '');
+      setPhone(profile.phone ? maskPhone(profile.phone) : '');
+      setAddressCep(profile.address_cep ? maskCEP(profile.address_cep) : '');
+      setAddressStreet(profile.address_street || '');
+      setAddressNumber(profile.address_number || '');
+      setAddressComplement(profile.address_complement || '');
+      setAddressNeighborhood(profile.address_neighborhood || '');
+      setAddressCity(profile.address_city || '');
+      setAddressState(profile.address_state || '');
     }
-  });
+  }, [profile]);
 
   const getInitials = (name: string) => {
     return name
@@ -57,6 +114,32 @@ export default function Perfil() {
       .join('')
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  // Handle CEP change with ViaCEP integration
+  const handleCepChange = async (value: string) => {
+    const maskedValue = maskCEP(value);
+    setAddressCep(maskedValue);
+    
+    const cleanCep = maskedValue.replace(/[^\d]/g, '');
+    if (cleanCep.length === 8) {
+      setIsLoadingCep(true);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data: ViaCepData = await response.json();
+        
+        if (!data.erro) {
+          setAddressStreet(data.logradouro || '');
+          setAddressNeighborhood(data.bairro || '');
+          setAddressCity(data.localidade || '');
+          setAddressState(data.uf || '');
+        }
+      } catch (err) {
+        console.error('Error fetching CEP:', err);
+      } finally {
+        setIsLoadingCep(false);
+      }
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,10 +247,15 @@ export default function Perfil() {
     setIsUploading(true);
 
     try {
-      // Remover do storage
-      const { error: deleteError } = await supabase.storage
+      // Listar e remover todos os arquivos do usuário na pasta avatars
+      const { data: files } = await supabase.storage
         .from('avatars')
-        .remove([`${user.id}/avatar.jpg`, `${user.id}/avatar.png`, `${user.id}/avatar.jpeg`]);
+        .list(user.id);
+      
+      if (files && files.length > 0) {
+        const filesToDelete = files.map(f => `${user.id}/${f.name}`);
+        await supabase.storage.from('avatars').remove(filesToDelete);
+      }
 
       // Atualizar perfil para remover URL
       const { error: updateError } = await updateProfile({ avatar_url: null });
@@ -204,9 +292,19 @@ export default function Perfil() {
 
     setIsSaving(true);
 
+    const cleanPhone = phone.replace(/[^\d]/g, '');
+    const cleanCep = addressCep.replace(/[^\d]/g, '');
+
     const { error } = await updateProfile({
       full_name: fullName.trim(),
-      phone: phone.trim() || null,
+      phone: cleanPhone || null,
+      address_cep: cleanCep || null,
+      address_street: addressStreet.trim() || null,
+      address_number: addressNumber.trim() || null,
+      address_complement: addressComplement.trim() || null,
+      address_neighborhood: addressNeighborhood.trim() || null,
+      address_city: addressCity.trim() || null,
+      address_state: addressState.trim() || null,
     });
 
     if (error) {
@@ -377,40 +475,176 @@ export default function Perfil() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Telefone</Label>
+                  <Label htmlFor="phone">Telefone/WhatsApp</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="phone"
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => setPhone(maskPhone(e.target.value))}
                       placeholder="(11) 99999-9999"
                       className="pl-10"
                     />
                   </div>
                 </div>
-              </div>
 
-              <Button 
-                onClick={handleSaveProfile} 
-                disabled={isSaving}
-                className="gap-2"
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Salvar Alterações
-                  </>
-                )}
-              </Button>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>CPF</Label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={formatCPF(profile?.cpf || null)}
+                        disabled
+                        className="pl-10 bg-muted"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      CPF não pode ser alterado
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Data de Nascimento</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={profile?.birth_date 
+                          ? format(new Date(profile.birth_date), "dd/MM/yyyy")
+                          : '—'
+                        }
+                        disabled
+                        className="pl-10 bg-muted"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
+
+          {/* Card de Endereço */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Endereço
+              </CardTitle>
+              <CardDescription>
+                Mantenha seu endereço atualizado para entrega de prêmios
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="cep">CEP</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="cep"
+                    value={addressCep}
+                    onChange={(e) => handleCepChange(e.target.value)}
+                    placeholder="00000-000"
+                    className="pl-10"
+                  />
+                  {isLoadingCep && (
+                    <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="street">Endereço</Label>
+                <div className="relative">
+                  <Home className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="street"
+                    value={addressStreet}
+                    onChange={(e) => setAddressStreet(e.target.value)}
+                    placeholder="Rua, Avenida..."
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="number">Número</Label>
+                  <Input
+                    id="number"
+                    value={addressNumber}
+                    onChange={(e) => setAddressNumber(e.target.value)}
+                    placeholder="123"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="complement">Complemento</Label>
+                  <Input
+                    id="complement"
+                    value={addressComplement}
+                    onChange={(e) => setAddressComplement(e.target.value)}
+                    placeholder="Apto, Bloco..."
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="neighborhood">Bairro</Label>
+                <Input
+                  id="neighborhood"
+                  value={addressNeighborhood}
+                  onChange={(e) => setAddressNeighborhood(e.target.value)}
+                  placeholder="Bairro"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">Cidade</Label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="city"
+                      value={addressCity}
+                      onChange={(e) => setAddressCity(e.target.value)}
+                      placeholder="Cidade"
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">Estado</Label>
+                  <Input
+                    id="state"
+                    value={addressState}
+                    onChange={(e) => setAddressState(e.target.value.toUpperCase().slice(0, 2))}
+                    placeholder="UF"
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <Button 
+            onClick={handleSaveProfile} 
+            disabled={isSaving}
+            className="w-full gap-2"
+            size="lg"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Salvando...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Salvar Todas as Alterações
+              </>
+            )}
+          </Button>
 
           {/* Card de Informações da Conta */}
           <Card>
@@ -442,8 +676,33 @@ export default function Perfil() {
                     <Mail className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">Email verificado</span>
                   </div>
-                  <span className={`text-sm font-medium ${user.email_confirmed_at ? 'text-green-600' : 'text-yellow-600'}`}>
-                    {user.email_confirmed_at ? 'Sim' : 'Pendente'}
+                  <span className={`text-sm font-medium flex items-center gap-1 ${user.email_confirmed_at ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {user.email_confirmed_at ? (
+                      <>
+                        <CheckCircle className="h-4 w-4" />
+                        Sim
+                      </>
+                    ) : 'Pendente'}
+                  </span>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <Shield className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">Aceite LGPD</span>
+                  </div>
+                  <span className={`text-sm font-medium flex items-center gap-1 ${profile?.lgpd_consent ? 'text-green-600' : 'text-muted-foreground'}`}>
+                    {profile?.lgpd_consent ? (
+                      <>
+                        <CheckCircle className="h-4 w-4" />
+                        {profile.lgpd_consent_at 
+                          ? format(new Date(profile.lgpd_consent_at), "dd/MM/yyyy")
+                          : 'Aceito'
+                        }
+                      </>
+                    ) : '—'}
                   </span>
                 </div>
 
