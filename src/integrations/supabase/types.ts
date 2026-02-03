@@ -1373,11 +1373,12 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       validate_cpf: { Args: { cpf: string }; Returns: boolean }
     }
     Enums: {
       affiliate_status: "pending" | "approved" | "rejected" | "suspended"
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "super_admin"
       commission_status: "pending" | "approved" | "paid"
       payment_status: "pending" | "approved" | "cancelled" | "refunded"
       prize_status: "pending" | "processing" | "delivered"
@@ -1512,7 +1513,7 @@ export const Constants = {
   public: {
     Enums: {
       affiliate_status: ["pending", "approved", "rejected", "suspended"],
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "super_admin"],
       commission_status: ["pending", "approved", "paid"],
       payment_status: ["pending", "approved", "cancelled", "refunded"],
       prize_status: ["pending", "processing", "delivered"],

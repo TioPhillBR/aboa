@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,6 +112,25 @@ export function DatabaseCleanupPanel() {
   const [showResults, setShowResults] = useState(false);
   const [preserveAdminData, setPreserveAdminData] = useState(false);
   const [deleteAuthUsers, setDeleteAuthUsers] = useState(false);
+  const [deleteAllUsers, setDeleteAllUsers] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // Check if current user is super_admin
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('role', 'super_admin')
+          .maybeSingle();
+        setIsSuperAdmin(!!data);
+      }
+    };
+    checkSuperAdmin();
+  }, []);
 
   const CONFIRM_PHRASE = 'LIMPAR DADOS';
 
@@ -161,7 +180,8 @@ export function DatabaseCleanupPanel() {
           tables: tablesToClear,
           confirmPhrase: CONFIRM_PHRASE,
           preserveAdminData: preserveAdminData,
-          deleteAuthUsers: deleteAuthUsers
+          deleteAuthUsers: deleteAuthUsers,
+          deleteAllUsers: deleteAllUsers
         }
       });
 
@@ -258,6 +278,31 @@ export function DatabaseCleanupPanel() {
             />
           </div>
         </div>
+
+        {/* Super Admin: Delete ALL users including admins */}
+        {isSuperAdmin && (
+          <div className="p-4 rounded-lg border-2 border-red-600 bg-red-950/30">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-sm font-bold flex items-center gap-2 text-red-500">
+                  <ShieldAlert className="h-4 w-4" />
+                  🔴 SUPER ADMIN: Deletar TODOS os usuários
+                </Label>
+                <p className="text-xs text-red-400">
+                  {deleteAllUsers 
+                    ? "⚠️ EXTREMO: Todos os usuários (incluindo admins) serão deletados, exceto você!"
+                    : "Modo super admin: pode deletar também outros administradores"
+                  }
+                </p>
+              </div>
+              <Checkbox 
+                checked={deleteAllUsers} 
+                onCheckedChange={(checked) => setDeleteAllUsers(checked === true)}
+                className="border-red-600 data-[state=checked]:bg-red-600"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={selectAll}>
