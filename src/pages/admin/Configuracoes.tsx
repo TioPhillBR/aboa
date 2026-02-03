@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   Settings, 
   CreditCard, 
@@ -33,9 +34,13 @@ import {
   Gift,
   Share2,
   RefreshCw,
-  Wallet
+  Wallet,
+  Upload,
+  Image,
+  X,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
-import { toast } from 'sonner';
 import {
   Select,
   SelectContent,
@@ -43,190 +48,256 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
+import { usePlatformSettings } from '@/hooks/usePlatformSettings';
+import { cn } from '@/lib/utils';
 
-// Configurações gerais da plataforma
-interface GeneralSettings {
-  platformName: string;
-  platformDescription: string;
-  contactEmail: string;
-  contactPhone: string;
-  supportEmail: string;
-  logoUrl: string;
-  faviconUrl: string;
-  primaryColor: string;
-  maintenanceMode: boolean;
-  maintenanceMessage: string;
+// Field wrapper with validation error display
+function FormField({ 
+  label, 
+  error, 
+  children,
+  icon: Icon,
+  description,
+  required
+}: { 
+  label: string; 
+  error?: string; 
+  children: React.ReactNode;
+  icon?: React.ElementType;
+  description?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className={cn("flex items-center gap-2", error && "text-destructive")}>
+        {Icon && <Icon className="h-4 w-4" />}
+        {label}
+        {required && <span className="text-destructive">*</span>}
+      </Label>
+      {children}
+      {description && !error && (
+        <p className="text-xs text-muted-foreground">{description}</p>
+      )}
+      {error && (
+        <p className="text-xs text-destructive flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" />
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
 
-// Configurações de pagamento
-interface PaymentSettings {
-  pixEnabled: boolean;
-  pixKey: string;
-  pixKeyType: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
-  pixReceiverName: string;
-  pixCity: string;
-  minimumDeposit: number;
-  maximumDeposit: number;
-  minimumWithdrawal: number;
-  withdrawalFee: number;
-  autoApproveWithdrawals: boolean;
-  autoApproveLimit: number;
+// Validated input component
+function ValidatedInput({
+  value,
+  onChange,
+  error,
+  type = 'text',
+  placeholder,
+  className,
+  min,
+  max,
+  step,
+  disabled
+}: {
+  value: string | number;
+  onChange: (value: string) => void;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+  className?: string;
+  min?: number;
+  max?: number;
+  step?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <Input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={cn(
+          className,
+          error && "border-destructive focus-visible:ring-destructive"
+        )}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+      />
+      {error ? (
+        <AlertCircle className="absolute right-3 top-3 h-4 w-4 text-destructive" />
+      ) : value && !error ? (
+        <CheckCircle className="absolute right-3 top-3 h-4 w-4 text-green-500" />
+      ) : null}
+    </div>
+  );
 }
 
-// Configurações de jogos
-interface GameSettings {
-  // Raspadinhas
-  scratchCardEnabled: boolean;
-  scratchCardMinPrice: number;
-  scratchCardMaxPrice: number;
-  scratchCardDefaultProbability: number;
-  scratchCardMaxWinRate: number;
-  
-  // Sorteios
-  raffleEnabled: boolean;
-  raffleMinPrice: number;
-  raffleMaxPrice: number;
-  raffleMinNumbers: number;
-  raffleMaxNumbers: number;
-  raffleAutoDrawEnabled: boolean;
-}
+// Image upload component
+function ImageUpload({
+  label,
+  currentUrl,
+  onUpload,
+  onRemove,
+  type
+}: {
+  label: string;
+  currentUrl: string;
+  onUpload: (file: File) => Promise<void>;
+  onRemove: () => void;
+  type: 'logo' | 'favicon';
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-// Configurações de comissões
-interface CommissionSettings {
-  affiliateEnabled: boolean;
-  defaultAffiliateCommission: number;
-  maxAffiliateCommission: number;
-  affiliateMinWithdrawal: number;
-  referralEnabled: boolean;
-  referralBonusAmount: number;
-  referralBonusType: 'fixed' | 'percentage';
-  shareRewardEnabled: boolean;
-  shareRewardAmount: number;
-}
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-// Configurações de notificações
-interface NotificationSettings {
-  emailEnabled: boolean;
-  smsEnabled: boolean;
-  pushEnabled: boolean;
-  notifyOnPurchase: boolean;
-  notifyOnWin: boolean;
-  notifyOnDeposit: boolean;
-  notifyOnWithdrawal: boolean;
-  notifyOnRaffleDraw: boolean;
-  marketingEmails: boolean;
-}
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+    if (type === 'favicon') {
+      validTypes.push('image/x-icon', 'image/vnd.microsoft.icon');
+    }
+    
+    if (!validTypes.includes(file.type)) {
+      return;
+    }
 
-// Configurações de segurança
-interface SecuritySettings {
-  twoFactorEnabled: boolean;
-  sessionTimeout: number;
-  maxLoginAttempts: number;
-  passwordMinLength: number;
-  requireUppercase: boolean;
-  requireNumbers: boolean;
-  requireSpecialChars: boolean;
-  ipWhitelist: string;
-  adminIpRestriction: boolean;
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      return;
+    }
+
+    setIsUploading(true);
+    await onUpload(file);
+    setIsUploading(false);
+    
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <Label>{label}</Label>
+      <div className="flex items-center gap-4">
+        {currentUrl ? (
+          <div className="relative group">
+            <Avatar className={cn(
+              "border-2 border-border",
+              type === 'logo' ? 'h-20 w-20 rounded-xl' : 'h-12 w-12'
+            )}>
+              <AvatarImage src={currentUrl} alt={label} />
+              <AvatarFallback className="bg-muted">
+                <Image className="h-6 w-6 text-muted-foreground" />
+              </AvatarFallback>
+            </Avatar>
+            <button
+              onClick={onRemove}
+              className="absolute -top-2 -right-2 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <div className={cn(
+            "flex items-center justify-center border-2 border-dashed border-muted-foreground/25 bg-muted/50 rounded-xl",
+            type === 'logo' ? 'h-20 w-20' : 'h-12 w-12'
+          )}>
+            <Image className="h-6 w-6 text-muted-foreground" />
+          </div>
+        )}
+        
+        <div className="flex-1 space-y-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept={type === 'favicon' ? '.ico,.png,.svg' : '.png,.jpg,.jpeg,.webp,.svg'}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => inputRef.current?.click()}
+            disabled={isUploading}
+            className="gap-2"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4" />
+                {currentUrl ? 'Alterar' : 'Fazer Upload'}
+              </>
+            )}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            {type === 'logo' 
+              ? 'PNG, JPG, WebP ou SVG. Máx 2MB.' 
+              : 'ICO, PNG ou SVG. Máx 2MB.'
+            }
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminConfiguracoes() {
-  const [isSaving, setIsSaving] = useState(false);
+  const {
+    settings,
+    isLoading,
+    isSaving,
+    errors,
+    hasChanges,
+    updateSettings,
+    saveSettings,
+    uploadImage,
+  } = usePlatformSettings();
+  
   const [activeTab, setActiveTab] = useState('general');
 
-  // Estados para cada grupo de configurações
-  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
-    platformName: 'A Boa',
-    platformDescription: 'Plataforma de sorteios e raspadinhas premiadas',
-    contactEmail: 'contato@aboa.com.br',
-    contactPhone: '(11) 99999-9999',
-    supportEmail: 'suporte@aboa.com.br',
-    logoUrl: '',
-    faviconUrl: '',
-    primaryColor: '#8B5CF6',
-    maintenanceMode: false,
-    maintenanceMessage: 'Estamos em manutenção. Voltamos em breve!',
-  });
-
-  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({
-    pixEnabled: true,
-    pixKey: '',
-    pixKeyType: 'cpf',
-    pixReceiverName: '',
-    pixCity: 'São Paulo',
-    minimumDeposit: 10,
-    maximumDeposit: 5000,
-    minimumWithdrawal: 20,
-    withdrawalFee: 0,
-    autoApproveWithdrawals: false,
-    autoApproveLimit: 100,
-  });
-
-  const [gameSettings, setGameSettings] = useState<GameSettings>({
-    scratchCardEnabled: true,
-    scratchCardMinPrice: 1,
-    scratchCardMaxPrice: 50,
-    scratchCardDefaultProbability: 15,
-    scratchCardMaxWinRate: 30,
-    raffleEnabled: true,
-    raffleMinPrice: 1,
-    raffleMaxPrice: 100,
-    raffleMinNumbers: 100,
-    raffleMaxNumbers: 100000,
-    raffleAutoDrawEnabled: true,
-  });
-
-  const [commissionSettings, setCommissionSettings] = useState<CommissionSettings>({
-    affiliateEnabled: true,
-    defaultAffiliateCommission: 10,
-    maxAffiliateCommission: 30,
-    affiliateMinWithdrawal: 50,
-    referralEnabled: true,
-    referralBonusAmount: 5,
-    referralBonusType: 'fixed',
-    shareRewardEnabled: true,
-    shareRewardAmount: 1,
-  });
-
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
-    emailEnabled: true,
-    smsEnabled: false,
-    pushEnabled: true,
-    notifyOnPurchase: true,
-    notifyOnWin: true,
-    notifyOnDeposit: true,
-    notifyOnWithdrawal: true,
-    notifyOnRaffleDraw: true,
-    marketingEmails: false,
-  });
-
-  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
-    twoFactorEnabled: false,
-    sessionTimeout: 60,
-    maxLoginAttempts: 5,
-    passwordMinLength: 8,
-    requireUppercase: true,
-    requireNumbers: true,
-    requireSpecialChars: false,
-    ipWhitelist: '',
-    adminIpRestriction: false,
-  });
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    
-    // Simular salvamento (futuramente salvar no Supabase)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast.success('Configurações salvas com sucesso!');
-    setIsSaving(false);
+  const handleLogoUpload = async (file: File) => {
+    const url = await uploadImage(file, 'logo');
+    if (url) {
+      updateSettings('general', { logoUrl: url });
+    }
   };
+
+  const handleFaviconUpload = async (file: File) => {
+    const url = await uploadImage(file, 'favicon');
+    if (url) {
+      updateSettings('general', { faviconUrl: url });
+    }
+  };
+
+  // Count errors per tab
+  const getErrorCount = (category: string): number => {
+    return Object.keys(errors).filter(key => key.startsWith(category)).length;
+  };
+
+  if (isLoading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+            <p className="text-muted-foreground">Carregando configurações...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -242,66 +313,78 @@ export default function AdminConfiguracoes() {
               Gerencie todas as configurações da plataforma
             </p>
           </div>
-          <Button onClick={handleSave} disabled={isSaving} className="gap-2">
-            {isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Salvando...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Salvar Alterações
-              </>
+          <div className="flex items-center gap-2">
+            {hasChanges && (
+              <Badge variant="secondary" className="gap-1">
+                <AlertCircle className="h-3 w-3" />
+                Alterações não salvas
+              </Badge>
             )}
-          </Button>
+            <Button 
+              onClick={saveSettings} 
+              disabled={isSaving || Object.keys(errors).length > 0} 
+              className="gap-2"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Salvar Alterações
+                </>
+              )}
+            </Button>
+          </div>
         </div>
+
+        {/* Error summary */}
+        {Object.keys(errors).length > 0 && (
+          <Card className="border-destructive bg-destructive/5">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                <span className="font-medium">
+                  {Object.keys(errors).length} erro(s) encontrado(s)
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Corrija os campos destacados antes de salvar.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tabs de Configurações */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 h-auto gap-2 bg-transparent p-0">
-            <TabsTrigger 
-              value="general" 
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-2 py-3"
-            >
-              <Globe className="h-4 w-4" />
-              <span className="hidden sm:inline">Geral</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="payment"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-2 py-3"
-            >
-              <CreditCard className="h-4 w-4" />
-              <span className="hidden sm:inline">Pagamentos</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="games"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-2 py-3"
-            >
-              <Gamepad2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Jogos</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="commissions"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-2 py-3"
-            >
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Comissões</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="notifications"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-2 py-3"
-            >
-              <Bell className="h-4 w-4" />
-              <span className="hidden sm:inline">Notificações</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="security"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-2 py-3"
-            >
-              <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">Segurança</span>
-            </TabsTrigger>
+            {[
+              { value: 'general', label: 'Geral', icon: Globe },
+              { value: 'payment', label: 'Pagamentos', icon: CreditCard },
+              { value: 'games', label: 'Jogos', icon: Gamepad2 },
+              { value: 'commissions', label: 'Comissões', icon: Users },
+              { value: 'notifications', label: 'Notificações', icon: Bell },
+              { value: 'security', label: 'Segurança', icon: Shield },
+            ].map((tab) => {
+              const errorCount = getErrorCount(tab.value);
+              return (
+                <TabsTrigger 
+                  key={tab.value}
+                  value={tab.value}
+                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-2 py-3 relative"
+                >
+                  <tab.icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  {errorCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center">
+                      {errorCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
 
           {/* Configurações Gerais */}
@@ -318,83 +401,118 @@ export default function AdminConfiguracoes() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="platformName">Nome da Plataforma</Label>
-                    <Input
-                      id="platformName"
-                      value={generalSettings.platformName}
-                      onChange={(e) => setGeneralSettings({ ...generalSettings, platformName: e.target.value })}
+                  <FormField 
+                    label="Nome da Plataforma" 
+                    error={errors['general.platformName']}
+                    required
+                  >
+                    <ValidatedInput
+                      value={settings.general.platformName}
+                      onChange={(value) => updateSettings('general', { platformName: value })}
+                      error={errors['general.platformName']}
+                      placeholder="Ex: A Boa"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="primaryColor">Cor Principal</Label>
+                  </FormField>
+                  
+                  <FormField 
+                    label="Cor Principal" 
+                    error={errors['general.primaryColor']}
+                    required
+                  >
                     <div className="flex gap-2">
                       <Input
-                        id="primaryColor"
                         type="color"
-                        value={generalSettings.primaryColor}
-                        onChange={(e) => setGeneralSettings({ ...generalSettings, primaryColor: e.target.value })}
+                        value={settings.general.primaryColor}
+                        onChange={(e) => updateSettings('general', { primaryColor: e.target.value })}
                         className="w-14 h-10 p-1 cursor-pointer"
                       />
-                      <Input
-                        value={generalSettings.primaryColor}
-                        onChange={(e) => setGeneralSettings({ ...generalSettings, primaryColor: e.target.value })}
+                      <ValidatedInput
+                        value={settings.general.primaryColor}
+                        onChange={(value) => updateSettings('general', { primaryColor: value })}
+                        error={errors['general.primaryColor']}
                         className="flex-1"
+                        placeholder="#10B981"
                       />
                     </div>
-                  </div>
+                  </FormField>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="platformDescription">Descrição</Label>
+                <FormField label="Descrição">
                   <Textarea
-                    id="platformDescription"
-                    value={generalSettings.platformDescription}
-                    onChange={(e) => setGeneralSettings({ ...generalSettings, platformDescription: e.target.value })}
+                    value={settings.general.platformDescription}
+                    onChange={(e) => updateSettings('general', { platformDescription: e.target.value })}
                     rows={3}
+                    placeholder="Descreva sua plataforma..."
+                  />
+                </FormField>
+
+                <Separator />
+
+                {/* Image Uploads */}
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <ImageUpload
+                    label="Logo da Plataforma"
+                    currentUrl={settings.general.logoUrl}
+                    onUpload={handleLogoUpload}
+                    onRemove={() => updateSettings('general', { logoUrl: '' })}
+                    type="logo"
+                  />
+                  <ImageUpload
+                    label="Favicon"
+                    currentUrl={settings.general.faviconUrl}
+                    onUpload={handleFaviconUpload}
+                    onRemove={() => updateSettings('general', { faviconUrl: '' })}
+                    type="favicon"
                   />
                 </div>
 
                 <Separator />
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="contactEmail" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Email de Contato
-                    </Label>
-                    <Input
-                      id="contactEmail"
+                  <FormField 
+                    label="Email de Contato" 
+                    icon={Mail}
+                    error={errors['general.contactEmail']}
+                    required
+                  >
+                    <ValidatedInput
                       type="email"
-                      value={generalSettings.contactEmail}
-                      onChange={(e) => setGeneralSettings({ ...generalSettings, contactEmail: e.target.value })}
+                      value={settings.general.contactEmail}
+                      onChange={(value) => updateSettings('general', { contactEmail: value })}
+                      error={errors['general.contactEmail']}
+                      placeholder="contato@exemplo.com"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="supportEmail" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Email de Suporte
-                    </Label>
-                    <Input
-                      id="supportEmail"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Email de Suporte" 
+                    icon={Mail}
+                    error={errors['general.supportEmail']}
+                    required
+                  >
+                    <ValidatedInput
                       type="email"
-                      value={generalSettings.supportEmail}
-                      onChange={(e) => setGeneralSettings({ ...generalSettings, supportEmail: e.target.value })}
+                      value={settings.general.supportEmail}
+                      onChange={(value) => updateSettings('general', { supportEmail: value })}
+                      error={errors['general.supportEmail']}
+                      placeholder="suporte@exemplo.com"
                     />
-                  </div>
+                  </FormField>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="contactPhone" className="flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    Telefone de Contato
-                  </Label>
-                  <Input
-                    id="contactPhone"
-                    value={generalSettings.contactPhone}
-                    onChange={(e) => setGeneralSettings({ ...generalSettings, contactPhone: e.target.value })}
+                <FormField 
+                  label="Telefone de Contato" 
+                  icon={Phone}
+                  error={errors['general.contactPhone']}
+                  description="Formato: (11) 99999-9999"
+                >
+                  <ValidatedInput
+                    value={settings.general.contactPhone}
+                    onChange={(value) => updateSettings('general', { contactPhone: value })}
+                    error={errors['general.contactPhone']}
+                    placeholder="(11) 99999-9999"
                   />
-                </div>
+                </FormField>
               </CardContent>
             </Card>
 
@@ -417,20 +535,19 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={generalSettings.maintenanceMode}
-                    onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, maintenanceMode: checked })}
+                    checked={settings.general.maintenanceMode}
+                    onCheckedChange={(checked) => updateSettings('general', { maintenanceMode: checked })}
                   />
                 </div>
-                {generalSettings.maintenanceMode && (
-                  <div className="space-y-2">
-                    <Label htmlFor="maintenanceMessage">Mensagem de Manutenção</Label>
+                {settings.general.maintenanceMode && (
+                  <FormField label="Mensagem de Manutenção">
                     <Textarea
-                      id="maintenanceMessage"
-                      value={generalSettings.maintenanceMessage}
-                      onChange={(e) => setGeneralSettings({ ...generalSettings, maintenanceMessage: e.target.value })}
+                      value={settings.general.maintenanceMessage}
+                      onChange={(e) => updateSettings('general', { maintenanceMessage: e.target.value })}
                       rows={2}
+                      placeholder="Mensagem exibida aos usuários..."
                     />
-                  </div>
+                  </FormField>
                 )}
               </CardContent>
             </Card>
@@ -457,20 +574,19 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={paymentSettings.pixEnabled}
-                    onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, pixEnabled: checked })}
+                    checked={settings.payment.pixEnabled}
+                    onCheckedChange={(checked) => updateSettings('payment', { pixEnabled: checked })}
                   />
                 </div>
 
                 <Separator />
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="pixKeyType">Tipo da Chave PIX</Label>
+                  <FormField label="Tipo da Chave PIX">
                     <Select
-                      value={paymentSettings.pixKeyType}
-                      onValueChange={(value: PaymentSettings['pixKeyType']) => 
-                        setPaymentSettings({ ...paymentSettings, pixKeyType: value })
+                      value={settings.payment.pixKeyType}
+                      onValueChange={(value: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random') => 
+                        updateSettings('payment', { pixKeyType: value })
                       }
                     >
                       <SelectTrigger>
@@ -484,35 +600,36 @@ export default function AdminConfiguracoes() {
                         <SelectItem value="random">Chave Aleatória</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pixKey">Chave PIX</Label>
-                    <Input
-                      id="pixKey"
-                      value={paymentSettings.pixKey}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, pixKey: e.target.value })}
+                  </FormField>
+                  
+                  <FormField 
+                    label="Chave PIX" 
+                    error={errors['payment.pixKey']}
+                  >
+                    <ValidatedInput
+                      value={settings.payment.pixKey}
+                      onChange={(value) => updateSettings('payment', { pixKey: value })}
+                      error={errors['payment.pixKey']}
                       placeholder="Digite sua chave PIX"
                     />
-                  </div>
+                  </FormField>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="pixReceiverName">Nome do Recebedor</Label>
+                  <FormField label="Nome do Recebedor">
                     <Input
-                      id="pixReceiverName"
-                      value={paymentSettings.pixReceiverName}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, pixReceiverName: e.target.value })}
+                      value={settings.payment.pixReceiverName}
+                      onChange={(e) => updateSettings('payment', { pixReceiverName: e.target.value })}
+                      placeholder="Nome completo ou razão social"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pixCity">Cidade</Label>
+                  </FormField>
+                  <FormField label="Cidade">
                     <Input
-                      id="pixCity"
-                      value={paymentSettings.pixCity}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, pixCity: e.target.value })}
+                      value={settings.payment.pixCity}
+                      onChange={(e) => updateSettings('payment', { pixCity: e.target.value })}
+                      placeholder="São Paulo"
                     />
-                  </div>
+                  </FormField>
                 </div>
               </CardContent>
             </Card>
@@ -529,50 +646,60 @@ export default function AdminConfiguracoes() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="minimumDeposit">Depósito Mínimo (R$)</Label>
-                    <Input
-                      id="minimumDeposit"
+                  <FormField 
+                    label="Depósito Mínimo (R$)" 
+                    error={errors['payment.minimumDeposit']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      value={paymentSettings.minimumDeposit}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, minimumDeposit: Number(e.target.value) })}
+                      min={1}
+                      value={settings.payment.minimumDeposit}
+                      onChange={(value) => updateSettings('payment', { minimumDeposit: Number(value) })}
+                      error={errors['payment.minimumDeposit']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="maximumDeposit">Depósito Máximo (R$)</Label>
-                    <Input
-                      id="maximumDeposit"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Depósito Máximo (R$)" 
+                    error={errors['payment.maximumDeposit']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      value={paymentSettings.maximumDeposit}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, maximumDeposit: Number(e.target.value) })}
+                      min={1}
+                      value={settings.payment.maximumDeposit}
+                      onChange={(value) => updateSettings('payment', { maximumDeposit: Number(value) })}
+                      error={errors['payment.maximumDeposit']}
                     />
-                  </div>
+                  </FormField>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="minimumWithdrawal">Saque Mínimo (R$)</Label>
-                    <Input
-                      id="minimumWithdrawal"
+                  <FormField 
+                    label="Saque Mínimo (R$)" 
+                    error={errors['payment.minimumWithdrawal']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      value={paymentSettings.minimumWithdrawal}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, minimumWithdrawal: Number(e.target.value) })}
+                      min={1}
+                      value={settings.payment.minimumWithdrawal}
+                      onChange={(value) => updateSettings('payment', { minimumWithdrawal: Number(value) })}
+                      error={errors['payment.minimumWithdrawal']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="withdrawalFee">Taxa de Saque (R$)</Label>
-                    <Input
-                      id="withdrawalFee"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Taxa de Saque (R$)" 
+                    error={errors['payment.withdrawalFee']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="0"
+                      min={0}
                       step="0.01"
-                      value={paymentSettings.withdrawalFee}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, withdrawalFee: Number(e.target.value) })}
+                      value={settings.payment.withdrawalFee}
+                      onChange={(value) => updateSettings('payment', { withdrawalFee: Number(value) })}
+                      error={errors['payment.withdrawalFee']}
                     />
-                  </div>
+                  </FormField>
                 </div>
 
                 <Separator />
@@ -585,22 +712,20 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={paymentSettings.autoApproveWithdrawals}
-                    onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, autoApproveWithdrawals: checked })}
+                    checked={settings.payment.autoApproveWithdrawals}
+                    onCheckedChange={(checked) => updateSettings('payment', { autoApproveWithdrawals: checked })}
                   />
                 </div>
 
-                {paymentSettings.autoApproveWithdrawals && (
-                  <div className="space-y-2">
-                    <Label htmlFor="autoApproveLimit">Limite de Aprovação Automática (R$)</Label>
+                {settings.payment.autoApproveWithdrawals && (
+                  <FormField label="Limite de Aprovação Automática (R$)">
                     <Input
-                      id="autoApproveLimit"
                       type="number"
-                      min="1"
-                      value={paymentSettings.autoApproveLimit}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, autoApproveLimit: Number(e.target.value) })}
+                      min={1}
+                      value={settings.payment.autoApproveLimit}
+                      onChange={(e) => updateSettings('payment', { autoApproveLimit: Number(e.target.value) })}
                     />
-                  </div>
+                  </FormField>
                 )}
               </CardContent>
             </Card>
@@ -627,66 +752,72 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={gameSettings.scratchCardEnabled}
-                    onCheckedChange={(checked) => setGameSettings({ ...gameSettings, scratchCardEnabled: checked })}
+                    checked={settings.games.scratchCardEnabled}
+                    onCheckedChange={(checked) => updateSettings('games', { scratchCardEnabled: checked })}
                   />
                 </div>
 
                 <Separator />
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="scratchCardMinPrice">Preço Mínimo (R$)</Label>
-                    <Input
-                      id="scratchCardMinPrice"
+                  <FormField 
+                    label="Preço Mínimo (R$)" 
+                    error={errors['games.scratchCardMinPrice']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="0.5"
+                      min={0.5}
                       step="0.5"
-                      value={gameSettings.scratchCardMinPrice}
-                      onChange={(e) => setGameSettings({ ...gameSettings, scratchCardMinPrice: Number(e.target.value) })}
+                      value={settings.games.scratchCardMinPrice}
+                      onChange={(value) => updateSettings('games', { scratchCardMinPrice: Number(value) })}
+                      error={errors['games.scratchCardMinPrice']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="scratchCardMaxPrice">Preço Máximo (R$)</Label>
-                    <Input
-                      id="scratchCardMaxPrice"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Preço Máximo (R$)" 
+                    error={errors['games.scratchCardMaxPrice']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      value={gameSettings.scratchCardMaxPrice}
-                      onChange={(e) => setGameSettings({ ...gameSettings, scratchCardMaxPrice: Number(e.target.value) })}
+                      min={1}
+                      value={settings.games.scratchCardMaxPrice}
+                      onChange={(value) => updateSettings('games', { scratchCardMaxPrice: Number(value) })}
+                      error={errors['games.scratchCardMaxPrice']}
                     />
-                  </div>
+                  </FormField>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="scratchCardDefaultProbability">Probabilidade Padrão (%)</Label>
-                    <Input
-                      id="scratchCardDefaultProbability"
+                  <FormField 
+                    label="Probabilidade Padrão (%)" 
+                    error={errors['games.scratchCardDefaultProbability']}
+                    description="Chance padrão de vitória ao criar nova raspadinha"
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      max="100"
-                      value={gameSettings.scratchCardDefaultProbability}
-                      onChange={(e) => setGameSettings({ ...gameSettings, scratchCardDefaultProbability: Number(e.target.value) })}
+                      min={1}
+                      max={100}
+                      value={settings.games.scratchCardDefaultProbability}
+                      onChange={(value) => updateSettings('games', { scratchCardDefaultProbability: Number(value) })}
+                      error={errors['games.scratchCardDefaultProbability']}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Chance padrão de vitória ao criar nova raspadinha
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="scratchCardMaxWinRate">Taxa Máxima de Vitória (%)</Label>
-                    <Input
-                      id="scratchCardMaxWinRate"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Taxa Máxima de Vitória (%)" 
+                    error={errors['games.scratchCardMaxWinRate']}
+                    description="Limite máximo permitido para chance de vitória"
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      max="100"
-                      value={gameSettings.scratchCardMaxWinRate}
-                      onChange={(e) => setGameSettings({ ...gameSettings, scratchCardMaxWinRate: Number(e.target.value) })}
+                      min={1}
+                      max={100}
+                      value={settings.games.scratchCardMaxWinRate}
+                      onChange={(value) => updateSettings('games', { scratchCardMaxWinRate: Number(value) })}
+                      error={errors['games.scratchCardMaxWinRate']}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Limite máximo permitido para chance de vitória
-                    </p>
-                  </div>
+                  </FormField>
                 </div>
               </CardContent>
             </Card>
@@ -710,58 +841,68 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={gameSettings.raffleEnabled}
-                    onCheckedChange={(checked) => setGameSettings({ ...gameSettings, raffleEnabled: checked })}
+                    checked={settings.games.raffleEnabled}
+                    onCheckedChange={(checked) => updateSettings('games', { raffleEnabled: checked })}
                   />
                 </div>
 
                 <Separator />
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="raffleMinPrice">Preço Mínimo por Número (R$)</Label>
-                    <Input
-                      id="raffleMinPrice"
+                  <FormField 
+                    label="Preço Mínimo por Número (R$)" 
+                    error={errors['games.raffleMinPrice']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="0.5"
+                      min={0.5}
                       step="0.5"
-                      value={gameSettings.raffleMinPrice}
-                      onChange={(e) => setGameSettings({ ...gameSettings, raffleMinPrice: Number(e.target.value) })}
+                      value={settings.games.raffleMinPrice}
+                      onChange={(value) => updateSettings('games', { raffleMinPrice: Number(value) })}
+                      error={errors['games.raffleMinPrice']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="raffleMaxPrice">Preço Máximo por Número (R$)</Label>
-                    <Input
-                      id="raffleMaxPrice"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Preço Máximo por Número (R$)" 
+                    error={errors['games.raffleMaxPrice']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      value={gameSettings.raffleMaxPrice}
-                      onChange={(e) => setGameSettings({ ...gameSettings, raffleMaxPrice: Number(e.target.value) })}
+                      min={1}
+                      value={settings.games.raffleMaxPrice}
+                      onChange={(value) => updateSettings('games', { raffleMaxPrice: Number(value) })}
+                      error={errors['games.raffleMaxPrice']}
                     />
-                  </div>
+                  </FormField>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="raffleMinNumbers">Mínimo de Números</Label>
-                    <Input
-                      id="raffleMinNumbers"
+                  <FormField 
+                    label="Mínimo de Números" 
+                    error={errors['games.raffleMinNumbers']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="10"
-                      value={gameSettings.raffleMinNumbers}
-                      onChange={(e) => setGameSettings({ ...gameSettings, raffleMinNumbers: Number(e.target.value) })}
+                      min={10}
+                      value={settings.games.raffleMinNumbers}
+                      onChange={(value) => updateSettings('games', { raffleMinNumbers: Number(value) })}
+                      error={errors['games.raffleMinNumbers']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="raffleMaxNumbers">Máximo de Números</Label>
-                    <Input
-                      id="raffleMaxNumbers"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Máximo de Números" 
+                    error={errors['games.raffleMaxNumbers']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="100"
-                      value={gameSettings.raffleMaxNumbers}
-                      onChange={(e) => setGameSettings({ ...gameSettings, raffleMaxNumbers: Number(e.target.value) })}
+                      min={100}
+                      value={settings.games.raffleMaxNumbers}
+                      onChange={(value) => updateSettings('games', { raffleMaxNumbers: Number(value) })}
+                      error={errors['games.raffleMaxNumbers']}
                     />
-                  </div>
+                  </FormField>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -772,8 +913,8 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={gameSettings.raffleAutoDrawEnabled}
-                    onCheckedChange={(checked) => setGameSettings({ ...gameSettings, raffleAutoDrawEnabled: checked })}
+                    checked={settings.games.raffleAutoDrawEnabled}
+                    onCheckedChange={(checked) => updateSettings('games', { raffleAutoDrawEnabled: checked })}
                   />
                 </div>
               </CardContent>
@@ -801,46 +942,54 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={commissionSettings.affiliateEnabled}
-                    onCheckedChange={(checked) => setCommissionSettings({ ...commissionSettings, affiliateEnabled: checked })}
+                    checked={settings.commissions.affiliateEnabled}
+                    onCheckedChange={(checked) => updateSettings('commissions', { affiliateEnabled: checked })}
                   />
                 </div>
 
                 <Separator />
 
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="defaultAffiliateCommission">Comissão Padrão (%)</Label>
-                    <Input
-                      id="defaultAffiliateCommission"
+                  <FormField 
+                    label="Comissão Padrão (%)" 
+                    error={errors['commissions.defaultAffiliateCommission']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      max="100"
-                      value={commissionSettings.defaultAffiliateCommission}
-                      onChange={(e) => setCommissionSettings({ ...commissionSettings, defaultAffiliateCommission: Number(e.target.value) })}
+                      min={1}
+                      max={100}
+                      value={settings.commissions.defaultAffiliateCommission}
+                      onChange={(value) => updateSettings('commissions', { defaultAffiliateCommission: Number(value) })}
+                      error={errors['commissions.defaultAffiliateCommission']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="maxAffiliateCommission">Comissão Máxima (%)</Label>
-                    <Input
-                      id="maxAffiliateCommission"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Comissão Máxima (%)" 
+                    error={errors['commissions.maxAffiliateCommission']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      max="100"
-                      value={commissionSettings.maxAffiliateCommission}
-                      onChange={(e) => setCommissionSettings({ ...commissionSettings, maxAffiliateCommission: Number(e.target.value) })}
+                      min={1}
+                      max={100}
+                      value={settings.commissions.maxAffiliateCommission}
+                      onChange={(value) => updateSettings('commissions', { maxAffiliateCommission: Number(value) })}
+                      error={errors['commissions.maxAffiliateCommission']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="affiliateMinWithdrawal">Saque Mínimo (R$)</Label>
-                    <Input
-                      id="affiliateMinWithdrawal"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Saque Mínimo (R$)" 
+                    error={errors['commissions.affiliateMinWithdrawal']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="1"
-                      value={commissionSettings.affiliateMinWithdrawal}
-                      onChange={(e) => setCommissionSettings({ ...commissionSettings, affiliateMinWithdrawal: Number(e.target.value) })}
+                      min={1}
+                      value={settings.commissions.affiliateMinWithdrawal}
+                      onChange={(value) => updateSettings('commissions', { affiliateMinWithdrawal: Number(value) })}
+                      error={errors['commissions.affiliateMinWithdrawal']}
                     />
-                  </div>
+                  </FormField>
                 </div>
               </CardContent>
             </Card>
@@ -864,20 +1013,19 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={commissionSettings.referralEnabled}
-                    onCheckedChange={(checked) => setCommissionSettings({ ...commissionSettings, referralEnabled: checked })}
+                    checked={settings.commissions.referralEnabled}
+                    onCheckedChange={(checked) => updateSettings('commissions', { referralEnabled: checked })}
                   />
                 </div>
 
                 <Separator />
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="referralBonusType">Tipo de Bônus</Label>
+                  <FormField label="Tipo de Bônus">
                     <Select
-                      value={commissionSettings.referralBonusType}
+                      value={settings.commissions.referralBonusType}
                       onValueChange={(value: 'fixed' | 'percentage') => 
-                        setCommissionSettings({ ...commissionSettings, referralBonusType: value })
+                        updateSettings('commissions', { referralBonusType: value })
                       }
                     >
                       <SelectTrigger>
@@ -888,20 +1036,21 @@ export default function AdminConfiguracoes() {
                         <SelectItem value="percentage">Percentual (%)</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="referralBonusAmount">
-                      Valor do Bônus {commissionSettings.referralBonusType === 'fixed' ? '(R$)' : '(%)'}
-                    </Label>
-                    <Input
-                      id="referralBonusAmount"
+                  </FormField>
+                  
+                  <FormField 
+                    label={`Valor do Bônus ${settings.commissions.referralBonusType === 'fixed' ? '(R$)' : '(%)'}`}
+                    error={errors['commissions.referralBonusAmount']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="0"
-                      step={commissionSettings.referralBonusType === 'fixed' ? '1' : '0.5'}
-                      value={commissionSettings.referralBonusAmount}
-                      onChange={(e) => setCommissionSettings({ ...commissionSettings, referralBonusAmount: Number(e.target.value) })}
+                      min={0}
+                      step={settings.commissions.referralBonusType === 'fixed' ? '1' : '0.5'}
+                      value={settings.commissions.referralBonusAmount}
+                      onChange={(value) => updateSettings('commissions', { referralBonusAmount: Number(value) })}
+                      error={errors['commissions.referralBonusAmount']}
                     />
-                  </div>
+                  </FormField>
                 </div>
               </CardContent>
             </Card>
@@ -925,23 +1074,25 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={commissionSettings.shareRewardEnabled}
-                    onCheckedChange={(checked) => setCommissionSettings({ ...commissionSettings, shareRewardEnabled: checked })}
+                    checked={settings.commissions.shareRewardEnabled}
+                    onCheckedChange={(checked) => updateSettings('commissions', { shareRewardEnabled: checked })}
                   />
                 </div>
 
-                {commissionSettings.shareRewardEnabled && (
-                  <div className="space-y-2">
-                    <Label htmlFor="shareRewardAmount">Crédito por Compartilhamento (R$)</Label>
-                    <Input
-                      id="shareRewardAmount"
+                {settings.commissions.shareRewardEnabled && (
+                  <FormField 
+                    label="Crédito por Compartilhamento (R$)"
+                    error={errors['commissions.shareRewardAmount']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="0"
+                      min={0}
                       step="0.5"
-                      value={commissionSettings.shareRewardAmount}
-                      onChange={(e) => setCommissionSettings({ ...commissionSettings, shareRewardAmount: Number(e.target.value) })}
+                      value={settings.commissions.shareRewardAmount}
+                      onChange={(value) => updateSettings('commissions', { shareRewardAmount: Number(value) })}
+                      error={errors['commissions.shareRewardAmount']}
                     />
-                  </div>
+                  </FormField>
                 )}
               </CardContent>
             </Card>
@@ -971,8 +1122,8 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={notificationSettings.emailEnabled}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, emailEnabled: checked })}
+                    checked={settings.notifications.emailEnabled}
+                    onCheckedChange={(checked) => updateSettings('notifications', { emailEnabled: checked })}
                   />
                 </div>
 
@@ -991,8 +1142,7 @@ export default function AdminConfiguracoes() {
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary">Em breve</Badge>
                     <Switch
-                      checked={notificationSettings.smsEnabled}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, smsEnabled: checked })}
+                      checked={settings.notifications.smsEnabled}
                       disabled
                     />
                   </div>
@@ -1011,8 +1161,8 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={notificationSettings.pushEnabled}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, pushEnabled: checked })}
+                    checked={settings.notifications.pushEnabled}
+                    onCheckedChange={(checked) => updateSettings('notifications', { pushEnabled: checked })}
                   />
                 </div>
               </CardContent>
@@ -1029,45 +1179,26 @@ export default function AdminConfiguracoes() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label>Notificar em Compras</Label>
-                  <Switch
-                    checked={notificationSettings.notifyOnPurchase}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, notifyOnPurchase: checked })}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Label>Notificar em Vitórias</Label>
-                  <Switch
-                    checked={notificationSettings.notifyOnWin}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, notifyOnWin: checked })}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Label>Notificar em Depósitos</Label>
-                  <Switch
-                    checked={notificationSettings.notifyOnDeposit}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, notifyOnDeposit: checked })}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Label>Notificar em Saques</Label>
-                  <Switch
-                    checked={notificationSettings.notifyOnWithdrawal}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, notifyOnWithdrawal: checked })}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Label>Notificar Sorteios</Label>
-                  <Switch
-                    checked={notificationSettings.notifyOnRaffleDraw}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, notifyOnRaffleDraw: checked })}
-                  />
-                </div>
+                {[
+                  { key: 'notifyOnPurchase', label: 'Notificar em Compras' },
+                  { key: 'notifyOnWin', label: 'Notificar em Vitórias' },
+                  { key: 'notifyOnDeposit', label: 'Notificar em Depósitos' },
+                  { key: 'notifyOnWithdrawal', label: 'Notificar em Saques' },
+                  { key: 'notifyOnRaffleDraw', label: 'Notificar Sorteios' },
+                ].map((item, index) => (
+                  <div key={item.key}>
+                    {index > 0 && <Separator className="my-4" />}
+                    <div className="flex items-center justify-between">
+                      <Label>{item.label}</Label>
+                      <Switch
+                        checked={settings.notifications[item.key as keyof typeof settings.notifications] as boolean}
+                        onCheckedChange={(checked) => 
+                          updateSettings('notifications', { [item.key]: checked })
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
 
                 <Separator />
 
@@ -1079,8 +1210,8 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={notificationSettings.marketingEmails}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, marketingEmails: checked })}
+                    checked={settings.notifications.marketingEmails}
+                    onCheckedChange={(checked) => updateSettings('notifications', { marketingEmails: checked })}
                   />
                 </div>
               </CardContent>
@@ -1113,8 +1244,7 @@ export default function AdminConfiguracoes() {
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary">Em breve</Badge>
                     <Switch
-                      checked={securitySettings.twoFactorEnabled}
-                      onCheckedChange={(checked) => setSecuritySettings({ ...securitySettings, twoFactorEnabled: checked })}
+                      checked={settings.security.twoFactorEnabled}
                       disabled
                     />
                   </div>
@@ -1123,31 +1253,34 @@ export default function AdminConfiguracoes() {
                 <Separator />
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="sessionTimeout" className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Tempo de Sessão (minutos)
-                    </Label>
-                    <Input
-                      id="sessionTimeout"
+                  <FormField 
+                    label="Tempo de Sessão (minutos)" 
+                    icon={Clock}
+                    error={errors['security.sessionTimeout']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="5"
-                      max="1440"
-                      value={securitySettings.sessionTimeout}
-                      onChange={(e) => setSecuritySettings({ ...securitySettings, sessionTimeout: Number(e.target.value) })}
+                      min={5}
+                      max={1440}
+                      value={settings.security.sessionTimeout}
+                      onChange={(value) => updateSettings('security', { sessionTimeout: Number(value) })}
+                      error={errors['security.sessionTimeout']}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="maxLoginAttempts">Máximo de Tentativas de Login</Label>
-                    <Input
-                      id="maxLoginAttempts"
+                  </FormField>
+                  
+                  <FormField 
+                    label="Máximo de Tentativas de Login"
+                    error={errors['security.maxLoginAttempts']}
+                  >
+                    <ValidatedInput
                       type="number"
-                      min="3"
-                      max="10"
-                      value={securitySettings.maxLoginAttempts}
-                      onChange={(e) => setSecuritySettings({ ...securitySettings, maxLoginAttempts: Number(e.target.value) })}
+                      min={3}
+                      max={10}
+                      value={settings.security.maxLoginAttempts}
+                      onChange={(value) => updateSettings('security', { maxLoginAttempts: Number(value) })}
+                      error={errors['security.maxLoginAttempts']}
                     />
-                  </div>
+                  </FormField>
                 </div>
               </CardContent>
             </Card>
@@ -1163,42 +1296,36 @@ export default function AdminConfiguracoes() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="passwordMinLength">Comprimento Mínimo</Label>
-                  <Input
-                    id="passwordMinLength"
+                <FormField 
+                  label="Comprimento Mínimo"
+                  error={errors['security.passwordMinLength']}
+                >
+                  <ValidatedInput
                     type="number"
-                    min="6"
-                    max="32"
-                    value={securitySettings.passwordMinLength}
-                    onChange={(e) => setSecuritySettings({ ...securitySettings, passwordMinLength: Number(e.target.value) })}
+                    min={6}
+                    max={32}
+                    value={settings.security.passwordMinLength}
+                    onChange={(value) => updateSettings('security', { passwordMinLength: Number(value) })}
+                    error={errors['security.passwordMinLength']}
                   />
-                </div>
+                </FormField>
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Exigir Letras Maiúsculas</Label>
-                    <Switch
-                      checked={securitySettings.requireUppercase}
-                      onCheckedChange={(checked) => setSecuritySettings({ ...securitySettings, requireUppercase: checked })}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label>Exigir Números</Label>
-                    <Switch
-                      checked={securitySettings.requireNumbers}
-                      onCheckedChange={(checked) => setSecuritySettings({ ...securitySettings, requireNumbers: checked })}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label>Exigir Caracteres Especiais</Label>
-                    <Switch
-                      checked={securitySettings.requireSpecialChars}
-                      onCheckedChange={(checked) => setSecuritySettings({ ...securitySettings, requireSpecialChars: checked })}
-                    />
-                  </div>
+                  {[
+                    { key: 'requireUppercase', label: 'Exigir Letras Maiúsculas' },
+                    { key: 'requireNumbers', label: 'Exigir Números' },
+                    { key: 'requireSpecialChars', label: 'Exigir Caracteres Especiais' },
+                  ].map((item) => (
+                    <div key={item.key} className="flex items-center justify-between">
+                      <Label>{item.label}</Label>
+                      <Switch
+                        checked={settings.security[item.key as keyof typeof settings.security] as boolean}
+                        onCheckedChange={(checked) => 
+                          updateSettings('security', { [item.key]: checked })
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -1222,25 +1349,23 @@ export default function AdminConfiguracoes() {
                     </p>
                   </div>
                   <Switch
-                    checked={securitySettings.adminIpRestriction}
-                    onCheckedChange={(checked) => setSecuritySettings({ ...securitySettings, adminIpRestriction: checked })}
+                    checked={settings.security.adminIpRestriction}
+                    onCheckedChange={(checked) => updateSettings('security', { adminIpRestriction: checked })}
                   />
                 </div>
 
-                {securitySettings.adminIpRestriction && (
-                  <div className="space-y-2">
-                    <Label htmlFor="ipWhitelist">IPs Autorizados (um por linha)</Label>
+                {settings.security.adminIpRestriction && (
+                  <FormField 
+                    label="IPs Autorizados (um por linha)"
+                    description="Deixe em branco para permitir qualquer IP"
+                  >
                     <Textarea
-                      id="ipWhitelist"
                       placeholder="192.168.1.1&#10;10.0.0.1"
-                      value={securitySettings.ipWhitelist}
-                      onChange={(e) => setSecuritySettings({ ...securitySettings, ipWhitelist: e.target.value })}
+                      value={settings.security.ipWhitelist}
+                      onChange={(e) => updateSettings('security', { ipWhitelist: e.target.value })}
                       rows={4}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Deixe em branco para permitir qualquer IP
-                    </p>
-                  </div>
+                  </FormField>
                 )}
               </CardContent>
             </Card>
