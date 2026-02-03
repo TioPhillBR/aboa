@@ -788,6 +788,85 @@ export type Database = {
           },
         ]
       }
+      settings_backups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          settings_data: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          settings_data: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          settings_data?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settings_backups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings_history: {
+        Row: {
+          category: string
+          change_type: string
+          changed_by: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          new_value: Json
+          old_value: Json | null
+          user_agent: string | null
+        }
+        Insert: {
+          category: string
+          change_type?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_value: Json
+          old_value?: Json | null
+          user_agent?: string | null
+        }
+        Update: {
+          category?: string
+          change_type?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_value?: Json
+          old_value?: Json | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settings_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       share_events: {
         Row: {
           created_at: string | null

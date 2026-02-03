@@ -23,6 +23,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -40,6 +47,7 @@ import {
   Wallet as WalletIcon,
   Shield,
   ShieldCheck,
+  ShieldOff,
   History,
   Loader2,
   ArrowUpRight,
@@ -47,7 +55,12 @@ import {
   Gift,
   RefreshCw,
   Phone,
-  Calendar
+  Calendar,
+  Crown,
+  ChevronDown,
+  UserCheck,
+  UserX,
+  MoreHorizontal,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -56,6 +69,8 @@ interface UserWithDetails extends Profile {
   wallet: Wallet | null;
   roles: UserRole[];
   isAdmin: boolean;
+  affiliateStatus?: string | null;
+  affiliateId?: string | null;
 }
 
 interface TransactionWithType extends WalletTransaction {
@@ -78,10 +93,10 @@ export default function AdminUsuarios() {
   const [transactions, setTransactions] = useState<TransactionWithType[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   
-  // Promote dialog
-  const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
-  const [userToPromote, setUserToPromote] = useState<UserWithDetails | null>(null);
-  const [isPromoting, setIsPromoting] = useState(false);
+  // Action state
+  const [actionUser, setActionUser] = useState<UserWithDetails | null>(null);
+  const [actionType, setActionType] = useState<'promote_admin' | 'remove_admin' | 'approve_affiliate' | 'reject_affiliate' | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -113,7 +128,7 @@ export default function AdminUsuarios() {
 
       if (profilesError) throw profilesError;
 
-      // Para cada perfil, buscar wallet e roles
+      // Para cada perfil, buscar wallet, roles e affiliate
       const usersWithDetails = await Promise.all(
         (profilesData || []).map(async (profile) => {
           // Buscar wallet
@@ -129,6 +144,13 @@ export default function AdminUsuarios() {
             .select('*')
             .eq('user_id', profile.id);
 
+          // Buscar affiliate status
+          const { data: affiliateData } = await supabase
+            .from('affiliates')
+            .select('id, status')
+            .eq('user_id', profile.id)
+            .single();
+
           const roles = (rolesData || []) as UserRole[];
           const isAdmin = roles.some(r => r.role === 'admin');
 
@@ -137,6 +159,8 @@ export default function AdminUsuarios() {
             wallet: walletData as Wallet | null,
             roles,
             isAdmin,
+            affiliateStatus: affiliateData?.status || null,
+            affiliateId: affiliateData?.id || null,
           } as UserWithDetails;
         })
       );
@@ -231,86 +255,155 @@ export default function AdminUsuarios() {
     }
   };
 
-  const openPromoteDialog = (userDetails: UserWithDetails) => {
-    setUserToPromote(userDetails);
-    setPromoteDialogOpen(true);
-  };
-
-  const handlePromoteToAdmin = async () => {
-    if (!userToPromote || !user) return;
-
-    setIsPromoting(true);
-
+  const handleAction = async () => {
+    if (!actionUser || !actionType || !user) return;
+    
+    setIsProcessing(true);
+    
     try {
-      // Verificar se já é admin
-      if (userToPromote.isAdmin) {
-        toast({
-          title: 'Usuário já é administrador',
-          variant: 'destructive',
-        });
-        return;
+      switch (actionType) {
+        case 'promote_admin':
+          await supabase.from('user_roles').insert({
+            user_id: actionUser.id,
+            role: 'admin',
+            created_by: user.id,
+          });
+          toast({ title: `${actionUser.full_name} agora é administrador!` });
+          break;
+          
+        case 'remove_admin':
+          await supabase
+            .from('user_roles')
+            .delete()
+            .eq('user_id', actionUser.id)
+            .eq('role', 'admin');
+          toast({ title: `Permissões de admin removidas de ${actionUser.full_name}` });
+          break;
+          
+        case 'approve_affiliate':
+          if (actionUser.affiliateId) {
+            await supabase
+              .from('affiliates')
+              .update({
+                status: 'approved',
+                approved_by: user.id,
+                approved_at: new Date().toISOString(),
+              })
+              .eq('id', actionUser.affiliateId);
+          } else {
+            // Create affiliate if doesn't exist
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name, phone')
+              .eq('id', actionUser.id)
+              .single();
+              
+            await supabase.from('affiliates').insert({
+              user_id: actionUser.id,
+              full_name: profileData?.full_name || 'Afiliado',
+              cpf: '00000000000', // Placeholder - user should update
+              status: 'approved',
+              approved_by: user.id,
+              approved_at: new Date().toISOString(),
+              affiliate_code: `AF${Date.now().toString(36).toUpperCase()}`,
+            });
+          }
+          toast({ title: `${actionUser.full_name} aprovado como afiliado!` });
+          break;
+          
+        case 'reject_affiliate':
+          if (actionUser.affiliateId) {
+            await supabase
+              .from('affiliates')
+              .update({ status: 'rejected' })
+              .eq('id', actionUser.affiliateId);
+          }
+          toast({ title: `Afiliação de ${actionUser.full_name} rejeitada` });
+          break;
       }
-
-      // Adicionar role de admin
-      const { error } = await supabase.from('user_roles').insert({
-        user_id: userToPromote.id,
-        role: 'admin',
-        created_by: user.id,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Usuário promovido!',
-        description: `${userToPromote.full_name} agora é administrador.`,
-      });
-
-      setPromoteDialogOpen(false);
-      setUserToPromote(null);
+      
       fetchUsers();
     } catch (error) {
-      console.error('Error promoting user:', error);
-      toast({
-        title: 'Erro ao promover usuário',
-        description: 'Não foi possível promover o usuário.',
-        variant: 'destructive',
-      });
+      console.error('Error performing action:', error);
+      toast({ title: 'Erro ao executar ação', variant: 'destructive' });
     } finally {
-      setIsPromoting(false);
+      setIsProcessing(false);
+      setActionUser(null);
+      setActionType(null);
     }
   };
 
-  const handleRemoveAdmin = async (userDetails: UserWithDetails) => {
-    if (!confirm('Tem certeza que deseja remover as permissões de admin deste usuário?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userDetails.id)
-        .eq('role', 'admin');
-
-      if (error) throw error;
-
-      toast({
-        title: 'Permissão removida',
-        description: `${userDetails.full_name} não é mais administrador.`,
-      });
-
-      fetchUsers();
-    } catch (error) {
-      console.error('Error removing admin:', error);
-      toast({
-        title: 'Erro ao remover permissão',
-        variant: 'destructive',
-      });
+  const getActionDialogContent = () => {
+    if (!actionUser || !actionType) return { title: '', description: '' };
+    
+    switch (actionType) {
+      case 'promote_admin':
+        return {
+          title: 'Promover a Administrador?',
+          description: `${actionUser.full_name} terá acesso total ao painel administrativo.`,
+        };
+      case 'remove_admin':
+        return {
+          title: 'Remover Permissões de Admin?',
+          description: `${actionUser.full_name} perderá acesso ao painel administrativo.`,
+        };
+      case 'approve_affiliate':
+        return {
+          title: 'Aprovar como Afiliado?',
+          description: `${actionUser.full_name} poderá compartilhar links de indicação e receber comissões.`,
+        };
+      case 'reject_affiliate':
+        return {
+          title: 'Rejeitar/Suspender Afiliação?',
+          description: `${actionUser.full_name} não poderá mais atuar como afiliado.`,
+        };
+      default:
+        return { title: '', description: '' };
     }
+  };
+
+  const getRoleBadges = (userDetails: UserWithDetails) => {
+    const badges = [];
+    
+    if (userDetails.isAdmin) {
+      badges.push(
+        <Badge key="admin" className="bg-primary/10 text-primary gap-1">
+          <ShieldCheck className="h-3 w-3" />
+          Admin
+        </Badge>
+      );
+    }
+    
+    if (userDetails.affiliateStatus === 'approved') {
+      badges.push(
+        <Badge key="affiliate" className="bg-success/10 text-success gap-1">
+          <UserCheck className="h-3 w-3" />
+          Afiliado
+        </Badge>
+      );
+    } else if (userDetails.affiliateStatus === 'pending') {
+      badges.push(
+        <Badge key="affiliate-pending" className="bg-warning/10 text-warning gap-1">
+          Afiliado Pendente
+        </Badge>
+      );
+    }
+    
+    if (badges.length === 0) {
+      badges.push(<Badge key="user" variant="secondary">Usuário</Badge>);
+    }
+    
+    return badges;
   };
 
   // Stats
   const totalUsers = users.length;
   const totalAdmins = users.filter(u => u.isAdmin).length;
+  const totalAffiliates = users.filter(u => u.affiliateStatus === 'approved').length;
+  const pendingAffiliates = users.filter(u => u.affiliateStatus === 'pending').length;
   const totalBalance = users.reduce((sum, u) => sum + (u.wallet?.balance || 0), 0);
+
+  const dialogContent = getActionDialogContent();
 
   return (
     <AdminLayout>
@@ -323,13 +416,13 @@ export default function AdminUsuarios() {
               Usuários
             </h1>
             <p className="text-muted-foreground mt-1">
-              Gerencie usuários, visualize saldos e histórico
+              Gerencie usuários, permissões e afiliações
             </p>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
@@ -350,7 +443,25 @@ export default function AdminUsuarios() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Saldo Total em Carteiras</CardTitle>
+              <CardTitle className="text-sm font-medium">Afiliados Ativos</CardTitle>
+              <UserCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-success">{totalAffiliates}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Afiliados Pendentes</CardTitle>
+              <Crown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-warning">{pendingAffiliates}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Saldo Total</CardTitle>
               <WalletIcon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -387,7 +498,7 @@ export default function AdminUsuarios() {
                   <TableHead>Usuário</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Saldo</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead>Permissões</TableHead>
                   <TableHead>Cadastro</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -435,14 +546,9 @@ export default function AdminUsuarios() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {userDetails.isAdmin ? (
-                          <Badge className="bg-primary gap-1">
-                            <ShieldCheck className="h-3 w-3" />
-                            Admin
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">Usuário</Badge>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {getRoleBadges(userDetails)}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -461,28 +567,82 @@ export default function AdminUsuarios() {
                             <History className="h-3 w-3" />
                             Histórico
                           </Button>
-                          {userDetails.isAdmin ? (
-                            userDetails.id !== user?.id && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRemoveAdmin(userDetails)}
-                                className="gap-1 text-destructive hover:text-destructive"
-                              >
-                                <Shield className="h-3 w-3" />
-                                Remover Admin
-                              </Button>
-                            )
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openPromoteDialog(userDetails)}
-                              className="gap-1"
-                            >
-                              <ShieldCheck className="h-3 w-3" />
-                              Promover
-                            </Button>
+                          
+                          {userDetails.id !== user?.id && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="outline" className="gap-1">
+                                  <Crown className="h-3 w-3" />
+                                  Gerenciar
+                                  <ChevronDown className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                {!userDetails.isAdmin ? (
+                                  <DropdownMenuItem onClick={() => {
+                                    setActionUser(userDetails);
+                                    setActionType('promote_admin');
+                                  }}>
+                                    <ShieldCheck className="h-4 w-4 mr-2 text-primary" />
+                                    Promover a Admin
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem 
+                                    onClick={() => {
+                                      setActionUser(userDetails);
+                                      setActionType('remove_admin');
+                                    }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <ShieldOff className="h-4 w-4 mr-2" />
+                                    Remover Admin
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                <DropdownMenuSeparator />
+                                
+                                {!userDetails.affiliateStatus || userDetails.affiliateStatus === 'rejected' ? (
+                                  <DropdownMenuItem onClick={() => {
+                                    setActionUser(userDetails);
+                                    setActionType('approve_affiliate');
+                                  }}>
+                                    <UserCheck className="h-4 w-4 mr-2 text-success" />
+                                    Aprovar como Afiliado
+                                  </DropdownMenuItem>
+                                ) : userDetails.affiliateStatus === 'pending' ? (
+                                  <>
+                                    <DropdownMenuItem onClick={() => {
+                                      setActionUser(userDetails);
+                                      setActionType('approve_affiliate');
+                                    }}>
+                                      <UserCheck className="h-4 w-4 mr-2 text-success" />
+                                      Aprovar Afiliação
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => {
+                                        setActionUser(userDetails);
+                                        setActionType('reject_affiliate');
+                                      }}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <UserX className="h-4 w-4 mr-2" />
+                                      Rejeitar Afiliação
+                                    </DropdownMenuItem>
+                                  </>
+                                ) : userDetails.affiliateStatus === 'approved' ? (
+                                  <DropdownMenuItem 
+                                    onClick={() => {
+                                      setActionUser(userDetails);
+                                      setActionType('reject_affiliate');
+                                    }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <UserX className="h-4 w-4 mr-2" />
+                                    Suspender Afiliado
+                                  </DropdownMenuItem>
+                                ) : null}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                         </div>
                       </TableCell>
@@ -498,15 +658,12 @@ export default function AdminUsuarios() {
         <Dialog open={transactionsDialogOpen} onOpenChange={setTransactionsDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <History className="h-5 w-5" />
-                Histórico de Transações
-              </DialogTitle>
+              <DialogTitle>Histórico de Transações</DialogTitle>
               <DialogDescription>
-                {selectedUser?.full_name} - Saldo atual: R$ {(selectedUser?.wallet?.balance || 0).toFixed(2)}
+                Transações de {selectedUser?.full_name}
               </DialogDescription>
             </DialogHeader>
-
+            
             <div className="flex-1 overflow-auto">
               {isLoadingTransactions ? (
                 <div className="flex items-center justify-center py-8">
@@ -514,41 +671,32 @@ export default function AdminUsuarios() {
                 </div>
               ) : transactions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <WalletIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <WalletIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>Nenhuma transação encontrada</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {transactions.map((transaction) => (
-                    <div 
-                      key={transaction.id}
-                      className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg"
+                  {transactions.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                     >
-                      <div className={`p-2 rounded-full bg-background ${transaction.type_color}`}>
-                        {transaction.type_icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {transaction.type_label}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(transaction.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                          </span>
-                        </div>
-                        {transaction.description && (
-                          <p className="text-sm text-muted-foreground truncate mt-1">
-                            {transaction.description}
+                      <div className="flex items-center gap-3">
+                        <div className={t.type_color}>{t.type_icon}</div>
+                        <div>
+                          <p className="font-medium">{t.type_label}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t.description || '-'}
                           </p>
-                        )}
+                        </div>
                       </div>
-                      <div className={`font-bold ${
-                        transaction.type === 'purchase' 
-                          ? 'text-red-600' 
-                          : 'text-green-600'
-                      }`}>
-                        {transaction.type === 'purchase' ? '-' : '+'}
-                        R$ {Math.abs(transaction.amount).toFixed(2)}
+                      <div className="text-right">
+                        <p className={`font-bold ${t.type === 'purchase' ? 'text-red-600' : 'text-green-600'}`}>
+                          {t.type === 'purchase' ? '-' : '+'}R$ {Math.abs(t.amount).toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(t.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -558,30 +706,44 @@ export default function AdminUsuarios() {
           </DialogContent>
         </Dialog>
 
-        {/* Promote Dialog */}
-        <AlertDialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
+        {/* Action Confirmation Dialog */}
+        <AlertDialog open={actionType !== null} onOpenChange={(open) => !open && setActionType(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Promover a Administrador</AlertDialogTitle>
-              <AlertDialogDescription>
-                Tem certeza que deseja promover <strong>{userToPromote?.full_name}</strong> a administrador?
-                <br /><br />
-                Administradores têm acesso total ao painel de controle, incluindo gerenciamento de usuários, sorteios e raspadinhas.
-              </AlertDialogDescription>
+              <AlertDialogTitle>{dialogContent.title}</AlertDialogTitle>
+              <AlertDialogDescription>{dialogContent.description}</AlertDialogDescription>
             </AlertDialogHeader>
+            {actionUser && (
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
+                <Avatar>
+                  <AvatarImage src={actionUser.avatar_url || ''} />
+                  <AvatarFallback>{actionUser.full_name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{actionUser.full_name}</p>
+                  <div className="flex gap-2 mt-1">
+                    {getRoleBadges(actionUser)}
+                  </div>
+                </div>
+              </div>
+            )}
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handlePromoteToAdmin} disabled={isPromoting}>
-                {isPromoting ? (
+              <AlertDialogCancel disabled={isProcessing}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleAction}
+                disabled={isProcessing}
+                className={actionType?.includes('remove') || actionType?.includes('reject')
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : ''
+                }
+              >
+                {isProcessing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Promovendo...
+                    Processando...
                   </>
                 ) : (
-                  <>
-                    <ShieldCheck className="h-4 w-4 mr-2" />
-                    Promover
-                  </>
+                  'Confirmar'
                 )}
               </AlertDialogAction>
             </AlertDialogFooter>
