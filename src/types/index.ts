@@ -1,5 +1,5 @@
 // Tipos base do sistema
-export type AppRole = 'admin' | 'user';
+export type AppRole = 'admin' | 'user' | 'super_admin';
 export type RaffleStatus = 'open' | 'drawing' | 'completed' | 'cancelled';
 export type TransactionType = 'deposit' | 'purchase' | 'prize' | 'refund';
 export type AffiliateStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
