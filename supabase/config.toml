@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.confirm-pix]
 verify_jwt = false
+
+[functions.wipe-auth-users]
+verify_jwt = false
