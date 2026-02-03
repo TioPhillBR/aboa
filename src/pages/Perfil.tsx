@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { ImageCropper } from '@/components/ui/image-cropper';
 import { 
   User, 
   Camera, 
@@ -20,7 +21,8 @@ import {
   Save,
   Loader2,
   Shield,
-  Trash2
+  Trash2,
+  Crop
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -35,6 +37,10 @@ export default function Perfil() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
+  // Estados do cropper
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string>('');
 
   // Atualizar estados quando o perfil carregar
   useState(() => {
@@ -77,23 +83,42 @@ export default function Perfil() {
       return;
     }
 
+    // Abrir cropper ao invés de fazer upload direto
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageToCrop(reader.result as string);
+      setCropperOpen(true);
+    };
+    reader.readAsDataURL(file);
+    
+    // Limpar input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropperOpen(false);
+    setImageToCrop('');
+    
+    if (!user) return;
+
     setIsUploading(true);
 
     try {
       // Criar preview local
-      const localPreview = URL.createObjectURL(file);
+      const localPreview = URL.createObjectURL(croppedBlob);
       setPreviewUrl(localPreview);
 
       // Gerar nome único para o arquivo
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/avatar.${fileExt}`;
+      const fileName = `${user.id}/avatar-${Date.now()}.jpg`;
 
       // Fazer upload para o Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(fileName, file, { 
+        .upload(fileName, croppedBlob, { 
           upsert: true,
-          contentType: file.type 
+          contentType: 'image/jpeg'
         });
 
       if (uploadError) throw uploadError;
@@ -126,6 +151,11 @@ export default function Perfil() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleCropCancel = () => {
+    setCropperOpen(false);
+    setImageToCrop('');
   };
 
   const handleRemovePhoto = async () => {
@@ -432,6 +462,16 @@ export default function Perfil() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Modal de Crop para Avatar */}
+        <ImageCropper
+          imageSrc={imageToCrop}
+          open={cropperOpen}
+          onClose={handleCropCancel}
+          onCropComplete={handleCropComplete}
+          aspectRatio={1}
+          circularCrop={true}
+        />
       </main>
     </div>
   );
