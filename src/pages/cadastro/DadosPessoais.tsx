@@ -17,8 +17,9 @@ import {
 } from '@/components/ui/select';
 import { 
   Loader2, Mail, Lock, User, Trophy, Eye, EyeOff, Gift,
-  Phone, Calendar, CreditCard, ArrowRight, Upload, AlertCircle, Banknote
+  Phone, CreditCard, ArrowRight, Upload, AlertCircle, Banknote
 } from 'lucide-react';
+import { DatePickerInput } from '@/components/ui/date-picker-input';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   useRegistration, 
@@ -85,14 +86,14 @@ export default function DadosPessoais() {
   };
 
   // Handle birth date change and age validation
-  const handleBirthDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setPersonalData({ birthDate: value });
-    
-    if (value) {
-      const age = calculateAge(new Date(value));
+  const handleBirthDateChange = (date: Date | undefined) => {
+    if (date) {
+      const isoDate = date.toISOString().split('T')[0];
+      setPersonalData({ birthDate: isoDate });
+      const age = calculateAge(date);
       setAgeWarning(age < 18);
     } else {
+      setPersonalData({ birthDate: '' });
       setAgeWarning(false);
     }
   };
@@ -357,18 +358,12 @@ export default function DadosPessoais() {
 
           <div className="space-y-2">
             <Label htmlFor="birthDate">Data de Nascimento *</Label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="birthDate"
-                type="date"
-                value={personalData.birthDate}
-                onChange={handleBirthDateChange}
-                className="pl-10"
-                max={new Date().toISOString().split('T')[0]}
-                required
-              />
-            </div>
+            <DatePickerInput
+              value={personalData.birthDate ? new Date(personalData.birthDate) : undefined}
+              onChange={handleBirthDateChange}
+              maxDate={new Date()}
+              placeholder="DD/MM/AAAA"
+            />
           </div>
 
           <div className="space-y-2">
