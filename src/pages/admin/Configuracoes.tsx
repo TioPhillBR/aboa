@@ -52,6 +52,7 @@ import {
 import { usePlatformSettings, type AllSettings } from '@/hooks/usePlatformSettings';
 import { useSettingsBackup } from '@/hooks/useSettingsBackup';
 import { SettingsBackupPanel } from '@/components/admin/SettingsBackupPanel';
+import { DatabaseCleanupPanel } from '@/components/admin/DatabaseCleanupPanel';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -1385,6 +1386,9 @@ export default function AdminConfiguracoes() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Database Cleanup Panel */}
+            <DatabaseCleanupPanel />
           </TabsContent>
 
           {/* Backup Tab */}
