@@ -40,6 +40,7 @@ import AdminFinanceiro from "./pages/admin/Financeiro";
 import AdminAfiliados from "./pages/admin/Afiliados";
 import AdminCompartilhamentos from "./pages/admin/Compartilhamentos";
 import AdminPremios from "./pages/admin/Premios";
+import AdminPagamentosPremios from "./pages/admin/PagamentosPremios";
 import AdminRelatorios from "./pages/admin/Relatorios";
 import AdminConfiguracoes from "./pages/admin/Configuracoes";
 import AdminSupporte from "./pages/admin/Suporte";
@@ -130,6 +131,7 @@ const App = () => (
                   <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><AdminUsuarios /></ProtectedRoute>} />
                   <Route path="/admin/usuarios-online" element={<ProtectedRoute requireAdmin><AdminUsuariosOnline /></ProtectedRoute>} />
                   <Route path="/admin/ganhadores" element={<ProtectedRoute requireAdmin><AdminGanhadores /></ProtectedRoute>} />
+                  <Route path="/admin/pagamentos-premios" element={<ProtectedRoute requireAdmin><AdminPagamentosPremios /></ProtectedRoute>} />
                   <Route path="/admin/relatorios" element={<ProtectedRoute requireAdmin><AdminRelatorios /></ProtectedRoute>} />
                   <Route path="/admin/configuracoes" element={<ProtectedRoute requireAdmin><AdminConfiguracoes /></ProtectedRoute>} />
                   <Route path="/admin/suporte" element={<ProtectedRoute requireAdmin><AdminSupporte /></ProtectedRoute>} />
