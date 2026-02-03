@@ -24,6 +24,9 @@ export interface Profile {
   address_neighborhood: string | null;
   address_city: string | null;
   address_state: string | null;
+  // Chave PIX para recebimento de prêmios
+  pix_key: string | null;
+  pix_key_type: string | null;
   // LGPD
   lgpd_consent: boolean | null;
   lgpd_consent_at: string | null;

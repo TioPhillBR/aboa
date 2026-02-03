@@ -48,10 +48,8 @@ import { ptBR } from 'date-fns/locale';
 import { TransactionType } from '@/types';
 
 const CREDIT_OPTIONS = [10, 25, 50, 100, 200, 500];
-const MIN_WITHDRAWAL = 100;
 
 type PaymentStep = 'select-amount' | 'pix-payment';
-type PixKeyType = 'cpf' | 'email' | 'phone' | 'random';
 
 export default function Carteira() {
   const { user } = useAuth();
@@ -63,15 +61,6 @@ export default function Carteira() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('select-amount');
 
-  // Withdrawal states
-  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [pixKey, setPixKey] = useState('');
-  const [pixKeyType, setPixKeyType] = useState<PixKeyType>('cpf');
-  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
-
-  // Calculate available balance (total - bonus)
-  const availableBalance = balance - bonusBalance;
 
   const handleContinueToPayment = () => {
     const amount = selectedAmount || parseFloat(customAmount);
@@ -122,70 +111,6 @@ export default function Carteira() {
     return selectedAmount || parseFloat(customAmount) || 0;
   };
 
-  const handleWithdrawSubmit = async () => {
-    const amount = parseFloat(withdrawAmount);
-
-    if (!amount || amount < MIN_WITHDRAWAL) {
-      toast({
-        title: 'Valor mínimo',
-        description: `O valor mínimo para saque é R$ ${MIN_WITHDRAWAL},00`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (amount > availableBalance) {
-      toast({
-        title: 'Saldo insuficiente',
-        description: 'Você não possui saldo principal suficiente para este saque. Lembre-se: o saldo bônus não pode ser sacado.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!pixKey.trim()) {
-      toast({
-        title: 'Chave PIX obrigatória',
-        description: 'Por favor, informe sua chave PIX',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSubmittingWithdraw(true);
-
-    try {
-      const { error } = await supabase
-        .from('user_withdrawals')
-        .insert({
-          user_id: user!.id,
-          amount,
-          pix_key: pixKey.trim(),
-          pix_key_type: pixKeyType,
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Solicitação enviada!',
-        description: 'Seu pedido de saque foi registrado e será processado em breve.',
-      });
-
-      setWithdrawDialogOpen(false);
-      setWithdrawAmount('');
-      setPixKey('');
-      setPixKeyType('cpf');
-    } catch (error) {
-      console.error('Error submitting withdrawal:', error);
-      toast({
-        title: 'Erro ao solicitar saque',
-        description: 'Tente novamente mais tarde.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmittingWithdraw(false);
-    }
-  };
 
   const getTransactionIcon = (type: TransactionType) => {
     switch (type) {
@@ -299,10 +224,10 @@ export default function Carteira() {
                     Saldo Principal
                   </CardDescription>
                   <CardTitle className="text-4xl font-bold">
-                    R$ {availableBalance.toFixed(2)}
+                    R$ {balance.toFixed(2)}
                   </CardTitle>
                   <p className="text-xs text-primary-foreground/60 mt-1">
-                    Disponível para saque
+                    Disponível para compras
                   </p>
                 </CardHeader>
                 
@@ -409,125 +334,6 @@ export default function Carteira() {
                     </DialogContent>
                   </Dialog>
 
-                  {/* Botão de Saque */}
-                  <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button 
-                        size="sm" 
-                        variant="secondary"
-                        className="gap-2"
-                        disabled={availableBalance < MIN_WITHDRAWAL}
-                      >
-                        <ArrowUpRight className="h-4 w-4" />
-                        Sacar
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <Banknote className="h-5 w-5 text-primary" />
-                          Solicitar Saque
-                        </DialogTitle>
-                        <DialogDescription>
-                          Informe os dados para receber seu saque via PIX
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <div className="space-y-4 py-4">
-                        {/* Saldo disponível */}
-                        <div className="p-4 rounded-lg bg-muted">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">Saldo disponível para saque:</span>
-                            <span className="text-xl font-bold text-primary">
-                              R$ {availableBalance.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Aviso sobre bônus */}
-                        {bonusBalance > 0 && (
-                          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                            <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-amber-600">
-                              O saldo bônus de <strong>R$ {bonusBalance.toFixed(2)}</strong> não pode ser sacado, apenas utilizado para jogar.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Valor do saque */}
-                        <div className="space-y-2">
-                          <Label htmlFor="withdrawAmount">Valor do saque</Label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              R$
-                            </span>
-                            <Input
-                              id="withdrawAmount"
-                              type="number"
-                              min={MIN_WITHDRAWAL}
-                              max={availableBalance}
-                              step="0.01"
-                              placeholder={MIN_WITHDRAWAL.toString()}
-                              value={withdrawAmount}
-                              onChange={(e) => setWithdrawAmount(e.target.value)}
-                              className="pl-10 text-lg h-12"
-                            />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Valor mínimo: R$ {MIN_WITHDRAWAL},00
-                          </p>
-                        </div>
-
-                        {/* Tipo da chave PIX */}
-                        <div className="space-y-2">
-                          <Label>Tipo da chave PIX</Label>
-                          <Select value={pixKeyType} onValueChange={(v) => setPixKeyType(v as PixKeyType)}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="cpf">CPF</SelectItem>
-                              <SelectItem value="email">E-mail</SelectItem>
-                              <SelectItem value="phone">Telefone</SelectItem>
-                              <SelectItem value="random">Chave Aleatória</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Chave PIX */}
-                        <div className="space-y-2">
-                          <Label htmlFor="pixKey">Chave PIX</Label>
-                          <Input
-                            id="pixKey"
-                            type="text"
-                            placeholder={
-                              pixKeyType === 'cpf' ? '000.000.000-00' :
-                              pixKeyType === 'email' ? 'seu@email.com' :
-                              pixKeyType === 'phone' ? '(00) 90000-0000' :
-                              'Sua chave aleatória'
-                            }
-                            value={pixKey}
-                            onChange={(e) => setPixKey(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          onClick={() => setWithdrawDialogOpen(false)}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button
-                          onClick={handleWithdrawSubmit}
-                          disabled={isSubmittingWithdraw || !withdrawAmount || !pixKey}
-                        >
-                          {isSubmittingWithdraw ? 'Enviando...' : 'Solicitar Saque'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
                 </CardContent>
               </Card>
 

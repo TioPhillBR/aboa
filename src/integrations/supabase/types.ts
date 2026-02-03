@@ -323,6 +323,8 @@ export type Database = {
           lgpd_consent: boolean | null
           lgpd_consent_at: string | null
           phone: string | null
+          pix_key: string | null
+          pix_key_type: string | null
           registration_source: string | null
           source_code: string | null
           updated_at: string
@@ -345,6 +347,8 @@ export type Database = {
           lgpd_consent?: boolean | null
           lgpd_consent_at?: string | null
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           registration_source?: string | null
           source_code?: string | null
           updated_at?: string
@@ -367,6 +371,8 @@ export type Database = {
           lgpd_consent?: boolean | null
           lgpd_consent_at?: string | null
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           registration_source?: string | null
           source_code?: string | null
           updated_at?: string
