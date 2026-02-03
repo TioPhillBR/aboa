@@ -202,7 +202,9 @@ export default function AdminUsuarios() {
       
       setIsAddingBonus(true);
       
-      // Add transaction
+      // Add transaction with source_type 'admin_bonus'
+      // This will be counted in the bonus balance (calculated from transactions)
+      // NOT added to the main wallet balance
       const { error: transactionError } = await supabase
         .from('wallet_transactions')
         .insert({
@@ -215,18 +217,13 @@ export default function AdminUsuarios() {
       
       if (transactionError) throw transactionError;
       
-      // Update wallet balance
-      const newBalance = bonusUser.wallet.balance + amount;
-      const { error: walletError } = await supabase
-        .from('wallets')
-        .update({ balance: newBalance })
-        .eq('id', bonusUser.wallet.id);
-      
-      if (walletError) throw walletError;
+      // Note: We do NOT update wallet.balance here
+      // Bonus credits are tracked separately via source_type = 'admin_bonus' or 'referral'
+      // The bonusBalance is calculated in useWallet from these transactions
       
       toast({ 
-        title: 'Créditos adicionados!', 
-        description: `R$ ${amount.toFixed(2)} adicionados à carteira de ${bonusUser.full_name}` 
+        title: 'Créditos bônus adicionados!', 
+        description: `R$ ${amount.toFixed(2)} de bônus adicionados para ${bonusUser.full_name}` 
       });
       
       setBonusDialogOpen(false);
@@ -236,7 +233,7 @@ export default function AdminUsuarios() {
       fetchUsers();
     } catch (error) {
       console.error('Error adding bonus:', error);
-      toast({ title: 'Erro ao adicionar créditos', variant: 'destructive' });
+      toast({ title: 'Erro ao adicionar créditos bônus', variant: 'destructive' });
     } finally {
       setIsAddingBonus(false);
     }
