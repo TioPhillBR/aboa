@@ -157,7 +157,7 @@ export default function Index() {
               className="inline-flex items-center rounded-full border border-primary/30 px-4 py-2 text-sm font-medium bg-primary/10 text-primary backdrop-blur-sm"
             >
               <Sparkles className="mr-2 h-4 w-4 animate-pulse" />
-              🍀 Mais de {stats.totalUsers > 0 ? stats.totalUsers : '100'}+ usuários já ganharam!
+              {stats.totalUsers > 0 ? `🍀 Junte-se a ${stats.totalUsers} usuários!` : '🍀 Comece a jogar agora!'}
             </motion.div>
 
             {/* Título Principal */}
@@ -253,7 +253,7 @@ export default function Index() {
               className="text-center"
             >
               <div className="text-3xl md:text-4xl font-bold text-primary mb-1">
-                {formatCurrency(stats.totalPrizes > 0 ? stats.totalPrizes : 15000)}
+                {formatCurrency(stats.totalPrizes)}
               </div>
               <div className="text-sm text-muted-foreground">Prêmios Distribuídos</div>
             </motion.div>
@@ -265,7 +265,7 @@ export default function Index() {
               className="text-center"
             >
               <div className="text-3xl md:text-4xl font-bold text-purple-500 mb-1">
-                {stats.totalUsers > 0 ? stats.totalUsers : 250}+
+                {stats.totalUsers}
               </div>
               <div className="text-sm text-muted-foreground">Usuários Ativos</div>
             </motion.div>
@@ -277,7 +277,7 @@ export default function Index() {
               className="text-center"
             >
               <div className="text-3xl md:text-4xl font-bold text-pink-500 mb-1">
-                {stats.activeRaffles > 0 ? stats.activeRaffles : 5}
+                {stats.activeRaffles}
               </div>
               <div className="text-sm text-muted-foreground">Sorteios Ativos</div>
             </motion.div>
@@ -289,7 +289,7 @@ export default function Index() {
               className="text-center"
             >
               <div className="text-3xl md:text-4xl font-bold text-yellow-500 mb-1">
-                {stats.scratchCardsPlayed > 0 ? stats.scratchCardsPlayed : 500}+
+                {stats.scratchCardsPlayed}
               </div>
               <div className="text-sm text-muted-foreground">Raspadinhas Jogadas</div>
             </motion.div>
