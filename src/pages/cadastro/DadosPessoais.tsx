@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
+import { ImageCropper } from '@/components/ui/image-cropper';
 import { 
   Loader2, Mail, Lock, User, Trophy, Eye, EyeOff, Gift,
   Phone, Calendar, CreditCard, ArrowRight, Upload, AlertCircle
@@ -30,8 +31,13 @@ export default function DadosPessoais() {
   const [ageWarning, setAgeWarning] = useState(false);
   const [cpfError, setCpfError] = useState<string | null>(null);
   const [isCheckingCpf, setIsCheckingCpf] = useState(false);
+  
+  // Image cropper state
+  const [showCropper, setShowCropper] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle avatar file selection
+  // Handle avatar file selection - opens cropper
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -41,12 +47,33 @@ export default function DadosPessoais() {
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPersonalData({ 
-          avatarFile: file,
-          avatarPreview: reader.result as string 
-        });
+        setSelectedImage(reader.result as string);
+        setShowCropper(true);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle cropped image
+  const handleCropComplete = (croppedBlob: Blob) => {
+    const file = new File([croppedBlob], 'avatar.jpg', { type: 'image/jpeg' });
+    const previewUrl = URL.createObjectURL(croppedBlob);
+    setPersonalData({ 
+      avatarFile: file,
+      avatarPreview: previewUrl 
+    });
+    setShowCropper(false);
+    setSelectedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setSelectedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -239,6 +266,7 @@ export default function DadosPessoais() {
                 <Upload className="h-4 w-4 text-primary-foreground" />
               </label>
               <input
+                ref={fileInputRef}
                 id="avatar-upload"
                 type="file"
                 accept="image/*"
@@ -248,6 +276,18 @@ export default function DadosPessoais() {
             </div>
             <p className="text-xs text-muted-foreground">Opcional • Máximo 5MB</p>
           </div>
+
+          {/* Image Cropper */}
+          {selectedImage && (
+            <ImageCropper
+              imageSrc={selectedImage}
+              open={showCropper}
+              onClose={handleCropCancel}
+              onCropComplete={handleCropComplete}
+              aspectRatio={1}
+              circularCrop
+            />
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="fullName">Nome Completo *</Label>
