@@ -5,6 +5,8 @@ import { useAuth } from './useAuth';
 
 export function useRaffles() {
   const [raffles, setRaffles] = useState<(Raffle & { tickets_sold: number })[]>([]);
+  const [totalParticipants, setTotalParticipants] = useState(0);
+  const [totalPrizesValue, setTotalPrizesValue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -40,6 +42,28 @@ export function useRaffles() {
       );
 
       setRaffles(rafflesWithTickets);
+
+      // Buscar total de participantes únicos (usuários que compraram tickets)
+      const { data: allTickets, error: ticketsError } = await supabase
+        .from('raffle_tickets')
+        .select('user_id');
+
+      if (!ticketsError && allTickets) {
+        const uniqueParticipants = new Set(allTickets.map(t => t.user_id));
+        setTotalParticipants(uniqueParticipants.size);
+      }
+
+      // Buscar valor total de prêmios de sorteios completados
+      const completedRaffles = rafflesWithTickets.filter(r => r.status === 'completed');
+      const { data: prizesData, error: prizesError } = await supabase
+        .from('raffle_prizes')
+        .select('estimated_value, raffle_id')
+        .in('raffle_id', completedRaffles.map(r => r.id));
+
+      if (!prizesError && prizesData) {
+        const total = prizesData.reduce((sum, prize) => sum + (prize.estimated_value || 0), 0);
+        setTotalPrizesValue(total);
+      }
     } catch (error) {
       console.error('Error fetching raffles:', error);
     } finally {
@@ -49,6 +73,8 @@ export function useRaffles() {
 
   return {
     raffles,
+    totalParticipants,
+    totalPrizesValue,
     isLoading,
     refetch: fetchRaffles,
   };
