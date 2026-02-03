@@ -36,8 +36,12 @@ import AdminCompartilhamentos from "./pages/admin/Compartilhamentos";
 import AdminPremios from "./pages/admin/Premios";
 import AdminRelatorios from "./pages/admin/Relatorios";
 import AdminConfiguracoes from "./pages/admin/Configuracoes";
+import AdminSupporte from "./pages/admin/Suporte";
+import AdminSuporteDetail from "./pages/admin/SuporteDetail";
 import AfiliadoDashboard from "./pages/afiliado/Index";
 import AfiliadoCadastro from "./pages/afiliado/Cadastro";
+import Suporte from "./pages/Suporte";
+import SuporteDetail from "./pages/SuporteDetail";
 import SorteioAoVivo from "./pages/SorteioAoVivo";
 import NotFound from "./pages/NotFound";
 
@@ -83,6 +87,8 @@ const App = () => (
                 <Route path="/meus-tickets" element={<ProtectedRoute><MeusTickets /></ProtectedRoute>} />
                 <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
                 <Route path="/indicacoes" element={<ProtectedRoute><Indicacoes /></ProtectedRoute>} />
+                <Route path="/suporte" element={<ProtectedRoute><Suporte /></ProtectedRoute>} />
+                <Route path="/suporte/:id" element={<ProtectedRoute><SuporteDetail /></ProtectedRoute>} />
                 
                 {/* Admin Routes - Completely Separate Area */}
                 <Route path="/admin/login" element={<AdminLogin />} />
@@ -98,6 +104,8 @@ const App = () => (
                 <Route path="/admin/ganhadores" element={<ProtectedRoute requireAdmin><AdminGanhadores /></ProtectedRoute>} />
                 <Route path="/admin/relatorios" element={<ProtectedRoute requireAdmin><AdminRelatorios /></ProtectedRoute>} />
                 <Route path="/admin/configuracoes" element={<ProtectedRoute requireAdmin><AdminConfiguracoes /></ProtectedRoute>} />
+                <Route path="/admin/suporte" element={<ProtectedRoute requireAdmin><AdminSupporte /></ProtectedRoute>} />
+                <Route path="/admin/suporte/:id" element={<ProtectedRoute requireAdmin><AdminSuporteDetail /></ProtectedRoute>} />
                 
                 {/* Affiliate Routes */}
                 <Route path="/afiliado" element={<ProtectedRoute><AfiliadoDashboard /></ProtectedRoute>} />
