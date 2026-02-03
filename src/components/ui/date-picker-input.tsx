@@ -1,9 +1,9 @@
 import * as React from "react";
-import { format, parse, isValid } from "date-fns";
+import { parse, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, formatInSaoPaulo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
@@ -41,9 +41,9 @@ export function DatePickerInput({
   // Sync input value with prop value
   React.useEffect(() => {
     if (value && isValid(value)) {
-      setInputValue(format(value, "dd/MM/yyyy"));
+      setInputValue(formatInSaoPaulo(value, "dd/MM/yyyy"));
       if (showTime) {
-        setTimeValue(format(value, "HH:mm"));
+        setTimeValue(formatInSaoPaulo(value, "HH:mm"));
       }
     } else {
       setInputValue("");
@@ -191,10 +191,10 @@ export function DateRangePickerInput({
 
   React.useEffect(() => {
     if (from && isValid(from)) {
-      setFromInput(format(from, "dd/MM/yyyy"));
+      setFromInput(formatInSaoPaulo(from, "dd/MM/yyyy"));
     }
     if (to && isValid(to)) {
-      setToInput(format(to, "dd/MM/yyyy"));
+      setToInput(formatInSaoPaulo(to, "dd/MM/yyyy"));
     }
   }, [from, to]);
 
