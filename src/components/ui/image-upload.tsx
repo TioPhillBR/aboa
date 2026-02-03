@@ -49,10 +49,11 @@ export function ImageUpload({
   const [imageToCrop, setImageToCrop] = useState<string>('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
+  // Classes para aspect ratio - usando contain para não distorcer
   const aspectRatioClass = {
     square: 'aspect-square max-h-32',
     video: 'aspect-video max-h-24',
-    auto: 'aspect-auto h-20',
+    auto: 'max-h-32 w-full',
   };
 
   // Determinar aspect ratio para o crop baseado no aspectRatio prop
@@ -206,13 +207,16 @@ export function ImageUpload({
       {/* Preview da imagem */}
       {value && (
         <div className={cn(
-          'relative rounded-lg border bg-muted/50 overflow-hidden',
+          'relative rounded-lg border bg-muted/50 overflow-hidden flex items-center justify-center',
           aspectRatioClass[aspectRatio]
         )}>
           <img
             src={value}
             alt="Preview"
-            className="w-full h-full object-cover"
+            className={cn(
+              'max-w-full max-h-full',
+              aspectRatio === 'auto' ? 'object-contain' : 'object-cover w-full h-full'
+            )}
             onError={(e) => {
               e.currentTarget.src = '/placeholder.svg';
             }}
