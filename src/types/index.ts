@@ -286,6 +286,21 @@ export interface ScratchCardBatch {
 }
 
 // Configuração de prêmio (usado em lotes e formulários)
+// Saque de usuário
+export interface UserWithdrawal {
+  id: string;
+  user_id: string;
+  amount: number;
+  pix_key: string;
+  pix_key_type: string;
+  status: 'pending' | 'approved' | 'paid' | 'rejected';
+  processed_by: string | null;
+  processed_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PrizeConfigItem {
   name: string;
   value: number;

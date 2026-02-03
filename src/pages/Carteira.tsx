@@ -15,9 +15,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { PixPayment } from '@/components/payment/PixPayment';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Wallet, 
   Plus, 
@@ -28,25 +37,40 @@ import {
   Sparkles,
   Clock,
   TrendingUp,
-  QrCode
+  QrCode,
+  Gift,
+  Banknote,
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TransactionType } from '@/types';
 
 const CREDIT_OPTIONS = [10, 25, 50, 100, 200, 500];
+const MIN_WITHDRAWAL = 100;
 
 type PaymentStep = 'select-amount' | 'pix-payment';
+type PixKeyType = 'cpf' | 'email' | 'phone' | 'random';
 
 export default function Carteira() {
   const { user } = useAuth();
-  const { wallet, transactions, balance, isLoading, deposit, refetch } = useWallet();
+  const { wallet, transactions, balance, bonusBalance, isLoading, deposit, refetch } = useWallet();
   const { toast } = useToast();
   
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('select-amount');
+
+  // Withdrawal states
+  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [pixKey, setPixKey] = useState('');
+  const [pixKeyType, setPixKeyType] = useState<PixKeyType>('cpf');
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
+
+  // Calculate available balance (total - bonus)
+  const availableBalance = balance - bonusBalance;
 
   const handleContinueToPayment = () => {
     const amount = selectedAmount || parseFloat(customAmount);
@@ -95,6 +119,71 @@ export default function Carteira() {
 
   const getPaymentAmount = () => {
     return selectedAmount || parseFloat(customAmount) || 0;
+  };
+
+  const handleWithdrawSubmit = async () => {
+    const amount = parseFloat(withdrawAmount);
+
+    if (!amount || amount < MIN_WITHDRAWAL) {
+      toast({
+        title: 'Valor mínimo',
+        description: `O valor mínimo para saque é R$ ${MIN_WITHDRAWAL},00`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (amount > availableBalance) {
+      toast({
+        title: 'Saldo insuficiente',
+        description: 'Você não possui saldo principal suficiente para este saque. Lembre-se: o saldo bônus não pode ser sacado.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!pixKey.trim()) {
+      toast({
+        title: 'Chave PIX obrigatória',
+        description: 'Por favor, informe sua chave PIX',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmittingWithdraw(true);
+
+    try {
+      const { error } = await supabase
+        .from('user_withdrawals')
+        .insert({
+          user_id: user!.id,
+          amount,
+          pix_key: pixKey.trim(),
+          pix_key_type: pixKeyType,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Solicitação enviada!',
+        description: 'Seu pedido de saque foi registrado e será processado em breve.',
+      });
+
+      setWithdrawDialogOpen(false);
+      setWithdrawAmount('');
+      setPixKey('');
+      setPixKeyType('cpf');
+    } catch (error) {
+      console.error('Error submitting withdrawal:', error);
+      toast({
+        title: 'Erro ao solicitar saque',
+        description: 'Tente novamente mais tarde.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmittingWithdraw(false);
+    }
   };
 
   const getTransactionIcon = (type: TransactionType) => {
@@ -194,124 +283,286 @@ export default function Carteira() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Coluna Principal */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Card de Saldo */}
-            <Card className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground overflow-hidden relative">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-              
-              <CardHeader className="relative">
-                <CardDescription className="text-primary-foreground/70">
-                  Saldo Disponível
-                </CardDescription>
-                <CardTitle className="text-5xl font-bold">
-                  R$ {balance.toFixed(2)}
-                </CardTitle>
-              </CardHeader>
-              
-              <CardContent className="relative">
-              <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-                  <DialogTrigger asChild>
-                    <Button 
-                      size="lg" 
-                      variant="secondary"
-                      className="gap-2 shadow-lg"
-                    >
-                      <Plus className="h-5 w-5" />
-                      Adicionar Créditos
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    {paymentStep === 'select-amount' ? (
-                      <>
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center gap-2">
-                            <QrCode className="h-5 w-5 text-[#32BCAD]" />
-                            Adicionar Créditos via PIX
-                          </DialogTitle>
-                          <DialogDescription>
-                            Escolha um valor para adicionar à sua carteira
-                          </DialogDescription>
-                        </DialogHeader>
+            {/* Cards de Saldo */}
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Card de Saldo Principal */}
+              <Card className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+                
+                <CardHeader className="relative pb-2">
+                  <CardDescription className="text-primary-foreground/70 flex items-center gap-2">
+                    <Banknote className="h-4 w-4" />
+                    Saldo Principal
+                  </CardDescription>
+                  <CardTitle className="text-4xl font-bold">
+                    R$ {availableBalance.toFixed(2)}
+                  </CardTitle>
+                  <p className="text-xs text-primary-foreground/60 mt-1">
+                    Disponível para saque
+                  </p>
+                </CardHeader>
+                
+                <CardContent className="relative pt-2 flex flex-wrap gap-2">
+                  <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        className="gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Depositar
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      {paymentStep === 'select-amount' ? (
+                        <>
+                          <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                              <QrCode className="h-5 w-5 text-[#32BCAD]" />
+                              Adicionar Créditos via PIX
+                            </DialogTitle>
+                            <DialogDescription>
+                              Escolha um valor para adicionar à sua carteira
+                            </DialogDescription>
+                          </DialogHeader>
 
-                        <div className="space-y-6 py-4">
-                          {/* Valores pré-definidos */}
-                          <div className="grid grid-cols-3 gap-3">
-                            {CREDIT_OPTIONS.map((amount) => (
-                              <Button
-                                key={amount}
-                                variant={selectedAmount === amount ? 'default' : 'outline'}
-                                className="h-16 text-lg font-semibold"
-                                onClick={() => {
-                                  setSelectedAmount(amount);
-                                  setCustomAmount('');
-                                }}
-                              >
-                                R$ {amount}
-                              </Button>
-                            ))}
-                          </div>
-
-                          {/* Valor customizado */}
-                          <div className="space-y-2">
-                            <Label htmlFor="customAmount">Ou digite outro valor</Label>
-                            <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                R$
-                              </span>
-                              <Input
-                                id="customAmount"
-                                type="number"
-                                min="5"
-                                step="0.01"
-                                placeholder="0,00"
-                                value={customAmount}
-                                onChange={(e) => {
-                                  setCustomAmount(e.target.value);
-                                  setSelectedAmount(null);
-                                }}
-                                className="pl-10 text-lg h-12"
-                              />
+                          <div className="space-y-6 py-4">
+                            {/* Valores pré-definidos */}
+                            <div className="grid grid-cols-3 gap-3">
+                              {CREDIT_OPTIONS.map((amount) => (
+                                <Button
+                                  key={amount}
+                                  variant={selectedAmount === amount ? 'default' : 'outline'}
+                                  className="h-16 text-lg font-semibold"
+                                  onClick={() => {
+                                    setSelectedAmount(amount);
+                                    setCustomAmount('');
+                                  }}
+                                >
+                                  R$ {amount}
+                                </Button>
+                              ))}
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              Valor mínimo: R$ 5,00
+
+                            {/* Valor customizado */}
+                            <div className="space-y-2">
+                              <Label htmlFor="customAmount">Ou digite outro valor</Label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                  R$
+                                </span>
+                                <Input
+                                  id="customAmount"
+                                  type="number"
+                                  min="5"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  value={customAmount}
+                                  onChange={(e) => {
+                                    setCustomAmount(e.target.value);
+                                    setSelectedAmount(null);
+                                  }}
+                                  className="pl-10 text-lg h-12"
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Valor mínimo: R$ 5,00
+                              </p>
+                            </div>
+
+                            {/* Total */}
+                            {(selectedAmount || parseFloat(customAmount) > 0) && (
+                              <div className="p-4 rounded-lg bg-muted">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Valor a adicionar:</span>
+                                  <span className="text-2xl font-bold text-primary">
+                                    R$ {(selectedAmount || parseFloat(customAmount) || 0).toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Botão continuar */}
+                            <Button 
+                              onClick={handleContinueToPayment}
+                              disabled={!selectedAmount && !parseFloat(customAmount)}
+                              className="w-full gap-2 bg-[#32BCAD] hover:bg-[#2aa99b]"
+                              size="lg"
+                            >
+                              <QrCode className="h-5 w-5" />
+                              Continuar com PIX
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <PixPayment
+                          amount={getPaymentAmount()}
+                          onSuccess={handlePaymentSuccess}
+                          onCancel={handlePaymentCancel}
+                        />
+                      )}
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Botão de Saque */}
+                  <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        className="gap-2"
+                        disabled={availableBalance < MIN_WITHDRAWAL}
+                      >
+                        <ArrowUpRight className="h-4 w-4" />
+                        Sacar
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Banknote className="h-5 w-5 text-primary" />
+                          Solicitar Saque
+                        </DialogTitle>
+                        <DialogDescription>
+                          Informe os dados para receber seu saque via PIX
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 py-4">
+                        {/* Saldo disponível */}
+                        <div className="p-4 rounded-lg bg-muted">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Saldo disponível para saque:</span>
+                            <span className="text-xl font-bold text-primary">
+                              R$ {availableBalance.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Aviso sobre bônus */}
+                        {bonusBalance > 0 && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                            <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-600">
+                              O saldo bônus de <strong>R$ {bonusBalance.toFixed(2)}</strong> não pode ser sacado, apenas utilizado para jogar.
                             </p>
                           </div>
+                        )}
 
-                          {/* Total */}
-                          {(selectedAmount || parseFloat(customAmount) > 0) && (
-                            <div className="p-4 rounded-lg bg-muted">
-                              <div className="flex justify-between items-center">
-                                <span className="text-muted-foreground">Valor a adicionar:</span>
-                                <span className="text-2xl font-bold text-primary">
-                                  R$ {(selectedAmount || parseFloat(customAmount) || 0).toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Botão continuar */}
-                          <Button 
-                            onClick={handleContinueToPayment}
-                            disabled={!selectedAmount && !parseFloat(customAmount)}
-                            className="w-full gap-2 bg-[#32BCAD] hover:bg-[#2aa99b]"
-                            size="lg"
-                          >
-                            <QrCode className="h-5 w-5" />
-                            Continuar com PIX
-                          </Button>
+                        {/* Valor do saque */}
+                        <div className="space-y-2">
+                          <Label htmlFor="withdrawAmount">Valor do saque</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                              R$
+                            </span>
+                            <Input
+                              id="withdrawAmount"
+                              type="number"
+                              min={MIN_WITHDRAWAL}
+                              max={availableBalance}
+                              step="0.01"
+                              placeholder={MIN_WITHDRAWAL.toString()}
+                              value={withdrawAmount}
+                              onChange={(e) => setWithdrawAmount(e.target.value)}
+                              className="pl-10 text-lg h-12"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Valor mínimo: R$ {MIN_WITHDRAWAL},00
+                          </p>
                         </div>
-                      </>
-                    ) : (
-                      <PixPayment
-                        amount={getPaymentAmount()}
-                        onSuccess={handlePaymentSuccess}
-                        onCancel={handlePaymentCancel}
-                      />
-                    )}
-                  </DialogContent>
-                </Dialog>
-              </CardContent>
-            </Card>
+
+                        {/* Tipo da chave PIX */}
+                        <div className="space-y-2">
+                          <Label>Tipo da chave PIX</Label>
+                          <Select value={pixKeyType} onValueChange={(v) => setPixKeyType(v as PixKeyType)}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="cpf">CPF</SelectItem>
+                              <SelectItem value="email">E-mail</SelectItem>
+                              <SelectItem value="phone">Telefone</SelectItem>
+                              <SelectItem value="random">Chave Aleatória</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Chave PIX */}
+                        <div className="space-y-2">
+                          <Label htmlFor="pixKey">Chave PIX</Label>
+                          <Input
+                            id="pixKey"
+                            type="text"
+                            placeholder={
+                              pixKeyType === 'cpf' ? '000.000.000-00' :
+                              pixKeyType === 'email' ? 'seu@email.com' :
+                              pixKeyType === 'phone' ? '(00) 90000-0000' :
+                              'Sua chave aleatória'
+                            }
+                            value={pixKey}
+                            onChange={(e) => setPixKey(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => setWithdrawDialogOpen(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={handleWithdrawSubmit}
+                          disabled={isSubmittingWithdraw || !withdrawAmount || !pixKey}
+                        >
+                          {isSubmittingWithdraw ? 'Enviando...' : 'Solicitar Saque'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
+
+              {/* Card de Saldo Bônus */}
+              <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                
+                <CardHeader className="relative pb-2">
+                  <CardDescription className="text-amber-600 flex items-center gap-2">
+                    <Gift className="h-4 w-4" />
+                    Saldo Bônus
+                  </CardDescription>
+                  <CardTitle className="text-4xl font-bold text-amber-600">
+                    R$ {bonusBalance.toFixed(2)}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Bônus de indicações • Não sacável
+                  </p>
+                </CardHeader>
+                
+                <CardContent className="relative pt-2">
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                    <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground">
+                      O saldo bônus só pode ser usado para jogar e não pode ser sacado.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Saldo Total */}
+            <div className="p-4 rounded-lg bg-muted/50 border">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Saldo Total (Principal + Bônus)</span>
+                <span className="text-2xl font-bold">R$ {balance.toFixed(2)}</span>
+              </div>
+            </div>
 
             {/* Histórico de Transações */}
             <Card>
@@ -411,6 +662,16 @@ export default function Carteira() {
                   </div>
                   <span className="font-semibold text-red-600">
                     R$ {totalSpent.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10">
+                  <div className="flex items-center gap-2">
+                    <Gift className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm">Bônus de Indicações</span>
+                  </div>
+                  <span className="font-semibold text-amber-600">
+                    R$ {bonusBalance.toFixed(2)}
                   </span>
                 </div>
               </CardContent>
