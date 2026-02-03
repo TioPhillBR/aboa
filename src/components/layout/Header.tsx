@@ -223,8 +223,8 @@ export function Header() {
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-72">
-              <SheetHeader>
+            <SheetContent side="right" className="w-72 flex flex-col">
+              <SheetHeader className="flex-shrink-0">
                 <SheetTitle>
                   {user && profile ? (
                     <div className="flex items-center gap-3">
@@ -246,7 +246,7 @@ export function Header() {
                   )}
                 </SheetTitle>
               </SheetHeader>
-              <nav className="flex flex-col gap-2 mt-6">
+              <nav className="flex flex-col gap-2 mt-6 flex-1 overflow-y-auto">
                 {/* Saldo - Apenas logado */}
                 {user && profile && (
                   <>
@@ -309,6 +309,13 @@ export function Header() {
                     >
                       <User className="h-5 w-5" />
                       <span className="font-medium">Meu Perfil</span>
+                    </Link>
+                    <Link 
+                      to="/indicacoes" 
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                    >
+                      <Gift className="h-5 w-5 text-purple-500" />
+                      <span className="font-medium">Indicações</span>
                     </Link>
                     <Link 
                       to="/suporte" 

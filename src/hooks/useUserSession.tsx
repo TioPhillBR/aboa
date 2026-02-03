@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-const ACTIVITY_INTERVAL = 60000; // Update activity every 1 minute
+const ACTIVITY_INTERVAL = 30000; // Update activity every 30 seconds (was 60)
 const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutes
 
 export function useUserSession() {
@@ -11,10 +11,13 @@ export function useUserSession() {
   const lastActivityRef = useRef<number>(Date.now());
   const activityIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isCreatingSessionRef = useRef<boolean>(false);
 
   // Create or update session
   const createSession = useCallback(async () => {
-    if (!user) return;
+    if (!user || isCreatingSessionRef.current || sessionIdRef.current) return;
+
+    isCreatingSessionRef.current = true;
 
     try {
       // First, end any existing active sessions for this user
@@ -33,31 +36,55 @@ export function useUserSession() {
         .insert({
           user_id: user.id,
           user_agent: navigator.userAgent,
+          is_active: true,
+          session_started_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString(),
         })
         .select('id')
         .single();
 
       if (!error && data) {
         sessionIdRef.current = data.id;
+        console.log('Session created:', data.id);
+      } else if (error) {
+        console.error('Error creating session:', error);
       }
     } catch (err) {
       console.error('Error creating session:', err);
+    } finally {
+      isCreatingSessionRef.current = false;
     }
   }, [user]);
 
   // Update last activity
   const updateActivity = useCallback(async () => {
-    if (!sessionIdRef.current) return;
+    if (!sessionIdRef.current) {
+      // If we don't have a session but have a user, try to create one
+      if (user && !isCreatingSessionRef.current) {
+        await createSession();
+      }
+      return;
+    }
 
     try {
-      await supabase
+      const { error } = await supabase
         .from('user_sessions')
-        .update({ last_activity_at: new Date().toISOString() })
+        .update({ 
+          last_activity_at: new Date().toISOString(),
+          is_active: true 
+        })
         .eq('id', sessionIdRef.current);
+
+      if (error) {
+        console.error('Error updating activity:', error);
+        // If update fails, session might be invalid - try to recreate
+        sessionIdRef.current = null;
+        await createSession();
+      }
     } catch (err) {
       console.error('Error updating activity:', err);
     }
-  }, []);
+  }, [user, createSession]);
 
   // End session
   const endSession = useCallback(async () => {
@@ -116,7 +143,7 @@ export function useUserSession() {
 
   // Initialize session on login
   useEffect(() => {
-    if (user) {
+    if (user && !sessionIdRef.current && !isCreatingSessionRef.current) {
       createSession();
       resetInactivityTimer();
 
@@ -134,26 +161,52 @@ export function useUserSession() {
     };
   }, [user, createSession, updateActivity, resetInactivityTimer]);
 
-  // End session on logout or window close
+  // Clean up on user logout
+  useEffect(() => {
+    if (!user && sessionIdRef.current) {
+      endSession();
+    }
+  }, [user, endSession]);
+
+  // End session on window close
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (sessionIdRef.current) {
         // Use sendBeacon for reliable session ending
-        const url = `${import.meta.env.VITE_SUPABASE_URL || 'https://sarauvembzbneunhssud.supabase.co'}/rest/v1/user_sessions?id=eq.${sessionIdRef.current}`;
-        navigator.sendBeacon(url, JSON.stringify({
+        const url = `https://sarauvembzbneunhssud.supabase.co/rest/v1/user_sessions?id=eq.${sessionIdRef.current}`;
+        const headers = {
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhcmF1dmVtYnpibmV1bmhzc3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyMTc4MjEsImV4cCI6MjA4NDc5MzgyMX0.H1ww5qaVw2WGX7N9Ls6eM2q5_se8cj_J6hsw12XeNpM',
+          'Prefer': 'return=minimal'
+        };
+        
+        const body = JSON.stringify({
           is_active: false,
           session_ended_at: new Date().toISOString()
-        }));
+        });
+
+        // Try sendBeacon first
+        const blob = new Blob([body], { type: 'application/json' });
+        navigator.sendBeacon(url, blob);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user && sessionIdRef.current) {
+        // User came back - update activity
+        updateActivity();
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       endSession();
     };
-  }, [endSession]);
+  }, [user, endSession, updateActivity]);
 
   return {
     endSession,
