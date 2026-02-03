@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { 
@@ -21,7 +22,12 @@ import {
   Trophy,
   ArrowRight,
   Link as LinkIcon,
-  Coins
+  Coins,
+  MessageCircle,
+  Instagram,
+  Facebook,
+  Send,
+  Mail
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -56,20 +62,60 @@ export default function Indicacoes() {
     }
   };
 
-  const handleShare = async () => {
-    const link = getReferralLink();
-    if (navigator.share && link) {
-      try {
-        await navigator.share({
-          title: 'A Boa - Convite',
-          text: `Entre no A Boa usando meu link e ganhe bônus! 🎉`,
-          url: link,
+  const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
+
+  const shareMessage = `Entre no A Boa usando meu link e ganhe bônus! 🎉`;
+  const referralLink = getReferralLink() || '';
+  const encodedMessage = encodeURIComponent(shareMessage);
+  const encodedLink = encodeURIComponent(referralLink);
+  const fullEncodedMessage = encodeURIComponent(`${shareMessage}\n${referralLink}`);
+
+  const shareOptions = [
+    {
+      name: 'WhatsApp',
+      icon: MessageCircle,
+      color: 'bg-green-500 hover:bg-green-600',
+      url: `https://wa.me/?text=${fullEncodedMessage}`,
+    },
+    {
+      name: 'Instagram',
+      icon: Instagram,
+      color: 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 hover:opacity-90',
+      action: () => {
+        navigator.clipboard.writeText(referralLink);
+        toast({
+          title: 'Link copiado!',
+          description: 'Cole o link nos seus stories ou DMs do Instagram',
         });
-      } catch {
-        handleCopyLink();
-      }
-    } else {
-      handleCopyLink();
+        setSharePopoverOpen(false);
+      },
+    },
+    {
+      name: 'Facebook',
+      icon: Facebook,
+      color: 'bg-blue-600 hover:bg-blue-700',
+      url: `https://www.facebook.com/sharer/sharer.php?u=${encodedLink}&quote=${encodedMessage}`,
+    },
+    {
+      name: 'Telegram',
+      icon: Send,
+      color: 'bg-sky-500 hover:bg-sky-600',
+      url: `https://t.me/share/url?url=${encodedLink}&text=${encodedMessage}`,
+    },
+    {
+      name: 'Email',
+      icon: Mail,
+      color: 'bg-gray-600 hover:bg-gray-700',
+      url: `mailto:?subject=${encodeURIComponent('Convite para A Boa!')}&body=${fullEncodedMessage}`,
+    },
+  ];
+
+  const handleShareOption = (option: typeof shareOptions[0]) => {
+    if (option.action) {
+      option.action();
+    } else if (option.url) {
+      window.open(option.url, '_blank', 'noopener,noreferrer');
+      setSharePopoverOpen(false);
     }
   };
 
@@ -187,14 +233,48 @@ export default function Indicacoes() {
                         </>
                       )}
                     </Button>
-                    <Button
-                      variant="secondary"
-                      className="flex-1 gap-2"
-                      onClick={handleShare}
-                    >
-                      <Share2 className="h-4 w-4" />
-                      Compartilhar
-                    </Button>
+                    <Popover open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          className="flex-1 gap-2"
+                        >
+                          <Share2 className="h-4 w-4" />
+                          Compartilhar
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-2" align="center">
+                        <div className="grid gap-1">
+                          {shareOptions.map((option) => (
+                            <Button
+                              key={option.name}
+                              variant="ghost"
+                              className="w-full justify-start gap-3 h-11"
+                              onClick={() => handleShareOption(option)}
+                            >
+                              <div className={`p-1.5 rounded-md text-white ${option.color}`}>
+                                <option.icon className="h-4 w-4" />
+                              </div>
+                              {option.name}
+                            </Button>
+                          ))}
+                          <div className="border-t my-1" />
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start gap-3 h-11"
+                            onClick={() => {
+                              handleCopyLink();
+                              setSharePopoverOpen(false);
+                            }}
+                          >
+                            <div className="p-1.5 rounded-md bg-muted">
+                              <Copy className="h-4 w-4" />
+                            </div>
+                            Copiar Link
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </motion.div>
               </div>
@@ -368,10 +448,42 @@ export default function Indicacoes() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Não há limite para suas indicações. Compartilhe agora!
                 </p>
-                <Button className="w-full gap-2" onClick={handleShare}>
-                  <Share2 className="h-4 w-4" />
-                  Compartilhar Link
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button className="w-full gap-2">
+                      <Share2 className="h-4 w-4" />
+                      Compartilhar Link
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="center">
+                    <div className="grid gap-1">
+                      {shareOptions.map((option) => (
+                        <Button
+                          key={option.name}
+                          variant="ghost"
+                          className="w-full justify-start gap-3 h-11"
+                          onClick={() => handleShareOption(option)}
+                        >
+                          <div className={`p-1.5 rounded-md text-white ${option.color}`}>
+                            <option.icon className="h-4 w-4" />
+                          </div>
+                          {option.name}
+                        </Button>
+                      ))}
+                      <div className="border-t my-1" />
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start gap-3 h-11"
+                        onClick={handleCopyLink}
+                      >
+                        <div className="p-1.5 rounded-md bg-muted">
+                          <Copy className="h-4 w-4" />
+                        </div>
+                        Copiar Link
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </CardContent>
             </Card>
           </div>
