@@ -111,6 +111,7 @@ export function DatabaseCleanupPanel() {
   const [results, setResults] = useState<{ table: string; success: boolean; message: string }[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [preserveAdminData, setPreserveAdminData] = useState(false);
+  const [deleteAuthUsers, setDeleteAuthUsers] = useState(false);
 
   const CONFIRM_PHRASE = 'LIMPAR DADOS';
 
@@ -159,7 +160,8 @@ export function DatabaseCleanupPanel() {
         body: {
           tables: tablesToClear,
           confirmPhrase: CONFIRM_PHRASE,
-          preserveAdminData: preserveAdminData
+          preserveAdminData: preserveAdminData,
+          deleteAuthUsers: deleteAuthUsers
         }
       });
 
@@ -231,6 +233,28 @@ export function DatabaseCleanupPanel() {
             <Checkbox 
               checked={preserveAdminData} 
               onCheckedChange={(checked) => setPreserveAdminData(checked === true)}
+            />
+          </div>
+        </div>
+
+        {/* Delete auth users toggle */}
+        <div className="p-4 rounded-lg border border-destructive/50 bg-destructive/5">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium flex items-center gap-2 text-destructive">
+                <ShieldAlert className="h-4 w-4" />
+                Deletar usuários do sistema (auth.users)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {deleteAuthUsers 
+                  ? "⚠️ Usuários não-admin serão removidos completamente do Supabase Auth"
+                  : "Apenas os dados serão limpos, contas de login serão mantidas"
+                }
+              </p>
+            </div>
+            <Checkbox 
+              checked={deleteAuthUsers} 
+              onCheckedChange={(checked) => setDeleteAuthUsers(checked === true)}
             />
           </div>
         </div>
