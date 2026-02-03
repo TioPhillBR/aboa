@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { PrizeConfigList, PrizeConfig } from '@/components/admin/PrizeConfigList';
+import { DatePickerInput } from '@/components/ui/date-picker-input';
 import {
   Dialog,
   DialogContent,
@@ -103,7 +104,7 @@ export default function AdminSorteios() {
     description: '',
     price: '',
     total_numbers: '',
-    draw_date: '',
+    draw_date: undefined as Date | undefined,
     image_url: '',
     allowed_locations: [] as string[],
   });
@@ -200,7 +201,7 @@ export default function AdminSorteios() {
           description: formData.description || null,
           price: parseFloat(formData.price),
           total_numbers: parseInt(formData.total_numbers),
-          draw_date: new Date(formData.draw_date).toISOString(),
+          draw_date: formData.draw_date!.toISOString(),
           image_url: formData.image_url || null,
           allowed_locations: formData.allowed_locations.length > 0 ? formData.allowed_locations : null,
           status: 'open',
@@ -237,7 +238,7 @@ export default function AdminSorteios() {
       });
 
       setCreateDialogOpen(false);
-      setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '', image_url: '', allowed_locations: [] });
+      setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: undefined, image_url: '', allowed_locations: [] });
       setPrizes([]);
       setLocationScope('national');
       setSelectedState('');
@@ -400,11 +401,12 @@ export default function AdminSorteios() {
 
                   <div className="space-y-2">
                     <Label htmlFor="draw_date">Data do Sorteio *</Label>
-                    <Input
-                      id="draw_date"
-                      type="datetime-local"
+                    <DatePickerInput
                       value={formData.draw_date}
-                      onChange={(e) => setFormData({ ...formData, draw_date: e.target.value })}
+                      onChange={(date) => setFormData({ ...formData, draw_date: date })}
+                      minDate={new Date()}
+                      showTime={true}
+                      placeholder="DD/MM/AAAA"
                     />
                   </div>
 
