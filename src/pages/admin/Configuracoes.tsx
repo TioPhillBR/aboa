@@ -39,7 +39,8 @@ import {
   Image,
   X,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Archive
 } from 'lucide-react';
 import {
   Select,
@@ -48,8 +49,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { usePlatformSettings } from '@/hooks/usePlatformSettings';
+import { usePlatformSettings, type AllSettings } from '@/hooks/usePlatformSettings';
+import { useSettingsBackup } from '@/hooks/useSettingsBackup';
+import { SettingsBackupPanel } from '@/components/admin/SettingsBackupPanel';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // Field wrapper with validation error display
 function FormField({ 
@@ -265,6 +269,7 @@ export default function AdminConfiguracoes() {
     uploadImage,
   } = usePlatformSettings();
   
+  const { recordChange } = useSettingsBackup();
   const [activeTab, setActiveTab] = useState('general');
 
   const handleLogoUpload = async (file: File) => {
@@ -279,6 +284,16 @@ export default function AdminConfiguracoes() {
     if (url) {
       updateSettings('general', { faviconUrl: url });
     }
+  };
+
+  // Handle restore from backup
+  const handleRestoreSettings = (restoredSettings: AllSettings) => {
+    // Update all categories
+    const categories: (keyof AllSettings)[] = ['general', 'payment', 'games', 'commissions', 'notifications', 'security'];
+    categories.forEach(category => {
+      updateSettings(category, restoredSettings[category]);
+    });
+    toast.success('Configurações restauradas! Clique em Salvar para aplicar.');
   };
 
   // Count errors per tab
@@ -359,7 +374,7 @@ export default function AdminConfiguracoes() {
 
         {/* Tabs de Configurações */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 h-auto gap-2 bg-transparent p-0">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 h-auto gap-2 bg-transparent p-0">
             {[
               { value: 'general', label: 'Geral', icon: Globe },
               { value: 'payment', label: 'Pagamentos', icon: CreditCard },
@@ -367,6 +382,7 @@ export default function AdminConfiguracoes() {
               { value: 'commissions', label: 'Comissões', icon: Users },
               { value: 'notifications', label: 'Notificações', icon: Bell },
               { value: 'security', label: 'Segurança', icon: Shield },
+              { value: 'backup', label: 'Backup', icon: Archive },
             ].map((tab) => {
               const errorCount = getErrorCount(tab.value);
               return (
@@ -1369,6 +1385,14 @@ export default function AdminConfiguracoes() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Backup Tab */}
+          <TabsContent value="backup" className="space-y-6">
+            <SettingsBackupPanel 
+              currentSettings={settings}
+              onRestore={handleRestoreSettings}
+            />
           </TabsContent>
         </Tabs>
       </div>
