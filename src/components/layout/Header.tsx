@@ -1,8 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
+import { useAffiliates } from '@/hooks/useAffiliates';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +27,7 @@ import logoABoa from '@/assets/logo-a-boa.png';
 export function Header() {
   const { user, profile, signOut, isLoading, isAffiliate } = useAuth();
   const { balance, bonusBalance } = useWallet();
+  const { myAffiliateProfile } = useAffiliates();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -40,6 +43,8 @@ export function Header() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const pendingCommission = myAffiliateProfile?.pending_commission || 0;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -110,6 +115,9 @@ export function Header() {
                         {getInitials(profile.full_name)}
                       </AvatarFallback>
                     </Avatar>
+                    {isAffiliate && pendingCommission > 0 && (
+                      <span className="absolute -top-1 -right-1 h-3 w-3 bg-warning rounded-full border-2 border-background animate-pulse" />
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -159,11 +167,14 @@ export function Header() {
                       <Link to="/afiliado" className="flex items-center">
                         <Users className="mr-2 h-4 w-4" />
                         Painel Afiliado
+                        {pendingCommission > 0 && (
+                          <Badge variant="secondary" className="ml-auto bg-warning/20 text-warning text-xs px-1.5">
+                            R$ {Number(pendingCommission).toFixed(0)}
+                          </Badge>
+                        )}
                       </Link>
                     </DropdownMenuItem>
                   )}
-
-
 
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
@@ -187,14 +198,19 @@ export function Header() {
           {/* Mobile Menu Button */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="md:hidden relative">
                 {user && profile ? (
-                  <Avatar className="h-8 w-8 ring-2 ring-primary/20">
-                    <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name} />
-                    <AvatarFallback className="bg-gradient-primary text-white text-xs">
-                      {getInitials(profile.full_name)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <>
+                    <Avatar className="h-8 w-8 ring-2 ring-primary/20">
+                      <AvatarImage src={profile.avatar_url || undefined} alt={profile.full_name} />
+                      <AvatarFallback className="bg-gradient-primary text-white text-xs">
+                        {getInitials(profile.full_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {isAffiliate && pendingCommission > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 bg-warning rounded-full border-2 border-background animate-pulse" />
+                    )}
+                  </>
                 ) : (
                   <Menu className="h-5 w-5" />
                 )}
@@ -298,10 +314,17 @@ export function Header() {
                     {isAffiliate && (
                       <Link 
                         to="/afiliado" 
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                        className="flex items-center justify-between px-4 py-3 rounded-xl bg-warning/10 border border-warning/20 hover:bg-warning/20 transition-colors"
                       >
-                        <Users className="h-5 w-5 text-primary" />
-                        <span className="font-medium">Painel Afiliado</span>
+                        <div className="flex items-center gap-3">
+                          <Users className="h-5 w-5 text-warning" />
+                          <span className="font-medium">Painel Afiliado</span>
+                        </div>
+                        {pendingCommission > 0 && (
+                          <Badge variant="secondary" className="bg-warning/20 text-warning text-xs">
+                            R$ {Number(pendingCommission).toFixed(2)}
+                          </Badge>
+                        )}
                       </Link>
                     )}
 
