@@ -29,7 +29,8 @@ import {
   Gift,
   Share2,
   CheckCircle,
-  XCircle
+  XCircle,
+  ShieldAlert
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -103,16 +104,6 @@ const cleanupOptions: CleanupOption[] = [
   }
 ];
 
-type TableName = 
-  | 'profiles' | 'user_locations' | 'user_sessions' 
-  | 'raffle_tickets' | 'raffle_prizes' | 'raffles'
-  | 'scratch_chances' | 'scratch_symbols' | 'scratch_card_batches' | 'scratch_cards'
-  | 'wallet_transactions' | 'wallets' | 'user_withdrawals' | 'payment_transactions'
-  | 'support_messages' | 'support_tickets'
-  | 'affiliate_sales' | 'affiliate_withdrawals' | 'affiliates'
-  | 'referrals' | 'referral_codes'
-  | 'share_events' | 'share_tracking';
-
 export function DatabaseCleanupPanel() {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [isClearing, setIsClearing] = useState(false);
@@ -138,70 +129,15 @@ export function DatabaseCleanupPanel() {
     setSelectedOptions([]);
   };
 
-  const getSelectedTables = (): TableName[] => {
-    const tables: TableName[] = [];
+  const getSelectedTables = (): string[] => {
+    const tables: string[] = [];
     selectedOptions.forEach(optionId => {
       const option = cleanupOptions.find(o => o.id === optionId);
       if (option) {
-        tables.push(...option.tables as TableName[]);
+        tables.push(...option.tables);
       }
     });
     return [...new Set(tables)];
-  };
-
-  const deleteFromTable = async (table: TableName, adminUserIds: string[]) => {
-    const adminIdsForQuery = adminUserIds.length > 0 ? adminUserIds : ['00000000-0000-0000-0000-000000000000'];
-    
-    switch (table) {
-      case 'profiles':
-        return supabase.from('profiles').delete().not('id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'user_locations':
-        return supabase.from('user_locations').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'user_sessions':
-        return supabase.from('user_sessions').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'raffle_tickets':
-        return supabase.from('raffle_tickets').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'raffle_prizes':
-        return supabase.from('raffle_prizes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'raffles':
-        return supabase.from('raffles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'scratch_chances':
-        return supabase.from('scratch_chances').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'scratch_symbols':
-        return supabase.from('scratch_symbols').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'scratch_card_batches':
-        return supabase.from('scratch_card_batches').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'scratch_cards':
-        return supabase.from('scratch_cards').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'wallet_transactions':
-        return supabase.from('wallet_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'wallets':
-        return supabase.from('wallets').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'user_withdrawals':
-        return supabase.from('user_withdrawals').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'payment_transactions':
-        return supabase.from('payment_transactions').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'support_messages':
-        return supabase.from('support_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'support_tickets':
-        return supabase.from('support_tickets').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'affiliate_sales':
-        return supabase.from('affiliate_sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'affiliate_withdrawals':
-        return supabase.from('affiliate_withdrawals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'affiliates':
-        return supabase.from('affiliates').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'referrals':
-        return supabase.from('referrals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'referral_codes':
-        return supabase.from('referral_codes').delete().not('user_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      case 'share_events':
-        return supabase.from('share_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      case 'share_tracking':
-        return supabase.from('share_tracking').delete().not('sharer_id', 'in', `(${adminIdsForQuery.join(',')})`);
-      default:
-        throw new Error(`Unknown table: ${table}`);
-    }
   };
 
   const handleCleanup = async () => {
@@ -215,53 +151,37 @@ export function DatabaseCleanupPanel() {
     setShowResults(true);
 
     const tablesToClear = getSelectedTables();
-    const newResults: { table: string; success: boolean; message: string }[] = [];
 
-    const { data: adminRoles, error: adminError } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'admin');
-
-    if (adminError) {
-      toast.error('Erro ao buscar administradores');
-      setIsClearing(false);
-      return;
-    }
-
-    const adminUserIds = adminRoles?.map(r => r.user_id) || [];
-    
-    for (const table of tablesToClear) {
-      try {
-        const { error } = await deleteFromTable(table, adminUserIds);
-
-        if (error) {
-          newResults.push({ table, success: false, message: error.message });
-        } else {
-          newResults.push({ table, success: true, message: 'Limpo com sucesso' });
+    try {
+      // Call edge function with service role (bypasses RLS)
+      const { data, error } = await supabase.functions.invoke('cleanup-database', {
+        body: {
+          tables: tablesToClear,
+          confirmPhrase: CONFIRM_PHRASE
         }
-      } catch (err) {
-        newResults.push({
-          table,
-          success: false,
-          message: err instanceof Error ? err.message : 'Erro desconhecido'
-        });
-      }
+      });
 
-      setResults([...newResults]);
+      if (error) {
+        toast.error(`Erro na limpeza: ${error.message}`);
+        setResults([{ table: 'all', success: false, message: error.message }]);
+      } else if (data) {
+        setResults(data.results || []);
+        
+        if (data.success) {
+          toast.success(data.message);
+        } else {
+          toast.warning(data.message);
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro desconhecido';
+      toast.error(`Erro: ${message}`);
+      setResults([{ table: 'all', success: false, message }]);
     }
 
     setIsClearing(false);
     setConfirmText('');
     setSelectedOptions([]);
-
-    const successCount = newResults.filter(r => r.success).length;
-    const failCount = newResults.filter(r => !r.success).length;
-
-    if (failCount === 0) {
-      toast.success(`Limpeza concluída! ${successCount} tabelas limpas.`);
-    } else {
-      toast.warning(`Limpeza parcial: ${successCount} sucesso, ${failCount} erros.`);
-    }
   };
 
   return (
@@ -279,6 +199,18 @@ export function DatabaseCleanupPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Info about force cleanup */}
+        <div className="p-3 bg-primary/10 rounded-lg border border-primary/30">
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="h-4 w-4 text-primary mt-0.5" />
+            <div className="text-xs text-muted-foreground">
+              <span className="font-medium text-primary">Modo Forçado:</span> Esta limpeza utiliza 
+              privilégios administrativos que ignoram as políticas de segurança (RLS), garantindo 
+              que todos os dados selecionados sejam removidos completamente.
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={selectAll}>
             Selecionar Todos
