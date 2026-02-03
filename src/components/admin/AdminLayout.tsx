@@ -138,17 +138,6 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
             </p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          asChild 
-          className="w-full gap-2 bg-sidebar-accent/50 border-sidebar-border hover:bg-sidebar-accent"
-        >
-          <Link to="/">
-            <ChevronLeft className="h-4 w-4" />
-            Voltar ao Site
-          </Link>
-        </Button>
       </div>
     </div>
   );
@@ -230,12 +219,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
                 {theme === 'dark' ? 'Tema Claro' : 'Tema Escuro'}
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/">
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Voltar ao Site
-                </Link>
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => signOut()} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
@@ -282,18 +265,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/perfil">
-                  <Users className="mr-2 h-4 w-4" />
-                  Meu Perfil
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/">
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Voltar ao Site
-                </Link>
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => signOut()} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
