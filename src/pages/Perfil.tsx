@@ -10,9 +10,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { ImageCropper } from '@/components/ui/image-cropper';
-import { 
+import {
   User, 
   Camera, 
   Mail, 
@@ -26,7 +33,8 @@ import {
   Home,
   Building,
   CreditCard,
-  CheckCircle
+  CheckCircle,
+  Banknote
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -83,6 +91,10 @@ export default function Perfil() {
   const [addressCity, setAddressCity] = useState('');
   const [addressState, setAddressState] = useState('');
   
+  // PIX key states (for receiving prizes)
+  const [pixKey, setPixKey] = useState('');
+  const [pixKeyType, setPixKeyType] = useState<string>('cpf');
+  
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
@@ -104,6 +116,8 @@ export default function Perfil() {
       setAddressNeighborhood(profile.address_neighborhood || '');
       setAddressCity(profile.address_city || '');
       setAddressState(profile.address_state || '');
+      setPixKey(profile.pix_key || '');
+      setPixKeyType(profile.pix_key_type || 'cpf');
     }
   }, [profile]);
 
@@ -305,6 +319,8 @@ export default function Perfil() {
       address_neighborhood: addressNeighborhood.trim() || null,
       address_city: addressCity.trim() || null,
       address_state: addressState.trim() || null,
+      pix_key: pixKey.trim() || null,
+      pix_key_type: pixKey.trim() ? pixKeyType : null,
     });
 
     if (error) {
@@ -622,6 +638,57 @@ export default function Perfil() {
                     maxLength={2}
                   />
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card de Chave PIX para Prêmios */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Banknote className="h-5 w-5" />
+                Chave PIX para Prêmios
+              </CardTitle>
+              <CardDescription>
+                Cadastre sua chave PIX para receber os prêmios ganhos
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Tipo da chave PIX</Label>
+                <Select value={pixKeyType} onValueChange={setPixKeyType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cpf">CPF</SelectItem>
+                    <SelectItem value="email">E-mail</SelectItem>
+                    <SelectItem value="phone">Telefone</SelectItem>
+                    <SelectItem value="random">Chave Aleatória</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="pixKey">Chave PIX</Label>
+                <div className="relative">
+                  <Banknote className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="pixKey"
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder={
+                      pixKeyType === 'cpf' ? '000.000.000-00' :
+                      pixKeyType === 'email' ? 'seu@email.com' :
+                      pixKeyType === 'phone' ? '(00) 90000-0000' :
+                      'Sua chave aleatória'
+                    }
+                    className="pl-10"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Esta chave será usada para enviar seus prêmios via PIX
+                </p>
               </div>
             </CardContent>
           </Card>
