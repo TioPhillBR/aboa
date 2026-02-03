@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { BackButton } from '@/components/ui/back-button';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/layout/Header';
 import { ScratchCard } from '@/components/games/ScratchCard';
@@ -174,13 +175,7 @@ export default function RaspadinhaDetail() {
 
       <main className="container py-8">
         {/* Voltar */}
-        <Link 
-          to="/raspadinhas" 
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Voltar às raspadinhas
-        </Link>
+        <BackButton className="mb-6" />
 
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">

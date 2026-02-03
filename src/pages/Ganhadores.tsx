@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
+import { BackButton } from '@/components/ui/back-button';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -133,6 +134,7 @@ export default function Ganhadores() {
       <Header />
 
       <main className="container py-8">
+        <BackButton className="mb-4" />
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500">

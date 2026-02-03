@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -219,6 +220,8 @@ export default function Perfil() {
       <Header />
 
       <main className="container py-8 max-w-3xl">
+        <BackButton className="mb-4" />
+        
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="p-3 rounded-xl bg-primary/10">

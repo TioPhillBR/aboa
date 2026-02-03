@@ -1,4 +1,5 @@
 import { Header } from '@/components/layout/Header';
+import { BackButton } from '@/components/ui/back-button';
 import { RaffleCard } from '@/components/games/RaffleCard';
 import { useRaffles } from '@/hooks/useRaffles';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,6 +16,7 @@ export default function Sorteios() {
       <Header />
 
       <main className="container py-6 md:py-8">
+        <BackButton className="mb-4" />
         {/* Hero Section */}
         <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-primary p-6 md:p-8 lg:p-12 mb-8 md:mb-10">
           {/* Background decorations */}

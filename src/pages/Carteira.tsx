@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
 import { useWallet } from '@/hooks/useWallet';
 import { useAuth } from '@/hooks/useAuth';
@@ -267,6 +268,8 @@ export default function Carteira() {
       <Header />
 
       <main className="container py-8">
+        <BackButton className="mb-4" />
+        
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="p-3 rounded-xl bg-primary/10">
