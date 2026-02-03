@@ -224,7 +224,7 @@ export default function Estatisticas() {
         ) : stats ? (
           <>
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
+            <div className="grid grid-cols-2 gap-3 md:gap-4 mb-8">
               <Card className="relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-primary opacity-10 rounded-full blur-2xl" />
                 <CardContent className="p-4 md:p-6">
@@ -250,36 +250,10 @@ export default function Estatisticas() {
                   <p className="text-xs md:text-sm text-muted-foreground">Raspadinhas Jogadas</p>
                 </CardContent>
               </Card>
-
-              <Card className="relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-success opacity-10 rounded-full blur-2xl" />
-                <CardContent className="p-4 md:p-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 md:p-2.5 rounded-xl bg-success/10">
-                      <Trophy className="h-4 w-4 md:h-5 md:w-5 text-success" />
-                    </div>
-                  </div>
-                  <p className="text-2xl md:text-3xl font-bold">{stats.rafflesWon + stats.scratchWins}</p>
-                  <p className="text-xs md:text-sm text-muted-foreground">Vitórias Totais</p>
-                </CardContent>
-              </Card>
-
-              <Card className="relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-ocean opacity-10 rounded-full blur-2xl" />
-                <CardContent className="p-4 md:p-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 md:p-2.5 rounded-xl bg-blue-500/10">
-                      <Target className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
-                    </div>
-                  </div>
-                  <p className="text-2xl md:text-3xl font-bold">{stats.winRate.toFixed(1)}%</p>
-                  <p className="text-xs md:text-sm text-muted-foreground">Taxa de Vitória</p>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Financial Summary */}
-            <div className="grid md:grid-cols-3 gap-4 md:gap-6 mb-8">
+            <div className="grid md:grid-cols-2 gap-4 md:gap-6 mb-8">
               <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
                 <CardContent className="p-5 md:p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -290,19 +264,6 @@ export default function Estatisticas() {
                   </div>
                   <p className="text-sm text-muted-foreground mb-1">Saldo Atual</p>
                   <p className="text-3xl font-bold text-primary">R$ {balance.toFixed(2)}</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-red-500/5 to-red-500/10 border-red-500/20">
-                <CardContent className="p-5 md:p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 rounded-xl bg-red-500/10">
-                      <Coins className="h-6 w-6 text-red-500" />
-                    </div>
-                    <Badge variant="outline" className="text-red-500 border-red-500/30">Gasto</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-1">Total Gasto</p>
-                  <p className="text-3xl font-bold text-red-500">R$ {stats.totalSpent.toFixed(2)}</p>
                 </CardContent>
               </Card>
 
