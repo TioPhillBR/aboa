@@ -124,6 +124,73 @@ serve(async (req) => {
         // Only preserve admin data if explicitly requested
         const shouldPreserveAdmin = preserveAdminData;
 
+        // Before deleting profiles, clear FK references in user_roles.created_by
+        if (table === "profiles") {
+          // Get list of profile IDs that will be deleted (non-admin profiles)
+          const profilesToDelete = shouldPreserveAdmin && adminUserIds.length > 0
+            ? await adminClient
+                .from("profiles")
+                .select("id")
+                .not("id", "in", `(${adminUserIds.join(",")})`)
+            : await adminClient
+                .from("profiles")
+                .select("id")
+                .neq("id", "00000000-0000-0000-0000-000000000000");
+
+          if (profilesToDelete.data && profilesToDelete.data.length > 0) {
+            const profileIds = profilesToDelete.data.map((p) => p.id);
+            
+            // Clear created_by references in user_roles for profiles being deleted
+            for (const profileId of profileIds) {
+              await adminClient
+                .from("user_roles")
+                .update({ created_by: null })
+                .eq("created_by", profileId);
+            }
+
+            // Also clear other FK references pointing to profiles being deleted
+            // Clear approved_by in affiliates
+            for (const profileId of profileIds) {
+              await adminClient
+                .from("affiliates")
+                .update({ approved_by: null })
+                .eq("approved_by", profileId);
+            }
+            
+            // Clear processed_by in affiliate_withdrawals
+            for (const profileId of profileIds) {
+              await adminClient
+                .from("affiliate_withdrawals")
+                .update({ processed_by: null })
+                .eq("processed_by", profileId);
+            }
+            
+            // Clear processed_by in user_withdrawals
+            for (const profileId of profileIds) {
+              await adminClient
+                .from("user_withdrawals")
+                .update({ processed_by: null })
+                .eq("processed_by", profileId);
+            }
+            
+            // Clear winner_id in raffles
+            for (const profileId of profileIds) {
+              await adminClient
+                .from("raffles")
+                .update({ winner_id: null })
+                .eq("winner_id", profileId);
+            }
+            
+            // Clear winner_id in raffle_prizes
+            for (const profileId of profileIds) {
+              await adminClient
+                .from("raffle_prizes")
+                .update({ winner_id: null })
+                .eq("winner_id", profileId);
+            }
+          }
+        }
+
         // Helper to get delete query based on table and preserve settings
         const getDeleteQuery = (tableName: string) => {
           const query = adminClient.from(tableName as any);
