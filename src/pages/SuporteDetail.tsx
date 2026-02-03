@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { BackButton } from '@/components/ui/back-button';
 import { useSupport, useTicketMessages, SupportTicket } from '@/hooks/useSupport';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -88,9 +89,7 @@ export default function SuporteDetail() {
     <div className="container max-w-4xl py-6 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/suporte')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+        <BackButton />
         <div className="flex-1">
           <h1 className="text-xl font-bold">{ticket.subject}</h1>
           <div className="flex items-center gap-2 mt-1">

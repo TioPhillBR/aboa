@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
 import { RouletteWheel } from '@/components/games/RouletteWheel';
 import { useRaffle } from '@/hooks/useRaffles';
@@ -200,13 +201,7 @@ export default function SorteioDetail() {
 
       <main className="container py-6 md:py-8">
         {/* Voltar */}
-        <Link 
-          to="/sorteios" 
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Voltar aos sorteios
-        </Link>
+        <BackButton className="mb-6" />
 
         {/* Hero Banner */}
         <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-primary p-6 md:p-8 mb-6 md:mb-8">

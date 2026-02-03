@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
+import { BackButton } from '@/components/ui/back-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -204,6 +205,8 @@ export default function Estatisticas() {
       <Header />
 
       <main className="container py-6 md:py-8">
+        <BackButton className="mb-4" />
+        
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl md:text-3xl font-bold mb-2">Minhas Estatísticas</h1>
