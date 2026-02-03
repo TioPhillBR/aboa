@@ -66,10 +66,10 @@ export function useWallet() {
     }
   };
 
-  // Calculate bonus balance from referral transactions
+  // Calculate bonus balance from referral and admin bonus transactions
   const bonusBalance = useMemo(() => {
     return transactions
-      .filter(tx => tx.source_type === 'referral' && tx.amount > 0)
+      .filter(tx => (tx.source_type === 'referral' || tx.source_type === 'admin_bonus') && tx.amount > 0)
       .reduce((sum, tx) => sum + tx.amount, 0);
   }, [transactions]);
 
