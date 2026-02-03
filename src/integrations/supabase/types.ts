@@ -320,6 +320,8 @@ export type Database = {
           full_name: string
           id: string
           last_login_at: string | null
+          lgpd_consent: boolean | null
+          lgpd_consent_at: string | null
           phone: string | null
           registration_source: string | null
           source_code: string | null
@@ -340,6 +342,8 @@ export type Database = {
           full_name: string
           id: string
           last_login_at?: string | null
+          lgpd_consent?: boolean | null
+          lgpd_consent_at?: string | null
           phone?: string | null
           registration_source?: string | null
           source_code?: string | null
@@ -360,6 +364,8 @@ export type Database = {
           full_name?: string
           id?: string
           last_login_at?: string | null
+          lgpd_consent?: boolean | null
+          lgpd_consent_at?: string | null
           phone?: string | null
           registration_source?: string | null
           source_code?: string | null
@@ -468,6 +474,7 @@ export type Database = {
       }
       raffles: {
         Row: {
+          allowed_locations: string[] | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -483,6 +490,7 @@ export type Database = {
           winner_ticket_number: number | null
         }
         Insert: {
+          allowed_locations?: string[] | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -498,6 +506,7 @@ export type Database = {
           winner_ticket_number?: number | null
         }
         Update: {
+          allowed_locations?: string[] | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1164,6 +1173,50 @@ export type Database = {
           },
           {
             foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          ip_address: string | null
+          is_active: boolean
+          last_activity_at: string
+          session_ended_at: string | null
+          session_started_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          last_activity_at?: string
+          session_ended_at?: string | null
+          session_started_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          last_activity_at?: string
+          session_ended_at?: string | null
+          session_started_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_sessions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

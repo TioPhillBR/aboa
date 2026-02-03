@@ -9,6 +9,7 @@ import { NotificationProvider } from "@/hooks/useNotifications";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { ScrollToTop } from "@/components/layout/ScrollToTop";
+import { useUserSession } from "@/hooks/useUserSession";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
@@ -28,6 +29,7 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import AdminSorteios from "./pages/admin/Sorteios";
 import AdminRaspadinhas from "./pages/admin/Raspadinhas";
 import AdminUsuarios from "./pages/admin/Usuarios";
+import AdminUsuariosOnline from "./pages/admin/UsuariosOnline";
 import AdminGanhadores from "./pages/admin/Ganhadores";
 import AdminVendas from "./pages/admin/Vendas";
 import AdminFinanceiro from "./pages/admin/Financeiro";
@@ -44,6 +46,12 @@ import Suporte from "./pages/Suporte";
 import SuporteDetail from "./pages/SuporteDetail";
 import SorteioAoVivo from "./pages/SorteioAoVivo";
 import NotFound from "./pages/NotFound";
+
+// Component to track user session
+function SessionTracker() {
+  useUserSession();
+  return null;
+}
 
 const queryClient = new QueryClient();
 
@@ -68,6 +76,7 @@ const App = () => (
             <Toaster />
             <Sonner />
           <BrowserRouter>
+            <SessionTracker />
             <ScrollToTop />
             <div className="pb-16 md:pb-0">
               <Routes>
@@ -101,6 +110,7 @@ const App = () => (
                 <Route path="/admin/afiliados" element={<ProtectedRoute requireAdmin><AdminAfiliados /></ProtectedRoute>} />
                 <Route path="/admin/compartilhamentos" element={<ProtectedRoute requireAdmin><AdminCompartilhamentos /></ProtectedRoute>} />
                 <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><AdminUsuarios /></ProtectedRoute>} />
+                <Route path="/admin/usuarios-online" element={<ProtectedRoute requireAdmin><AdminUsuariosOnline /></ProtectedRoute>} />
                 <Route path="/admin/ganhadores" element={<ProtectedRoute requireAdmin><AdminGanhadores /></ProtectedRoute>} />
                 <Route path="/admin/relatorios" element={<ProtectedRoute requireAdmin><AdminRelatorios /></ProtectedRoute>} />
                 <Route path="/admin/configuracoes" element={<ProtectedRoute requireAdmin><AdminConfiguracoes /></ProtectedRoute>} />

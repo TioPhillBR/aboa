@@ -352,7 +352,7 @@ export default function Index() {
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Ticket className="h-4 w-4" />
-                        <span className="text-sm">{raffle.sold_count}/{raffle.total_numbers}</span>
+                        <span className="text-sm text-green-500 font-medium">Disponível</span>
                       </div>
                       <div className="text-xl font-bold text-primary">
                         R$ {raffle.price.toFixed(2)}

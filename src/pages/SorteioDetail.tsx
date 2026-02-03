@@ -532,9 +532,9 @@ export default function SorteioDetail() {
                     <Ticket className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Números</p>
-                    <p className="font-medium text-sm">
-                      {soldNumbers.length} / {raffle.total_numbers} vendidos
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <p className="font-medium text-sm text-green-500">
+                      {soldNumbers.length < raffle.total_numbers ? 'Disponível' : 'Esgotado'}
                     </p>
                   </div>
                 </div>

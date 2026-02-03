@@ -8,10 +8,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Loader2, Mail, Lock, User, Trophy, CheckCircle2, Eye, EyeOff, Gift,
   Phone, Calendar, CreditCard, MapPin, Building, Home, ArrowRight, ArrowLeft,
-  Upload, AlertCircle
+  Upload, AlertCircle, FileText
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -120,6 +121,9 @@ export function RegisterForm() {
   const [neighborhood, setNeighborhood] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  
+  // LGPD consent
+  const [lgpdConsent, setLgpdConsent] = useState(false);
   
   // UI state
   const [showPassword, setShowPassword] = useState(false);
@@ -344,6 +348,11 @@ export function RegisterForm() {
       setError('Estado é obrigatório');
       return false;
     }
+
+    if (!lgpdConsent) {
+      setError('Você precisa aceitar os termos de uso e política de privacidade');
+      return false;
+    }
     
     return true;
   };
@@ -421,6 +430,8 @@ export function RegisterForm() {
             address_neighborhood: neighborhood,
             address_city: city,
             address_state: state,
+            lgpd_consent: lgpdConsent,
+            lgpd_consent_at: lgpdConsent ? new Date().toISOString() : null,
           })
           .eq('id', session.user.id);
 
@@ -820,6 +831,34 @@ export function RegisterForm() {
                   </div>
                 </div>
 
+                {/* LGPD Consent */}
+                <div className="flex items-start space-x-3 p-4 rounded-lg bg-muted/50 border">
+                  <Checkbox
+                    id="lgpdConsent"
+                    checked={lgpdConsent}
+                    onCheckedChange={(checked) => setLgpdConsent(checked === true)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="lgpdConsent"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Aceito os Termos de Uso e Política de Privacidade *
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Ao marcar esta opção, você concorda com nossa{' '}
+                      <Link to="/politica-privacidade" className="text-primary hover:underline" target="_blank">
+                        Política de Privacidade
+                      </Link>
+                      {' '}e{' '}
+                      <Link to="/termos-uso" className="text-primary hover:underline" target="_blank">
+                        Termos de Uso
+                      </Link>
+                      , em conformidade com a LGPD (Lei Geral de Proteção de Dados).
+                    </p>
+                  </div>
+                </div>
+
                 <div className="flex gap-3">
                   <Button 
                     type="button" 
@@ -830,7 +869,7 @@ export function RegisterForm() {
                     <ArrowLeft className="h-4 w-4" />
                     Voltar
                   </Button>
-                  <Button type="submit" className="flex-1" disabled={isLoading}>
+                  <Button type="submit" className="flex-1" disabled={isLoading || !lgpdConsent}>
                     {isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

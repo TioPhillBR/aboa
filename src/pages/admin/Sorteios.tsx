@@ -40,10 +40,19 @@ import {
   Trash2,
   Eye,
   Loader2,
-  Gift
+  Gift,
+  MapPin,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+// Brazilian states
+const BRAZILIAN_STATES = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS',
+  'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC',
+  'SP', 'SE', 'TO'
+];
 
 interface RaffleWithStats extends Raffle {
   tickets_sold: number;
@@ -69,10 +78,12 @@ export default function AdminSorteios() {
     total_numbers: '',
     draw_date: '',
     image_url: '',
+    allowed_locations: [] as string[],
   });
 
   // Prizes state for the new raffle
   const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
+  const [locationInput, setLocationInput] = useState('');
 
   useEffect(() => {
     fetchRaffles();
@@ -160,6 +171,7 @@ export default function AdminSorteios() {
           total_numbers: parseInt(formData.total_numbers),
           draw_date: new Date(formData.draw_date).toISOString(),
           image_url: formData.image_url || null,
+          allowed_locations: formData.allowed_locations.length > 0 ? formData.allowed_locations : null,
           status: 'open',
           created_by: user.id,
         })
@@ -194,8 +206,9 @@ export default function AdminSorteios() {
       });
 
       setCreateDialogOpen(false);
-      setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '', image_url: '' });
+      setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '', image_url: '', allowed_locations: [] });
       setPrizes([]);
+      setLocationInput('');
       fetchRaffles();
     } catch (error) {
       console.error('Error creating raffle:', error);
@@ -370,6 +383,64 @@ export default function AdminSorteios() {
                     folder="covers"
                     aspectRatio="video"
                   />
+
+                  {/* Restrição de Localidade */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Restrição de Localidade (opcional)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Deixe vazio para permitir todas as localidades
+                    </p>
+                    <div className="flex gap-2">
+                      <select
+                        value={locationInput}
+                        onChange={(e) => setLocationInput(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Selecione um estado...</option>
+                        {BRAZILIAN_STATES.filter(s => !formData.allowed_locations.includes(s)).map(state => (
+                          <option key={state} value={state}>{state}</option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (locationInput && !formData.allowed_locations.includes(locationInput)) {
+                            setFormData({
+                              ...formData,
+                              allowed_locations: [...formData.allowed_locations, locationInput]
+                            });
+                            setLocationInput('');
+                          }
+                        }}
+                        disabled={!locationInput}
+                      >
+                        Adicionar
+                      </Button>
+                    </div>
+                    {formData.allowed_locations.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {formData.allowed_locations.map(loc => (
+                          <Badge key={loc} variant="secondary" className="gap-1">
+                            {loc}
+                            <button
+                              type="button"
+                              onClick={() => setFormData({
+                                ...formData,
+                                allowed_locations: formData.allowed_locations.filter(l => l !== loc)
+                              })}
+                              className="hover:text-destructive"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Prêmios */}
@@ -436,7 +507,7 @@ export default function AdminSorteios() {
                       <TableCell className="font-medium">{raffle.title}</TableCell>
                       <TableCell>R$ {raffle.price.toFixed(2)}</TableCell>
                       <TableCell>
-                        {raffle.tickets_sold} / {raffle.total_numbers}
+                        {Math.round((raffle.tickets_sold / raffle.total_numbers) * 100)}%
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

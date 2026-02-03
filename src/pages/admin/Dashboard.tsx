@@ -384,7 +384,7 @@ export default function AdminDashboard() {
                         <div className="space-y-1">
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Progresso</span>
-                            <span className="font-medium">{raffle.tickets_sold}/{raffle.total_numbers}</span>
+                            <span className="font-medium">{Math.round((raffle.tickets_sold / raffle.total_numbers) * 100)}%</span>
                           </div>
                           <Progress value={progress} className="h-2" />
                         </div>
