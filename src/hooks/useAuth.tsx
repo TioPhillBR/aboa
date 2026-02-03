@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { Profile, AppRole } from '@/types';
+import { Profile, AppRole, AffiliateStatus } from '@/types';
 
 interface AuthContextType {
   user: User | null;
@@ -9,6 +9,8 @@ interface AuthContextType {
   profile: Profile | null;
   roles: AppRole[];
   isAdmin: boolean;
+  isAffiliate: boolean;
+  affiliateStatus: AffiliateStatus | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null; session: Session | null }>;
@@ -23,9 +25,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [affiliateStatus, setAffiliateStatus] = useState<AffiliateStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const isAdmin = roles.includes('admin');
+  const isAffiliate = affiliateStatus === 'approved';
 
   useEffect(() => {
     // Configurar listener ANTES de getSession
@@ -42,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null);
           setRoles([]);
+          setAffiliateStatus(null);
         }
         setIsLoading(false);
       }
@@ -62,25 +67,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async (userId: string) => {
     try {
-      // Buscar perfil
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // Buscar perfil, roles e status de afiliado em paralelo
+      const [profileResult, rolesResult, affiliateResult] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('user_roles').select('role').eq('user_id', userId),
+        supabase.from('affiliates').select('status').eq('user_id', userId).maybeSingle()
+      ]);
 
-      if (profileData) {
-        setProfile(profileData as Profile);
+      if (profileResult.data) {
+        setProfile(profileResult.data as Profile);
       }
 
-      // Buscar roles
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
+      if (rolesResult.data) {
+        setRoles(rolesResult.data.map(r => r.role as AppRole));
+      }
 
-      if (rolesData) {
-        setRoles(rolesData.map(r => r.role as AppRole));
+      if (affiliateResult.data) {
+        setAffiliateStatus(affiliateResult.data.status as AffiliateStatus);
+      } else {
+        setAffiliateStatus(null);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -115,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setProfile(null);
     setRoles([]);
+    setAffiliateStatus(null);
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
@@ -140,6 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         roles,
         isAdmin,
+        isAffiliate,
+        affiliateStatus,
         isLoading,
         signIn,
         signUp,

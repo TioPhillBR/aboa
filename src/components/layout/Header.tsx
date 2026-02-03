@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift, Users } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
@@ -23,7 +23,7 @@ import {
 import logoABoa from '@/assets/logo-a-boa.png';
 
 export function Header() {
-  const { user, profile, signOut, isLoading } = useAuth();
+  const { user, profile, signOut, isLoading, isAffiliate } = useAuth();
   const { balance, bonusBalance } = useWallet();
   const navigate = useNavigate();
 
@@ -153,6 +153,15 @@ export function Header() {
                       Configurações
                     </Link>
                   </DropdownMenuItem>
+
+                  {isAffiliate && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/afiliado" className="flex items-center">
+                        <Users className="mr-2 h-4 w-4" />
+                        Painel Afiliado
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
 
 
 
@@ -286,7 +295,15 @@ export function Header() {
                       <span className="font-medium">Configurações</span>
                     </Link>
 
-
+                    {isAffiliate && (
+                      <Link 
+                        to="/afiliado" 
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                      >
+                        <Users className="h-5 w-5 text-primary" />
+                        <span className="font-medium">Painel Afiliado</span>
+                      </Link>
+                    )}
 
                     <div className="h-px bg-border my-2" />
                     <button 
