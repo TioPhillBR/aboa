@@ -6,10 +6,27 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Ticket, Trophy, Sparkles, Gift, Zap } from 'lucide-react';
 
 export default function Sorteios() {
-  const { raffles, isLoading } = useRaffles();
+  const { raffles, totalParticipants, totalPrizesValue, isLoading } = useRaffles();
 
   const openRaffles = raffles.filter(r => r.status === 'open');
   const completedRaffles = raffles.filter(r => r.status === 'completed');
+
+  // Format participants count
+  const formatParticipants = (count: number) => {
+    if (count === 0) return '0';
+    if (count < 100) return count.toString();
+    if (count < 1000) return `${Math.floor(count / 100) * 100}+`;
+    return `${(count / 1000).toFixed(1).replace('.0', '')}k+`;
+  };
+
+  // Format prize value
+  const formatPrizeValue = (value: number) => {
+    if (value === 0 && completedRaffles.length > 0) {
+      // Fallback estimate if no prizes registered
+      return `R$ ${(completedRaffles.length * 5000).toLocaleString()}`;
+    }
+    return `R$ ${value.toLocaleString()}`;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -57,8 +74,8 @@ export default function Sorteios() {
           {[
             { label: 'Sorteios Ativos', value: openRaffles.length, icon: Ticket, color: 'bg-gradient-primary' },
             { label: 'Finalizados', value: completedRaffles.length, icon: Trophy, color: 'bg-gradient-gold' },
-            { label: 'Prêmios Entregues', value: `R$ ${(completedRaffles.length * 5000).toLocaleString()}`, icon: Gift, color: 'bg-gradient-success' },
-            { label: 'Participantes', value: '500+', icon: Sparkles, color: 'bg-gradient-ocean' },
+            { label: 'Prêmios Entregues', value: formatPrizeValue(totalPrizesValue), icon: Gift, color: 'bg-gradient-success' },
+            { label: 'Participantes', value: formatParticipants(totalParticipants), icon: Sparkles, color: 'bg-gradient-ocean' },
           ].map((stat, i) => (
             <div 
               key={stat.label}
