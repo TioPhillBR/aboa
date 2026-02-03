@@ -36,27 +36,12 @@ export default function Indicacoes() {
     totalEarnings,
     bonusPerReferral,
     getReferralLink,
-    copyReferralLink,
-    copyReferralCode 
+    copyReferralLink
   } = useReferral();
   const { toast } = useToast();
   const { playSuccess } = useSoundEffects();
   
-  const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-
-  const handleCopyCode = async () => {
-    const success = await copyReferralCode();
-    if (success) {
-      playSuccess();
-      setCopiedCode(true);
-      toast({
-        title: 'Código copiado!',
-        description: 'Compartilhe com seus amigos',
-      });
-      setTimeout(() => setCopiedCode(false), 3000);
-    }
-  };
 
   const handleCopyLink = async () => {
     const success = await copyReferralLink();
@@ -65,7 +50,7 @@ export default function Indicacoes() {
       setCopiedLink(true);
       toast({
         title: 'Link copiado!',
-        description: 'Compartilhe nas redes sociais',
+        description: 'Compartilhe com seus amigos',
       });
       setTimeout(() => setCopiedLink(false), 3000);
     }
@@ -77,7 +62,7 @@ export default function Indicacoes() {
       try {
         await navigator.share({
           title: 'A Boa - Convite',
-          text: `Use meu código ${referralCode?.code} e ganhe bônus! 🎉`,
+          text: `Entre no A Boa usando meu link e ganhe bônus! 🎉`,
           url: link,
         });
       } catch {
@@ -152,43 +137,59 @@ export default function Indicacoes() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Coluna Principal */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Card do Código */}
+            {/* Card do Link de Indicação */}
             <Card className="overflow-hidden">
               <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 p-6 text-white">
                 <div className="flex items-center gap-2 mb-4">
                   <Gift className="h-6 w-6" />
-                  <span className="font-semibold">Seu Código de Indicação</span>
+                  <span className="font-semibold">Seu Link de Indicação</span>
                 </div>
                 
                 <motion.div 
-                  className="bg-white/20 backdrop-blur-sm rounded-xl p-6 text-center"
+                  className="bg-white/20 backdrop-blur-sm rounded-xl p-6"
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: 'spring', stiffness: 300 }}
                 >
-                  <p className="text-4xl md:text-5xl font-bold tracking-wider mb-4">
-                    {referralCode?.code || 'XXXXXX'}
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <p className="text-sm opacity-80 mb-2">Compartilhe este link:</p>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1 p-3 bg-white/20 rounded-lg text-sm font-mono truncate">
+                      {getReferralLink()}
+                    </div>
                     <Button
                       variant="secondary"
-                      className="gap-2"
-                      onClick={handleCopyCode}
+                      size="icon"
+                      onClick={handleCopyLink}
+                      className="shrink-0"
                     >
-                      {copiedCode ? (
+                      {copiedLink ? (
+                        <Check className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                    <Button
+                      variant="secondary"
+                      className="flex-1 gap-2"
+                      onClick={handleCopyLink}
+                    >
+                      {copiedLink ? (
                         <>
                           <Check className="h-4 w-4" />
-                          Copiado!
+                          Link Copiado!
                         </>
                       ) : (
                         <>
-                          <Copy className="h-4 w-4" />
-                          Copiar Código
+                          <LinkIcon className="h-4 w-4" />
+                          Copiar Link
                         </>
                       )}
                     </Button>
                     <Button
                       variant="secondary"
-                      className="gap-2"
+                      className="flex-1 gap-2"
                       onClick={handleShare}
                     >
                       <Share2 className="h-4 w-4" />
@@ -199,27 +200,15 @@ export default function Indicacoes() {
               </div>
 
               <CardContent className="p-6">
-                <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <Gift className="h-8 w-8 text-green-600 shrink-0" />
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                      Link de Convite
-                    </label>
-                    <div className="flex gap-2">
-                      <div className="flex-1 p-3 bg-muted rounded-lg text-sm font-mono truncate">
-                        {getReferralLink()}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleCopyLink}
-                      >
-                        {copiedLink ? (
-                          <Check className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <LinkIcon className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
+                    <p className="font-semibold text-green-700 dark:text-green-400">
+                      Ganhe R$ {bonusPerReferral.toFixed(2)} por indicação!
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Quando alguém se cadastrar pelo seu link, vocês dois ganham bônus.
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -241,7 +230,7 @@ export default function Indicacoes() {
                     </div>
                     <h4 className="font-semibold mb-1">1. Compartilhe</h4>
                     <p className="text-sm text-muted-foreground">
-                      Envie seu código para amigos e família
+                      Envie seu link para amigos e família
                     </p>
                   </div>
                   <div className="text-center">
@@ -250,7 +239,7 @@ export default function Indicacoes() {
                     </div>
                     <h4 className="font-semibold mb-1">2. Eles se Cadastram</h4>
                     <p className="text-sm text-muted-foreground">
-                      Usando seu código no cadastro
+                      Acessando pelo seu link de indicação
                     </p>
                   </div>
                   <div className="text-center">
@@ -274,7 +263,7 @@ export default function Indicacoes() {
                   Seus Indicados
                 </CardTitle>
                 <CardDescription>
-                  Pessoas que se cadastraram com seu código
+                  Pessoas que se cadastraram pelo seu link
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -381,7 +370,7 @@ export default function Indicacoes() {
                 </p>
                 <Button className="w-full gap-2" onClick={handleShare}>
                   <Share2 className="h-4 w-4" />
-                  Compartilhar Código
+                  Compartilhar Link
                 </Button>
               </CardContent>
             </Card>
