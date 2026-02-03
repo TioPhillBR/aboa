@@ -219,6 +219,8 @@ export default function Endereco() {
             address_state: addressData.state,
             lgpd_consent: addressData.lgpdConsent,
             lgpd_consent_at: addressData.lgpdConsent ? new Date().toISOString() : null,
+            pix_key: personalData.pixKey.trim() || null,
+            pix_key_type: personalData.pixKey.trim() ? personalData.pixKeyType : null,
           })
           .eq('id', session.user.id);
 
