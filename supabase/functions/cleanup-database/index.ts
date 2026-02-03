@@ -50,7 +50,7 @@ serve(async (req) => {
       });
     }
 
-    const { tables, confirmPhrase, preserveAdminData = false } = await req.json();
+    const { tables, confirmPhrase, preserveAdminData = false, deleteAuthUsers = false } = await req.json();
 
     if (confirmPhrase !== "LIMPAR DADOS") {
       return new Response(JSON.stringify({ error: "Invalid confirmation phrase" }), {
@@ -59,7 +59,7 @@ serve(async (req) => {
       });
     }
 
-    if (!tables || !Array.isArray(tables) || tables.length === 0) {
+    if ((!tables || !Array.isArray(tables) || tables.length === 0) && !deleteAuthUsers) {
       return new Response(JSON.stringify({ error: "No tables specified" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -191,6 +191,63 @@ serve(async (req) => {
       }
     }
 
+    // Delete auth users if requested
+    if (deleteAuthUsers) {
+      try {
+        // Get all user IDs that are NOT admins
+        const { data: allProfiles, error: profilesError } = await adminClient
+          .from("profiles")
+          .select("id");
+
+        if (profilesError) {
+          results.push({
+            table: "auth.users",
+            success: false,
+            message: `Erro ao buscar perfis: ${profilesError.message}`,
+          });
+        } else if (allProfiles) {
+          // Filter out admin user IDs
+          const nonAdminUserIds = allProfiles
+            .map((p) => p.id)
+            .filter((id) => !adminUserIds.includes(id));
+
+          let deletedCount = 0;
+          let errorCount = 0;
+
+          // Delete each non-admin user from auth.users
+          for (const userId of nonAdminUserIds) {
+            const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
+            if (deleteError) {
+              console.error(`Error deleting user ${userId}:`, deleteError);
+              errorCount++;
+            } else {
+              deletedCount++;
+            }
+          }
+
+          if (errorCount === 0) {
+            results.push({
+              table: "auth.users",
+              success: true,
+              message: `${deletedCount} usuários deletados do auth.users`,
+            });
+          } else {
+            results.push({
+              table: "auth.users",
+              success: false,
+              message: `${deletedCount} deletados, ${errorCount} erros`,
+            });
+          }
+        }
+      } catch (err) {
+        results.push({
+          table: "auth.users",
+          success: false,
+          message: err instanceof Error ? err.message : "Erro desconhecido",
+        });
+      }
+    }
+
     const successCount = results.filter((r) => r.success).length;
     const failCount = results.filter((r) => !r.success).length;
 
@@ -198,7 +255,7 @@ serve(async (req) => {
       JSON.stringify({
         success: failCount === 0,
         message: failCount === 0 
-          ? `Limpeza concluída! ${successCount} tabelas limpas.`
+          ? `Limpeza concluída! ${successCount} ${deleteAuthUsers ? "itens limpos" : "tabelas limpas"}.`
           : `Limpeza parcial: ${successCount} sucesso, ${failCount} erros.`,
         results,
       }),
