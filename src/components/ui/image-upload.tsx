@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { Upload, Link, Loader2, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, Link, Loader2, X, Image as ImageIcon, Crop } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { ImageCropper } from '@/components/ui/image-cropper';
 
 interface ImageUploadProps {
   value?: string;
@@ -18,6 +19,9 @@ interface ImageUploadProps {
   className?: string;
   aspectRatio?: 'square' | 'video' | 'auto';
   maxSizeMB?: number;
+  enableCrop?: boolean;
+  cropAspectRatio?: number;
+  circularCrop?: boolean;
 }
 
 export function ImageUpload({
@@ -30,17 +34,38 @@ export function ImageUpload({
   className,
   aspectRatio = 'auto',
   maxSizeMB = 5,
+  enableCrop = true,
+  cropAspectRatio,
+  circularCrop = false,
 }: ImageUploadProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [urlInput, setUrlInput] = useState(value || '');
   const [activeTab, setActiveTab] = useState<string>('upload');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados do cropper
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string>('');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const aspectRatioClass = {
     square: 'aspect-square max-h-32',
     video: 'aspect-video max-h-24',
     auto: 'aspect-auto h-20',
+  };
+
+  // Determinar aspect ratio para o crop baseado no aspectRatio prop
+  const getCropAspectRatio = () => {
+    if (cropAspectRatio) return cropAspectRatio;
+    switch (aspectRatio) {
+      case 'square':
+        return 1;
+      case 'video':
+        return 16 / 9;
+      default:
+        return undefined;
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,6 +92,23 @@ export function ImageUpload({
       return;
     }
 
+    // Se crop está habilitado, abrir o cropper
+    if (enableCrop) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImageToCrop(reader.result as string);
+        setPendingFile(file);
+        setCropperOpen(true);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // Se crop não está habilitado, fazer upload direto
+    await uploadFile(file);
+  };
+
+  const uploadFile = async (file: File | Blob) => {
     setIsUploading(true);
 
     try {
@@ -81,7 +123,7 @@ export function ImageUpload({
       }
 
       // Gerar nome único para o arquivo
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file instanceof File ? file.name.split('.').pop() : 'jpg';
       const fileName = `${user.id}/${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
@@ -118,6 +160,22 @@ export function ImageUpload({
     }
   };
 
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropperOpen(false);
+    setImageToCrop('');
+    setPendingFile(null);
+    await uploadFile(croppedBlob);
+  };
+
+  const handleCropCancel = () => {
+    setCropperOpen(false);
+    setImageToCrop('');
+    setPendingFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleUrlSubmit = () => {
     if (urlInput.trim()) {
       onChange(urlInput.trim());
@@ -131,6 +189,14 @@ export function ImageUpload({
   const handleClear = () => {
     onChange('');
     setUrlInput('');
+  };
+
+  // Abrir cropper para imagem existente
+  const handleEditCrop = () => {
+    if (value) {
+      setImageToCrop(value);
+      setCropperOpen(true);
+    }
   };
 
   return (
@@ -151,15 +217,29 @@ export function ImageUpload({
               e.currentTarget.src = '/placeholder.svg';
             }}
           />
-          <Button
-            type="button"
-            size="icon"
-            variant="destructive"
-            className="absolute top-1 right-1 h-6 w-6"
-            onClick={handleClear}
-          >
-            <X className="h-3 w-3" />
-          </Button>
+          <div className="absolute top-1 right-1 flex gap-1">
+            {enableCrop && (
+              <Button
+                type="button"
+                size="icon"
+                variant="secondary"
+                className="h-6 w-6"
+                onClick={handleEditCrop}
+                title="Ajustar imagem"
+              >
+                <Crop className="h-3 w-3" />
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="icon"
+              variant="destructive"
+              className="h-6 w-6"
+              onClick={handleClear}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -252,6 +332,16 @@ export function ImageUpload({
           </Button>
         </div>
       )}
+
+      {/* Modal de Crop */}
+      <ImageCropper
+        imageSrc={imageToCrop}
+        open={cropperOpen}
+        onClose={handleCropCancel}
+        onCropComplete={handleCropComplete}
+        aspectRatio={getCropAspectRatio()}
+        circularCrop={circularCrop}
+      />
     </div>
   );
 }
