@@ -110,16 +110,15 @@ export function RaffleCard({ raffle }: RaffleCardProps) {
           <div className="flex items-center justify-between text-xs md:text-sm">
             <span className="text-muted-foreground flex items-center gap-1">
               <Users className="h-3.5 w-3.5 md:h-4 md:w-4" />
-              <span className="hidden xs:inline">Números vendidos</span>
-              <span className="xs:hidden">Vendidos</span>
+              <span>Disponibilidade</span>
             </span>
-            <span className="font-semibold tabular-nums">
-              {ticketsSold} <span className="text-muted-foreground font-normal">/ {raffle.total_numbers}</span>
+            <span className="font-semibold tabular-nums text-primary">
+              {progress < 100 ? 'Disponível' : 'Esgotado'}
             </span>
           </div>
           <div className="relative">
             <Progress value={progress} className="h-2 md:h-2.5" />
-            {progress > 80 && (
+            {progress > 80 && progress < 100 && (
               <span className="absolute -top-5 md:-top-6 right-0 text-[10px] md:text-xs font-medium text-destructive animate-pulse">
                 🔥 Quase esgotando!
               </span>

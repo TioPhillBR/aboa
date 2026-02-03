@@ -24,7 +24,9 @@ import {
   Gift,
   UserCheck,
   Share2,
-  FileText
+  FileText,
+  Activity,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -47,7 +49,9 @@ const adminLinks = [
   { href: '/admin/afiliados', label: 'Afiliados', icon: UserCheck },
   { href: '/admin/compartilhamentos', label: 'Compartilhamentos', icon: Share2 },
   { href: '/admin/usuarios', label: 'Usuários', icon: Users },
+  { href: '/admin/usuarios-online', label: 'Online Agora', icon: Activity },
   { href: '/admin/ganhadores', label: 'Ganhadores', icon: Trophy },
+  { href: '/admin/suporte', label: 'Suporte', icon: MessageSquare },
   { href: '/admin/relatorios', label: 'Relatórios', icon: FileText },
 ];
 
