@@ -37,7 +37,6 @@ import {
   Ticket,
   Sparkles,
   Clock,
-  TrendingUp,
   QrCode,
   Gift,
   Banknote,
@@ -156,19 +155,6 @@ export default function Carteira() {
         return 'bg-muted';
     }
   };
-
-  // Calcular estatísticas
-  const totalDeposits = transactions
-    .filter(t => t.type === 'deposit')
-    .reduce((sum, t) => sum + t.amount, 0);
-  
-  const totalPrizes = transactions
-    .filter(t => t.type === 'prize')
-    .reduce((sum, t) => sum + t.amount, 0);
-  
-  const totalSpent = transactions
-    .filter(t => t.type === 'purchase')
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
   if (!user) {
     return (
@@ -433,57 +419,6 @@ export default function Carteira() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Estatísticas */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Resumo
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10">
-                  <div className="flex items-center gap-2">
-                    <ArrowDownLeft className="h-4 w-4 text-green-600" />
-                    <span className="text-sm">Total Depositado</span>
-                  </div>
-                  <span className="font-semibold text-green-600">
-                    R$ {totalDeposits.toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg bg-yellow-500/10">
-                  <div className="flex items-center gap-2">
-                    <Trophy className="h-4 w-4 text-yellow-600" />
-                    <span className="text-sm">Prêmios Ganhos</span>
-                  </div>
-                  <span className="font-semibold text-yellow-600">
-                    R$ {totalPrizes.toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10">
-                  <div className="flex items-center gap-2">
-                    <ArrowUpRight className="h-4 w-4 text-red-600" />
-                    <span className="text-sm">Total Gasto</span>
-                  </div>
-                  <span className="font-semibold text-red-600">
-                    R$ {totalSpent.toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10">
-                  <div className="flex items-center gap-2">
-                    <Gift className="h-4 w-4 text-amber-600" />
-                    <span className="text-sm">Bônus de Indicações</span>
-                  </div>
-                  <span className="font-semibold text-amber-600">
-                    R$ {bonusBalance.toFixed(2)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Ações Rápidas */}
             <Card>
               <CardHeader>
