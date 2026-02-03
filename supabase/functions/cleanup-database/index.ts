@@ -20,7 +20,6 @@ serve(async (req) => {
       });
     }
 
-    // Create client with user's token to verify they're an admin
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -29,7 +28,6 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Get current user
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -38,7 +36,6 @@ serve(async (req) => {
       });
     }
 
-    // Check if user is admin
     const { data: adminRole, error: roleError } = await userClient
       .from("user_roles")
       .select("role")
@@ -53,8 +50,7 @@ serve(async (req) => {
       });
     }
 
-    // Parse request body
-    const { tables, confirmPhrase } = await req.json();
+    const { tables, confirmPhrase, preserveAdminData = false } = await req.json();
 
     if (confirmPhrase !== "LIMPAR DADOS") {
       return new Response(JSON.stringify({ error: "Invalid confirmation phrase" }), {
@@ -70,10 +66,9 @@ serve(async (req) => {
       });
     }
 
-    // Create admin client with service role (bypasses RLS)
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all admin user IDs
+    // Get all admin user IDs (only used for profiles if preserveAdminData is true)
     const { data: adminRoles, error: adminError } = await adminClient
       .from("user_roles")
       .select("user_id")
@@ -87,11 +82,10 @@ serve(async (req) => {
     }
 
     const adminUserIds = adminRoles?.map((r) => r.user_id) || [];
-    const results: { table: string; success: boolean; message: string; deleted?: number }[] = [];
+    const results: { table: string; success: boolean; message: string }[] = [];
 
     // Define table cleanup order (respect foreign keys)
     const tableOrder = [
-      // First delete child records
       "support_messages",
       "wallet_transactions",
       "raffle_tickets",
@@ -103,7 +97,6 @@ serve(async (req) => {
       "affiliate_withdrawals",
       "share_events",
       "referrals",
-      // Then parent records
       "support_tickets",
       "user_withdrawals",
       "payment_transactions",
@@ -115,11 +108,9 @@ serve(async (req) => {
       "affiliates",
       "referral_codes",
       "share_tracking",
-      // Finally profiles (last due to many FKs)
       "profiles",
     ];
 
-    // Sort tables by order
     const sortedTables = tables.sort((a: string, b: string) => {
       const indexA = tableOrder.indexOf(a);
       const indexB = tableOrder.indexOf(b);
@@ -128,131 +119,83 @@ serve(async (req) => {
 
     for (const table of sortedTables) {
       try {
-        let query;
-        
-        // Tables that reference user_id and should preserve admin data
-        const userIdTables = [
-          "profiles", "user_locations", "user_sessions", "wallets", 
-          "user_withdrawals", "payment_transactions", "support_tickets",
-          "affiliates", "referral_codes"
-        ];
+        let deleteResult;
 
-        const sharerIdTables = ["share_tracking"];
+        // Tables that ALWAYS preserve admin data (auth and permissions related)
+        const alwaysPreserveAdminTables = ["profiles"];
         
+        // Check if we should preserve admin data for this table
+        const shouldPreserveAdmin = preserveAdminData || alwaysPreserveAdminTables.includes(table);
+
         if (table === "profiles" && adminUserIds.length > 0) {
-          // Delete non-admin profiles
-          query = adminClient
-            .from(table)
+          // Always preserve admin profiles
+          deleteResult = await adminClient
+            .from("profiles")
             .delete()
             .not("id", "in", `(${adminUserIds.join(",")})`);
-        } else if (userIdTables.includes(table) && adminUserIds.length > 0) {
-          query = adminClient
-            .from(table)
+        } else if (shouldPreserveAdmin && ["user_locations", "user_sessions"].includes(table) && adminUserIds.length > 0) {
+          deleteResult = await adminClient
+            .from(table as "user_locations" | "user_sessions")
             .delete()
             .not("user_id", "in", `(${adminUserIds.join(",")})`);
-        } else if (sharerIdTables.includes(table) && adminUserIds.length > 0) {
-          query = adminClient
-            .from(table)
-            .delete()
-            .not("sharer_id", "in", `(${adminUserIds.join(",")})`);
-        } else if (table === "wallet_transactions") {
-          // Get admin wallet IDs first
-          const { data: adminWallets } = await adminClient
-            .from("wallets")
-            .select("id")
-            .in("user_id", adminUserIds);
-          
-          const adminWalletIds = adminWallets?.map((w) => w.id) || [];
-          
-          if (adminWalletIds.length > 0) {
-            query = adminClient
-              .from(table)
-              .delete()
-              .not("wallet_id", "in", `(${adminWalletIds.join(",")})`);
-          } else {
-            query = adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-          }
+        } else if (table === "user_locations") {
+          deleteResult = await adminClient.from("user_locations").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "user_sessions") {
+          deleteResult = await adminClient.from("user_sessions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
         } else if (table === "support_messages") {
-          // Get admin ticket IDs first
-          const { data: adminTickets } = await adminClient
-            .from("support_tickets")
-            .select("id")
-            .in("user_id", adminUserIds);
-          
-          const adminTicketIds = adminTickets?.map((t) => t.id) || [];
-          
-          if (adminTicketIds.length > 0) {
-            query = adminClient
-              .from(table)
-              .delete()
-              .not("ticket_id", "in", `(${adminTicketIds.join(",")})`);
-          } else {
-            query = adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-          }
-        } else if (table === "share_events") {
-          // Get admin share tracking IDs
-          const { data: adminShares } = await adminClient
-            .from("share_tracking")
-            .select("id")
-            .in("sharer_id", adminUserIds);
-          
-          const adminShareIds = adminShares?.map((s) => s.id) || [];
-          
-          if (adminShareIds.length > 0) {
-            query = adminClient
-              .from(table)
-              .delete()
-              .not("share_tracking_id", "in", `(${adminShareIds.join(",")})`);
-          } else {
-            query = adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-          }
+          deleteResult = await adminClient.from("support_messages").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "support_tickets") {
+          deleteResult = await adminClient.from("support_tickets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "wallet_transactions") {
+          deleteResult = await adminClient.from("wallet_transactions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "wallets") {
+          deleteResult = await adminClient.from("wallets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "user_withdrawals") {
+          deleteResult = await adminClient.from("user_withdrawals").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "payment_transactions") {
+          deleteResult = await adminClient.from("payment_transactions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "raffle_tickets") {
+          deleteResult = await adminClient.from("raffle_tickets").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "raffle_prizes") {
+          deleteResult = await adminClient.from("raffle_prizes").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "raffles") {
+          deleteResult = await adminClient.from("raffles").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "scratch_chances") {
+          deleteResult = await adminClient.from("scratch_chances").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "scratch_symbols") {
+          deleteResult = await adminClient.from("scratch_symbols").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "scratch_card_batches") {
+          deleteResult = await adminClient.from("scratch_card_batches").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "scratch_cards") {
+          deleteResult = await adminClient.from("scratch_cards").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "affiliate_sales") {
+          deleteResult = await adminClient.from("affiliate_sales").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "affiliate_withdrawals") {
+          deleteResult = await adminClient.from("affiliate_withdrawals").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "affiliates") {
+          deleteResult = await adminClient.from("affiliates").delete().neq("id", "00000000-0000-0000-0000-000000000000");
         } else if (table === "referrals") {
-          // Get admin referral code IDs
-          const { data: adminRefCodes } = await adminClient
-            .from("referral_codes")
-            .select("id")
-            .in("user_id", adminUserIds);
-          
-          const adminRefCodeIds = adminRefCodes?.map((r) => r.id) || [];
-          
-          if (adminRefCodeIds.length > 0) {
-            query = adminClient
-              .from(table)
-              .delete()
-              .not("referral_code_id", "in", `(${adminRefCodeIds.join(",")})`);
-          } else {
-            query = adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-          }
-        } else if (["affiliate_sales", "affiliate_withdrawals"].includes(table)) {
-          // Get admin affiliate IDs
-          const { data: adminAffiliates } = await adminClient
-            .from("affiliates")
-            .select("id")
-            .in("user_id", adminUserIds);
-          
-          const adminAffiliateIds = adminAffiliates?.map((a) => a.id) || [];
-          
-          if (adminAffiliateIds.length > 0) {
-            query = adminClient
-              .from(table)
-              .delete()
-              .not("affiliate_id", "in", `(${adminAffiliateIds.join(",")})`);
-          } else {
-            query = adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-          }
+          deleteResult = await adminClient.from("referrals").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "referral_codes") {
+          deleteResult = await adminClient.from("referral_codes").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "share_events") {
+          deleteResult = await adminClient.from("share_events").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        } else if (table === "share_tracking") {
+          deleteResult = await adminClient.from("share_tracking").delete().neq("id", "00000000-0000-0000-0000-000000000000");
         } else {
-          // For other tables, delete all records
-          query = adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        }
-
-        // Execute deletion
-        const { error: deleteError } = await query;
-
-        if (deleteError) {
           results.push({
             table,
             success: false,
-            message: deleteError.message,
+            message: `Tabela não suportada: ${table}`,
+          });
+          continue;
+        }
+
+        if (deleteResult.error) {
+          results.push({
+            table,
+            success: false,
+            message: deleteResult.error.message,
           });
         } else {
           results.push({
