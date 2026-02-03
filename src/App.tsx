@@ -35,6 +35,7 @@ import AdminAfiliados from "./pages/admin/Afiliados";
 import AdminCompartilhamentos from "./pages/admin/Compartilhamentos";
 import AdminPremios from "./pages/admin/Premios";
 import AdminRelatorios from "./pages/admin/Relatorios";
+import AdminConfiguracoes from "./pages/admin/Configuracoes";
 import AfiliadoDashboard from "./pages/afiliado/Index";
 import AfiliadoCadastro from "./pages/afiliado/Cadastro";
 import SorteioAoVivo from "./pages/SorteioAoVivo";
@@ -96,6 +97,7 @@ const App = () => (
                 <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><AdminUsuarios /></ProtectedRoute>} />
                 <Route path="/admin/ganhadores" element={<ProtectedRoute requireAdmin><AdminGanhadores /></ProtectedRoute>} />
                 <Route path="/admin/relatorios" element={<ProtectedRoute requireAdmin><AdminRelatorios /></ProtectedRoute>} />
+                <Route path="/admin/configuracoes" element={<ProtectedRoute requireAdmin><AdminConfiguracoes /></ProtectedRoute>} />
                 
                 {/* Affiliate Routes */}
                 <Route path="/afiliado" element={<ProtectedRoute><AfiliadoDashboard /></ProtectedRoute>} />
