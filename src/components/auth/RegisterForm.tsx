@@ -847,11 +847,11 @@ export function RegisterForm() {
                     </label>
                     <p className="text-xs text-muted-foreground">
                       Ao marcar esta opção, você concorda com nossa{' '}
-                      <Link to="/politica-privacidade" className="text-primary hover:underline" target="_blank">
+                      <Link to="/politica-de-privacidade" className="text-primary hover:underline" target="_blank">
                         Política de Privacidade
                       </Link>
                       {' '}e{' '}
-                      <Link to="/termos-uso" className="text-primary hover:underline" target="_blank">
+                      <Link to="/termos-de-uso" className="text-primary hover:underline" target="_blank">
                         Termos de Uso
                       </Link>
                       , em conformidade com a LGPD (Lei Geral de Proteção de Dados).

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSupport, SupportTicket } from '@/hooks/useSupport';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,7 +20,10 @@ import {
   AlertCircle,
   Loader2,
   Headphones,
-  FileText
+  FileText,
+  Search,
+  Filter,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -67,6 +70,12 @@ export default function Suporte() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Filters state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -94,8 +103,42 @@ export default function Suporte() {
     }
   };
 
-  const openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress');
-  const closedTickets = tickets.filter(t => t.status === 'resolved' || t.status === 'closed');
+  const clearFilters = () => {
+    setSearchQuery('');
+    setCategoryFilter('all');
+    setPriorityFilter('all');
+  };
+
+  const hasActiveFilters = searchQuery || categoryFilter !== 'all' || priorityFilter !== 'all';
+
+  // Filter tickets
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(ticket => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = 
+          ticket.subject.toLowerCase().includes(query) ||
+          ticket.description.toLowerCase().includes(query);
+        if (!matchesSearch) return false;
+      }
+
+      // Category filter
+      if (categoryFilter !== 'all' && ticket.category !== categoryFilter) {
+        return false;
+      }
+
+      // Priority filter
+      if (priorityFilter !== 'all' && ticket.priority !== priorityFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [tickets, searchQuery, categoryFilter, priorityFilter]);
+
+  const openTickets = filteredTickets.filter(t => t.status === 'open' || t.status === 'in_progress');
+  const closedTickets = filteredTickets.filter(t => t.status === 'resolved' || t.status === 'closed');
 
   const TicketCard = ({ ticket }: { ticket: SupportTicket }) => {
     const StatusIcon = statusConfig[ticket.status].icon;
@@ -240,6 +283,70 @@ export default function Suporte() {
         </Dialog>
       </div>
 
+      {/* Search and Filters */}
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por assunto ou descrição..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button 
+            variant={showFilters ? "secondary" : "outline"} 
+            size="icon"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter className="h-4 w-4" />
+          </Button>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="icon" onClick={clearFilters}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {showFilters && (
+          <div className="flex gap-4 p-4 bg-muted/50 rounded-lg">
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">Categoria</Label>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {categoryOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">Prioridade</Label>
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="low">Baixa</SelectItem>
+                  <SelectItem value="medium">Média</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
+                  <SelectItem value="urgent">Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin" />
@@ -258,6 +365,19 @@ export default function Suporte() {
             </Button>
           </CardContent>
         </Card>
+      ) : filteredTickets.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="font-semibold text-lg mb-2">Nenhum resultado</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Nenhum chamado encontrado com os filtros aplicados.
+            </p>
+            <Button variant="outline" onClick={clearFilters}>
+              Limpar filtros
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <Tabs defaultValue="open" className="space-y-4">
           <TabsList>
@@ -272,7 +392,7 @@ export default function Suporte() {
           </TabsList>
 
           <TabsContent value="open">
-            <ScrollArea className="h-[calc(100vh-300px)]">
+            <ScrollArea className="h-[calc(100vh-400px)]">
               <div className="space-y-3 pr-4">
                 {openTickets.length === 0 ? (
                   <Card>
@@ -290,7 +410,7 @@ export default function Suporte() {
           </TabsContent>
 
           <TabsContent value="closed">
-            <ScrollArea className="h-[calc(100vh-300px)]">
+            <ScrollArea className="h-[calc(100vh-400px)]">
               <div className="space-y-3 pr-4">
                 {closedTickets.length === 0 ? (
                   <Card>

@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift, Users } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift, Users, Headphones } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
@@ -152,6 +152,13 @@ export function Header() {
                     <Link to="/perfil" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
                       Meu Perfil
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem asChild>
+                    <Link to="/suporte" className="flex items-center">
+                      <Headphones className="mr-2 h-4 w-4" />
+                      Suporte
                     </Link>
                   </DropdownMenuItem>
                   
@@ -302,6 +309,13 @@ export function Header() {
                     >
                       <User className="h-5 w-5" />
                       <span className="font-medium">Meu Perfil</span>
+                    </Link>
+                    <Link 
+                      to="/suporte" 
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                    >
+                      <Headphones className="h-5 w-5" />
+                      <span className="font-medium">Suporte</span>
                     </Link>
                     <Link 
                       to="/configuracoes" 

@@ -42,17 +42,44 @@ import {
   Loader2,
   Gift,
   MapPin,
-  X
+  X,
+  CheckCircle2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// Brazilian states
+// Brazilian states with names
 const BRAZILIAN_STATES = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS',
-  'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC',
-  'SP', 'SE', 'TO'
+  { code: 'AC', name: 'Acre' },
+  { code: 'AL', name: 'Alagoas' },
+  { code: 'AP', name: 'Amapá' },
+  { code: 'AM', name: 'Amazonas' },
+  { code: 'BA', name: 'Bahia' },
+  { code: 'CE', name: 'Ceará' },
+  { code: 'DF', name: 'Distrito Federal' },
+  { code: 'ES', name: 'Espírito Santo' },
+  { code: 'GO', name: 'Goiás' },
+  { code: 'MA', name: 'Maranhão' },
+  { code: 'MT', name: 'Mato Grosso' },
+  { code: 'MS', name: 'Mato Grosso do Sul' },
+  { code: 'MG', name: 'Minas Gerais' },
+  { code: 'PA', name: 'Pará' },
+  { code: 'PB', name: 'Paraíba' },
+  { code: 'PR', name: 'Paraná' },
+  { code: 'PE', name: 'Pernambuco' },
+  { code: 'PI', name: 'Piauí' },
+  { code: 'RJ', name: 'Rio de Janeiro' },
+  { code: 'RN', name: 'Rio Grande do Norte' },
+  { code: 'RS', name: 'Rio Grande do Sul' },
+  { code: 'RO', name: 'Rondônia' },
+  { code: 'RR', name: 'Roraima' },
+  { code: 'SC', name: 'Santa Catarina' },
+  { code: 'SP', name: 'São Paulo' },
+  { code: 'SE', name: 'Sergipe' },
+  { code: 'TO', name: 'Tocantins' },
 ];
+
+type LocationScope = 'national' | 'state' | 'city';
 
 interface RaffleWithStats extends Raffle {
   tickets_sold: number;
@@ -83,7 +110,11 @@ export default function AdminSorteios() {
 
   // Prizes state for the new raffle
   const [prizes, setPrizes] = useState<PrizeConfig[]>([]);
-  const [locationInput, setLocationInput] = useState('');
+  
+  // Location restriction state
+  const [locationScope, setLocationScope] = useState<LocationScope>('national');
+  const [selectedState, setSelectedState] = useState('');
+  const [cityInput, setCityInput] = useState('');
 
   useEffect(() => {
     fetchRaffles();
@@ -208,7 +239,9 @@ export default function AdminSorteios() {
       setCreateDialogOpen(false);
       setFormData({ title: '', description: '', price: '', total_numbers: '', draw_date: '', image_url: '', allowed_locations: [] });
       setPrizes([]);
-      setLocationInput('');
+      setLocationScope('national');
+      setSelectedState('');
+      setCityInput('');
       fetchRaffles();
     } catch (error) {
       console.error('Error creating raffle:', error);
@@ -385,59 +418,176 @@ export default function AdminSorteios() {
                   />
 
                   {/* Restrição de Localidade */}
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
                       Restrição de Localidade (opcional)
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Deixe vazio para permitir todas as localidades
+                      Defina a abrangência geográfica do sorteio
                     </p>
+                    
+                    {/* Scope selector */}
                     <div className="flex gap-2">
-                      <select
-                        value={locationInput}
-                        onChange={(e) => setLocationInput(e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="">Selecione um estado...</option>
-                        {BRAZILIAN_STATES.filter(s => !formData.allowed_locations.includes(s)).map(state => (
-                          <option key={state} value={state}>{state}</option>
-                        ))}
-                      </select>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant={locationScope === 'national' ? 'default' : 'outline'}
+                        size="sm"
                         onClick={() => {
-                          if (locationInput && !formData.allowed_locations.includes(locationInput)) {
-                            setFormData({
-                              ...formData,
-                              allowed_locations: [...formData.allowed_locations, locationInput]
-                            });
-                            setLocationInput('');
-                          }
+                          setLocationScope('national');
+                          setFormData({ ...formData, allowed_locations: [] });
+                          setSelectedState('');
+                          setCityInput('');
                         }}
-                        disabled={!locationInput}
                       >
-                        Adicionar
+                        🇧🇷 Nacional
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={locationScope === 'state' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setLocationScope('state');
+                          setFormData({ ...formData, allowed_locations: [] });
+                          setCityInput('');
+                        }}
+                      >
+                        Estadual
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={locationScope === 'city' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setLocationScope('city');
+                          setFormData({ ...formData, allowed_locations: [] });
+                        }}
+                      >
+                        Municipal
                       </Button>
                     </div>
-                    {formData.allowed_locations.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {formData.allowed_locations.map(loc => (
-                          <Badge key={loc} variant="secondary" className="gap-1">
-                            {loc}
-                            <button
-                              type="button"
-                              onClick={() => setFormData({
-                                ...formData,
-                                allowed_locations: formData.allowed_locations.filter(l => l !== loc)
-                              })}
-                              className="hover:text-destructive"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        ))}
+
+                    {locationScope === 'national' && (
+                      <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Sorteio aberto para todo o Brasil
+                      </p>
+                    )}
+
+                    {locationScope === 'state' && (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedState}
+                            onChange={(e) => setSelectedState(e.target.value)}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            <option value="">Selecione um estado...</option>
+                            {BRAZILIAN_STATES.filter(s => !formData.allowed_locations.includes(s.code)).map(state => (
+                              <option key={state.code} value={state.code}>{state.code} - {state.name}</option>
+                            ))}
+                          </select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              if (selectedState && !formData.allowed_locations.includes(selectedState)) {
+                                setFormData({
+                                  ...formData,
+                                  allowed_locations: [...formData.allowed_locations, selectedState]
+                                });
+                                setSelectedState('');
+                              }
+                            }}
+                            disabled={!selectedState}
+                          >
+                            Adicionar
+                          </Button>
+                        </div>
+                        {formData.allowed_locations.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {formData.allowed_locations.map(loc => {
+                              const stateName = BRAZILIAN_STATES.find(s => s.code === loc)?.name || loc;
+                              return (
+                                <Badge key={loc} variant="secondary" className="gap-1">
+                                  {loc} - {stateName}
+                                  <button
+                                    type="button"
+                                    onClick={() => setFormData({
+                                      ...formData,
+                                      allowed_locations: formData.allowed_locations.filter(l => l !== loc)
+                                    })}
+                                    className="hover:text-destructive"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {locationScope === 'city' && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-3 gap-2">
+                          <select
+                            value={selectedState}
+                            onChange={(e) => setSelectedState(e.target.value)}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            <option value="">UF</option>
+                            {BRAZILIAN_STATES.map(state => (
+                              <option key={state.code} value={state.code}>{state.code}</option>
+                            ))}
+                          </select>
+                          <Input
+                            placeholder="Nome da cidade..."
+                            value={cityInput}
+                            onChange={(e) => setCityInput(e.target.value)}
+                            className="col-span-2"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            if (selectedState && cityInput.trim()) {
+                              const locationEntry = `${cityInput.trim()}-${selectedState}`;
+                              if (!formData.allowed_locations.includes(locationEntry)) {
+                                setFormData({
+                                  ...formData,
+                                  allowed_locations: [...formData.allowed_locations, locationEntry]
+                                });
+                                setCityInput('');
+                              }
+                            }
+                          }}
+                          disabled={!selectedState || !cityInput.trim()}
+                        >
+                          Adicionar Cidade
+                        </Button>
+                        {formData.allowed_locations.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {formData.allowed_locations.map(loc => (
+                              <Badge key={loc} variant="secondary" className="gap-1">
+                                {loc}
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData({
+                                    ...formData,
+                                    allowed_locations: formData.allowed_locations.filter(l => l !== loc)
+                                  })}
+                                  className="hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

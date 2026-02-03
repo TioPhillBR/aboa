@@ -45,6 +45,8 @@ import AfiliadoCadastro from "./pages/afiliado/Cadastro";
 import Suporte from "./pages/Suporte";
 import SuporteDetail from "./pages/SuporteDetail";
 import SorteioAoVivo from "./pages/SorteioAoVivo";
+import TermosUso from "./pages/TermosUso";
+import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import NotFound from "./pages/NotFound";
 
 // Component to track user session
@@ -93,6 +95,8 @@ const App = () => (
                 <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
                 <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
                 <Route path="/ganhadores" element={<Ganhadores />} />
+                <Route path="/termos-de-uso" element={<TermosUso />} />
+                <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
                 <Route path="/meus-tickets" element={<ProtectedRoute><MeusTickets /></ProtectedRoute>} />
                 <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
                 <Route path="/indicacoes" element={<ProtectedRoute><Indicacoes /></ProtectedRoute>} />
