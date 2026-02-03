@@ -334,17 +334,21 @@ export default function AdminUsuarios() {
     try {
       switch (actionType) {
         case 'promote_admin':
-          // Update existing role to admin
-          const { error: promoteError } = await supabase
+          // Update existing user role to admin
+          const { data: updatedRole, error: promoteError } = await supabase
             .from('user_roles')
-            .update({ role: 'admin', created_by: user.id })
-            .eq('user_id', actionUser.id);
+            .update({ role: 'admin' as const, created_by: user.id })
+            .eq('user_id', actionUser.id)
+            .eq('role', 'user')
+            .select();
           
-          if (promoteError) {
-            // If no existing role, insert new one
+          if (promoteError) throw promoteError;
+          
+          // If no rows updated (user didn't have 'user' role), try insert
+          if (!updatedRole || updatedRole.length === 0) {
             const { error: insertError } = await supabase.from('user_roles').insert({
               user_id: actionUser.id,
-              role: 'admin',
+              role: 'admin' as const,
               created_by: user.id,
             });
             if (insertError) throw insertError;
@@ -353,10 +357,10 @@ export default function AdminUsuarios() {
           break;
           
         case 'remove_admin':
-          // Downgrade to user instead of deleting
+          // Downgrade admin to user
           const { error: demoteError } = await supabase
             .from('user_roles')
-            .update({ role: 'user' })
+            .update({ role: 'user' as const })
             .eq('user_id', actionUser.id)
             .eq('role', 'admin');
           if (demoteError) throw demoteError;
