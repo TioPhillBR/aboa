@@ -110,6 +110,7 @@ export function DatabaseCleanupPanel() {
   const [confirmText, setConfirmText] = useState('');
   const [results, setResults] = useState<{ table: string; success: boolean; message: string }[]>([]);
   const [showResults, setShowResults] = useState(false);
+  const [preserveAdminData, setPreserveAdminData] = useState(false);
 
   const CONFIRM_PHRASE = 'LIMPAR DADOS';
 
@@ -157,7 +158,8 @@ export function DatabaseCleanupPanel() {
       const { data, error } = await supabase.functions.invoke('cleanup-database', {
         body: {
           tables: tablesToClear,
-          confirmPhrase: CONFIRM_PHRASE
+          confirmPhrase: CONFIRM_PHRASE,
+          preserveAdminData: preserveAdminData
         }
       });
 
@@ -208,6 +210,28 @@ export function DatabaseCleanupPanel() {
               privilégios administrativos que ignoram as políticas de segurança (RLS), garantindo 
               que todos os dados selecionados sejam removidos completamente.
             </div>
+          </div>
+        </div>
+
+        {/* Preserve admin data toggle */}
+        <div className="p-4 rounded-lg border bg-card">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Preservar dados dos administradores
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {preserveAdminData 
+                  ? "Dados de carteira, tickets e transações dos admins serão mantidos"
+                  : "Todos os dados serão limpos, exceto perfis e permissões dos admins"
+                }
+              </p>
+            </div>
+            <Checkbox 
+              checked={preserveAdminData} 
+              onCheckedChange={(checked) => setPreserveAdminData(checked === true)}
+            />
           </div>
         </div>
 
