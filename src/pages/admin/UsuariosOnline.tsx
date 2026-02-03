@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,13 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Users, 
@@ -22,11 +29,13 @@ import {
   Clock,
   Monitor,
   Smartphone,
-  LogIn,
-  LogOut,
   Activity,
   UserCheck,
-  UserX
+  UserX,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -58,17 +67,24 @@ interface UserWithStatus {
   lastSession?: UserSession;
 }
 
+const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+
 export default function UsuariosOnline() {
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [allUsers, setAllUsers] = useState<UserWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('online');
+  
+  // Pagination state for each tab
+  const [onlinePage, setOnlinePage] = useState(1);
+  const [offlinePage, setOfflinePage] = useState(1);
+  const [allPage, setAllPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Fetch all users and sessions in parallel
       const [usersResult, sessionsResult] = await Promise.all([
         supabase
           .from('profiles')
@@ -94,7 +110,6 @@ export default function UsuariosOnline() {
       const sessionsData = sessionsResult.data || [];
       setSessions(sessionsData);
 
-      // Map users with their online status
       const usersData = usersResult.data || [];
       const activeSessionsByUser = new Map<string, UserSession>();
       
@@ -125,7 +140,6 @@ export default function UsuariosOnline() {
   useEffect(() => {
     fetchData();
 
-    // Set up real-time subscription
     const channel = supabase
       .channel('user_sessions_changes')
       .on(
@@ -141,7 +155,6 @@ export default function UsuariosOnline() {
       )
       .subscribe();
 
-    // Auto-refresh every 30 seconds
     const interval = setInterval(fetchData, 30000);
 
     return () => {
@@ -150,26 +163,56 @@ export default function UsuariosOnline() {
     };
   }, []);
 
-  const onlineUsers = allUsers.filter(u => u.isOnline);
-  const offlineUsers = allUsers.filter(u => !u.isOnline);
+  // Reset page when search changes
+  useEffect(() => {
+    setOnlinePage(1);
+    setOfflinePage(1);
+    setAllPage(1);
+  }, [search]);
 
-  const filteredOnlineUsers = onlineUsers.filter(u => 
-    u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.phone?.includes(search) ||
-    u.cpf?.includes(search)
+  const onlineUsers = useMemo(() => allUsers.filter(u => u.isOnline), [allUsers]);
+  const offlineUsers = useMemo(() => allUsers.filter(u => !u.isOnline), [allUsers]);
+
+  const filteredOnlineUsers = useMemo(() => 
+    onlineUsers.filter(u => 
+      u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      u.phone?.includes(search) ||
+      u.cpf?.includes(search)
+    ), [onlineUsers, search]
   );
 
-  const filteredOfflineUsers = offlineUsers.filter(u => 
-    u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.phone?.includes(search) ||
-    u.cpf?.includes(search)
+  const filteredOfflineUsers = useMemo(() =>
+    offlineUsers.filter(u => 
+      u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      u.phone?.includes(search) ||
+      u.cpf?.includes(search)
+    ), [offlineUsers, search]
   );
 
-  const filteredAllUsers = allUsers.filter(u => 
-    u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.phone?.includes(search) ||
-    u.cpf?.includes(search)
+  const filteredAllUsers = useMemo(() =>
+    allUsers.filter(u => 
+      u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      u.phone?.includes(search) ||
+      u.cpf?.includes(search)
+    ), [allUsers, search]
   );
+
+  // Pagination calculations
+  const getPaginatedData = <T,>(data: T[], page: number) => {
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return data.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = (totalItems: number) => Math.ceil(totalItems / itemsPerPage);
+
+  const paginatedOnlineUsers = getPaginatedData(filteredOnlineUsers, onlinePage);
+  const paginatedOfflineUsers = getPaginatedData(filteredOfflineUsers, offlinePage);
+  const paginatedAllUsers = getPaginatedData(filteredAllUsers, allPage);
+
+  const totalOnlinePages = getTotalPages(filteredOnlineUsers.length);
+  const totalOfflinePages = getTotalPages(filteredOfflineUsers.length);
+  const totalAllPages = getTotalPages(filteredAllUsers.length);
 
   const getDeviceIcon = (userAgent: string | null) => {
     if (!userAgent) return <Monitor className="h-4 w-4" />;
@@ -186,6 +229,68 @@ export default function UsuariosOnline() {
     if (/mac/i.test(userAgent)) return 'Mac';
     if (/linux/i.test(userAgent)) return 'Linux';
     return 'Outro';
+  };
+
+  const Pagination = ({ 
+    currentPage, 
+    totalPages, 
+    totalItems,
+    onPageChange 
+  }: { 
+    currentPage: number; 
+    totalPages: number;
+    totalItems: number;
+    onPageChange: (page: number) => void;
+  }) => {
+    const startItem = (currentPage - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+    if (totalItems === 0) return null;
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4">
+        <p className="text-sm text-muted-foreground">
+          Mostrando {startItem} a {endItem} de {totalItems} usuários
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onPageChange(1)}
+            disabled={currentPage === 1}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm px-2">
+            Página {currentPage} de {totalPages || 1}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage >= totalPages}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   const UserRow = ({ user, showDevice = false }: { user: UserWithStatus; showDevice?: boolean }) => (
@@ -212,12 +317,16 @@ export default function UsuariosOnline() {
       <TableCell className="text-sm text-muted-foreground">
         {user.cpf || '-'}
       </TableCell>
-      {showDevice && user.lastSession && (
+      {showDevice && (
         <TableCell>
-          <div className="flex items-center gap-2">
-            {getDeviceIcon(user.lastSession.user_agent)}
-            <span className="text-sm">{getDeviceName(user.lastSession.user_agent)}</span>
-          </div>
+          {user.lastSession ? (
+            <div className="flex items-center gap-2">
+              {getDeviceIcon(user.lastSession.user_agent)}
+              <span className="text-sm">{getDeviceName(user.lastSession.user_agent)}</span>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
         </TableCell>
       )}
       <TableCell>
@@ -337,15 +446,37 @@ export default function UsuariosOnline() {
           </Card>
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, telefone ou CPF..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search and Items Per Page */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, telefone ou CPF..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select
+            value={itemsPerPage.toString()}
+            onValueChange={(value) => {
+              setItemsPerPage(Number(value));
+              setOnlinePage(1);
+              setOfflinePage(1);
+              setAllPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ITEMS_PER_PAGE_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option.toString()}>
+                  {option} por página
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Tabs */}
@@ -385,23 +516,31 @@ export default function UsuariosOnline() {
                     Nenhum usuário online no momento
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Usuário</TableHead>
-                        <TableHead>CPF</TableHead>
-                        <TableHead>Dispositivo</TableHead>
-                        <TableHead>Cadastro</TableHead>
-                        <TableHead>Último Acesso</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredOnlineUsers.map((user) => (
-                        <UserRow key={user.id} user={user} showDevice />
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Usuário</TableHead>
+                          <TableHead>CPF</TableHead>
+                          <TableHead>Dispositivo</TableHead>
+                          <TableHead>Cadastro</TableHead>
+                          <TableHead>Último Acesso</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedOnlineUsers.map((user) => (
+                          <UserRow key={user.id} user={user} showDevice />
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <Pagination
+                      currentPage={onlinePage}
+                      totalPages={totalOnlinePages}
+                      totalItems={filteredOnlineUsers.length}
+                      onPageChange={setOnlinePage}
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -424,27 +563,30 @@ export default function UsuariosOnline() {
                     Nenhum usuário offline encontrado
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Usuário</TableHead>
-                        <TableHead>CPF</TableHead>
-                        <TableHead>Cadastro</TableHead>
-                        <TableHead>Último Acesso</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredOfflineUsers.slice(0, 50).map((user) => (
-                        <UserRow key={user.id} user={user} />
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-                {filteredOfflineUsers.length > 50 && (
-                  <p className="text-center text-sm text-muted-foreground mt-4">
-                    Mostrando 50 de {filteredOfflineUsers.length} usuários offline
-                  </p>
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Usuário</TableHead>
+                          <TableHead>CPF</TableHead>
+                          <TableHead>Cadastro</TableHead>
+                          <TableHead>Último Acesso</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedOfflineUsers.map((user) => (
+                          <UserRow key={user.id} user={user} />
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <Pagination
+                      currentPage={offlinePage}
+                      totalPages={totalOfflinePages}
+                      totalItems={filteredOfflineUsers.length}
+                      onPageChange={setOfflinePage}
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -467,27 +609,30 @@ export default function UsuariosOnline() {
                     Nenhum usuário encontrado
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Usuário</TableHead>
-                        <TableHead>CPF</TableHead>
-                        <TableHead>Cadastro</TableHead>
-                        <TableHead>Último Acesso</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAllUsers.slice(0, 100).map((user) => (
-                        <UserRow key={user.id} user={user} />
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-                {filteredAllUsers.length > 100 && (
-                  <p className="text-center text-sm text-muted-foreground mt-4">
-                    Mostrando 100 de {filteredAllUsers.length} usuários
-                  </p>
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Usuário</TableHead>
+                          <TableHead>CPF</TableHead>
+                          <TableHead>Cadastro</TableHead>
+                          <TableHead>Último Acesso</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedAllUsers.map((user) => (
+                          <UserRow key={user.id} user={user} />
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <Pagination
+                      currentPage={allPage}
+                      totalPages={totalAllPages}
+                      totalItems={filteredAllUsers.length}
+                      onPageChange={setAllPage}
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>
