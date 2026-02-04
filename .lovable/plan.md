@@ -1,146 +1,136 @@
 
+# Plano: Corrigir Métricas de Compartilhamentos no Admin
 
-# Plano: Rebranding para "A Boa"
+## Diagnóstico do Problema
 
-## Resumo
-Renomear o aplicativo de "Sorteio" para "A Boa", adicionar o logotipo fornecido no cabecalho (ocupando o maximo de espaco possivel) e ajustar a paleta de cores do tema claro para combinar com as cores do logotipo (verde e dourado/laranja).
+A página `/admin/compartilhamentos` está consultando as tabelas erradas. O sistema possui **dois mecanismos de compartilhamento paralelos**:
 
----
+1. **Sistema `share_tracking`** (usado atualmente pela página admin)
+   - Tabelas: `share_tracking`, `share_events`
+   - Estado: **VAZIO** - nenhum registro
 
-## Analise do Logotipo
+2. **Sistema `referral_codes`** (sistema real em uso)
+   - Tabelas: `referral_codes`, `referrals`
+   - Estado: **COM DADOS** - 12 indicações de Júlio Cesar para diversos usuários incluindo "josé das couves"
 
-O logotipo apresenta:
-- **Verde escuro/esmeralda** como cor principal (texto "A Boa")
-- **Dourado/Laranja** como cor de destaque (trevo de 4 folhas e slogan)
-- Estilo moderno e limpo
-
----
-
-## Mudancas Necessarias
-
-### 1. Adicionar a Imagem do Logotipo
-
-**Acao**: Copiar o arquivo do logotipo para a pasta de assets do projeto.
-
-| De | Para |
-|---|---|
-| `user-uploads://LOGO_A_BOA_-_CABEÇALHO.png` | `src/assets/logo-a-boa.png` |
+O usuário `juliocsm90@gmail.com` (Júlio Cesar dos Santos Moya) tem 12 indicações registradas na tabela `referrals`, mas a página admin busca dados de `share_tracking` que está vazia.
 
 ---
 
-### 2. Atualizar Metadados da Aplicacao
+## Solução Proposta
 
-**Arquivo**: `index.html`
-
-| Campo | Antes | Depois |
-|---|---|---|
-| `<title>` | Lovable App | A Boa - Vai na Certa, Vai na Boa |
-| `og:title` | Lovable App | A Boa - Sorteios e Raspadinhas |
-| `description` | Lovable Generated Project | Participe de sorteios e raspadinhas. Premios reais, diversao garantida! |
+Unificar a página `/admin/compartilhamentos` para exibir dados do sistema `referral_codes` + `referrals`, que é o sistema real em uso pela aplicação.
 
 ---
 
-### 3. Atualizar Cabecalho Principal
+## Etapas de Implementação
 
-**Arquivo**: `src/components/layout/Header.tsx`
+### 1. Atualizar Hook `useShareTracking.tsx`
 
-Mudancas no componente:
-- Remover o icone `Trophy` e o texto "Sorteio"
-- Importar e exibir a imagem do logotipo
-- Aplicar altura maxima de `h-10` ou `h-12` para ocupar o maior espaco possivel sem desconfigurar
-- Manter o logotipo responsivo
+Modificar as queries para buscar dados das tabelas corretas:
 
-**Exemplo do novo codigo**:
-```tsx
-import logoABoa from '@/assets/logo-a-boa.png';
+- **Query de referrers (quem indica)**:
+  ```sql
+  SELECT 
+    rc.*,
+    p.full_name,
+    p.avatar_url,
+    COUNT(r.id) as total_referrals,
+    SUM(r.bonus_awarded) as total_bonus
+  FROM referral_codes rc
+  JOIN profiles p ON rc.user_id = p.id
+  LEFT JOIN referrals r ON r.referral_code_id = rc.id
+  GROUP BY rc.id, p.id
+  ```
 
-// No JSX:
-<Link to="/" className="flex items-center">
-  <img 
-    src={logoABoa} 
-    alt="A Boa - Vai na Certa, Vai na Boa" 
-    className="h-10 md:h-12 w-auto"
-  />
-</Link>
+- **Métricas calculadas**:
+  - Total Links = Contagem de `referral_codes`
+  - Cadastros = Contagem de `referrals`
+  - Créditos = Soma de `bonus_awarded` em `referrals`
+  - Conversão = (cadastros / uses_count) * 100
+
+### 2. Atualizar Interface `AdminCompartilhamentos.tsx`
+
+Adaptar a tabela e métricas para refletir os novos dados:
+
+| Campo Atual | Campo Novo |
+|-------------|------------|
+| `share_code` | `code` (de referral_codes) |
+| `clicks` | `uses_count` |
+| `signups` | Contagem de referrals |
+| `credits_earned` | Soma de `bonus_awarded` |
+| `sharer` | Profile do user_id |
+
+### 3. Adicionar Lista de Indicados
+
+Para cada referrer, mostrar os usuários indicados:
+- Nome do indicado
+- Data do cadastro
+- Bônus pago
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useShareTracking.tsx` | Trocar queries de `share_tracking` para `referral_codes` + `referrals` |
+| `src/pages/admin/Compartilhamentos.tsx` | Atualizar colunas, métricas e adicionar expansão de detalhes |
+
+---
+
+## Resultado Esperado
+
+Após a implementação:
+- O admin verá as 12 indicações de Júlio Cesar
+- Métricas mostrarão: 15 links, 12 cadastros, R$ 60,00 em bônus
+- Cada linha terá opção de expandir e ver os indicados
+
+---
+
+## Seção Técnica
+
+### Queries Supabase
+
+**Buscar todos os referrers com estatísticas:**
+```typescript
+const { data } = await supabase
+  .from('referral_codes')
+  .select(`
+    *,
+    owner:profiles!referral_codes_user_id_fkey(full_name, avatar_url),
+    referrals(id, referred_id, bonus_awarded, created_at)
+  `)
+  .order('uses_count', { ascending: false });
 ```
 
----
-
-### 4. Atualizar Paleta de Cores (Tema Claro)
-
-**Arquivo**: `src/index.css`
-
-Ajustar as variaveis CSS do `:root` (tema claro) para refletir as cores do logotipo:
-
-| Variavel | Antes (HSL) | Depois (HSL) | Cor |
-|---|---|---|---|
-| `--primary` | 262 83% 58% (roxo) | 152 70% 35% | Verde esmeralda |
-| `--primary-foreground` | 0 0% 100% | 0 0% 100% | Branco (manter) |
-| `--accent` | 45 100% 51% | 38 95% 50% | Dourado/laranja |
-| `--accent-foreground` | 0 0% 10% | 0 0% 10% | Preto (manter) |
-| `--ring` | 262 83% 58% | 152 70% 35% | Verde esmeralda |
-| `--sidebar-primary` | 262 83% 58% | 152 70% 35% | Verde esmeralda |
-| `--sidebar-ring` | 262 83% 58% | 152 70% 35% | Verde esmeralda |
-
-Atualizar os gradientes:
-| Variavel | Antes | Depois |
-|---|---|---|
-| `--gradient-primary` | roxo/magenta | Verde escuro para verde claro |
-| `--gradient-gold` | (manter) | Dourado/laranja (ajustar tonalidade) |
-| `--shadow-glow-primary` | roxo | Verde esmeralda |
-
-**Nota**: O tema escuro (`.dark`) NAO sera alterado para manter a experiencia noturna.
-
----
-
-### 5. Atualizar Pagina Inicial
-
-**Arquivo**: `src/pages/Index.tsx`
-
-Mudancas pontuais:
-- Alterar o titulo hero de "Sorteios & Raspadinhas" para "A Boa" com subtitulo
-- Ajustar gradientes de texto para usar as novas cores (verde/dourado)
-
----
-
-### 6. Atualizar Menu Mobile
-
-**Arquivo**: `src/components/layout/MobileNav.tsx`
-
-Nenhuma mudanca estrutural necessaria - as cores serao atualizadas automaticamente via CSS.
-
----
-
-## Resumo de Arquivos
-
-| Arquivo | Tipo de Mudanca |
-|---|---|
-| `src/assets/logo-a-boa.png` | Novo arquivo (copia do upload) |
-| `index.html` | Atualizar titulo e meta tags |
-| `src/components/layout/Header.tsx` | Substituir icone/texto por imagem do logo |
-| `src/index.css` | Ajustar paleta de cores do tema claro |
-| `src/pages/Index.tsx` | Atualizar textos do hero |
-
----
-
-## Preview Visual das Cores
-
-```text
-ANTES (Tema Claro)              DEPOIS (Tema Claro)
-+------------------+            +------------------+
-|  Roxo/Magenta    |    -->     |  Verde Esmeralda |
-|  Primary Color   |            |  Primary Color   |
-+------------------+            +------------------+
-|  Amarelo         |    -->     |  Dourado/Laranja |
-|  Accent Color    |            |  Accent Color    |
-+------------------+            +------------------+
+**Buscar detalhes dos indicados:**
+```typescript
+const { data } = await supabase
+  .from('referrals')
+  .select(`
+    *,
+    referred:profiles!referrals_referred_id_fkey(full_name, avatar_url)
+  `)
+  .eq('referral_code_id', codeId);
 ```
 
----
+### Métricas Atualizadas
 
-## Consideracoes
+```typescript
+const metrics = {
+  totalLinks: referralCodes?.length || 0,
+  totalSignups: referralCodes?.reduce((sum, rc) => 
+    sum + (rc.referrals?.length || 0), 0) || 0,
+  totalCredits: referralCodes?.reduce((sum, rc) => 
+    sum + rc.referrals?.reduce((s, r) => s + Number(r.bonus_awarded), 0), 0) || 0,
+  // Cliques e compras não existem neste sistema - remover ou adaptar
+};
+```
 
-1. **Apenas o tema claro sera alterado** - o tema escuro permanece igual para manter contraste noturno
-2. **Estrutura das paginas nao sera modificada** - apenas cores e branding
-3. **O logotipo usara altura maxima que nao quebre o layout do header** (h-10 a h-12)
+### Considerações sobre Tabelas Órfãs
 
+As tabelas `share_tracking` e `share_events` ficarão sem uso após esta mudança. Opções:
+1. Mantê-las para uso futuro (rastreamento de cliques detalhado)
+2. Migrar funcionalidades para trabalhar junto com `referral_codes`
+3. Remover se não forem necessárias
