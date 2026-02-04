@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ScratchSymbolResult } from '@/types';
 import { Trophy, Sparkles, Plus, Wallet, RotateCcw } from 'lucide-react';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
-
+import confetti from 'canvas-confetti';
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -202,7 +202,7 @@ export function ScratchCard({
   }, [isRevealed, calculateScratchPercentage, playScratch]);
 
   // ==========================================================================
-  // TRIGGER REVEAL
+  // TRIGGER REVEAL + CONFETTI
   // ==========================================================================
   const triggerReveal = useCallback(() => {
     playReveal();
@@ -211,8 +211,37 @@ export function ScratchCard({
       setTimeout(() => {
         if ((prizeWon || 0) >= 50) {
           playBigWin();
+          // Confetti explosão grande para prêmios maiores
+          const duration = 3000;
+          const end = Date.now() + duration;
+          
+          const frame = () => {
+            confetti({
+              particleCount: 3,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0 },
+              colors: ['#f59e0b', '#f97316', '#ef4444', '#eab308', '#22c55e'],
+            });
+            confetti({
+              particleCount: 3,
+              angle: 120,
+              spread: 55,
+              origin: { x: 1 },
+              colors: ['#f59e0b', '#f97316', '#ef4444', '#eab308', '#22c55e'],
+            });
+            if (Date.now() < end) requestAnimationFrame(frame);
+          };
+          frame();
         } else {
           playWin();
+          // Confetti normal para prêmios menores
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#f59e0b', '#f97316', '#ea580c', '#fbbf24', '#22c55e'],
+          });
         }
       }, 300);
     }
