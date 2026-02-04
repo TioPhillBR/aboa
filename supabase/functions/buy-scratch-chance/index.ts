@@ -116,45 +116,129 @@ function generateWinningGrid(allSymbols: ScratchSymbolRow[], winning: ScratchSym
 }
 
 function generateLosingGrid(allSymbols: ScratchSymbolRow[]): ScratchSymbolResult[] {
-  const result: ScratchSymbolResult[] = [];
-  if (allSymbols.length === 0) return result;
+  if (allSymbols.length === 0) return [];
 
-  // Best effort: avoid 3+ occurrences by limiting repeats to 2.
-  const symbolCounts: Record<string, number> = {};
-  const maxPerSymbol = 2;
-
-  // Create a pool with each symbol repeated twice
-  const pool: ScratchSymbolRow[] = [];
-  for (const s of allSymbols) pool.push(s, s);
-
-  // If pool too small for 9 picks, we'll still try to keep counts <= 2,
-  // but with too few symbols it can become impossible.
-  shuffle(pool);
-
-  for (let i = 0; i < 9; i++) {
-    let selected = pool[i % pool.length];
-    let attempts = 0;
-    while ((symbolCounts[selected.id] || 0) >= maxPerSymbol && attempts < 50) {
-      selected = allSymbols[Math.floor(Math.random() * allSymbols.length)];
-      attempts++;
-    }
-    symbolCounts[selected.id] = (symbolCounts[selected.id] || 0) + 1;
-    result.push({
-      position: i,
-      symbol_id: selected.id,
-      image_url: selected.image_url,
-      name: selected.name,
-    });
+  const maxPerSymbol = 2; // CRITICAL: Max 2 of any symbol to guarantee no 3+ matches
+  
+  // We need at least 5 unique symbols to fill 9 positions with max 2 each (5*2=10 >= 9)
+  // If fewer symbols, we need to handle it carefully
+  const uniqueSymbolCount = allSymbols.length;
+  
+  if (uniqueSymbolCount < 5) {
+    console.warn(`Only ${uniqueSymbolCount} symbols configured. Minimum 5 recommended for clean losing grids.`);
   }
 
-  // Validate (best effort)
+  // Build a deterministic pool: each symbol appears exactly twice
+  // This guarantees we have enough variety
+  let pool: ScratchSymbolRow[] = [];
+  for (const s of allSymbols) {
+    pool.push(s, s); // Each symbol twice
+  }
+  
+  // If pool is still too small (less than 9), duplicate more
+  while (pool.length < 9) {
+    pool = [...pool, ...allSymbols.slice(0, Math.min(allSymbols.length, 9 - pool.length))];
+  }
+
+  // Shuffle the pool
+  shuffle(pool);
+
+  const result: ScratchSymbolResult[] = [];
+  const symbolCounts: Record<string, number> = {};
+
+  // Pick 9 symbols ensuring no symbol exceeds maxPerSymbol
+  for (let i = 0; i < 9; i++) {
+    // Find a valid symbol from the shuffled pool
+    let selectedSymbol: ScratchSymbolRow | null = null;
+    
+    // First, try to pick from pool in order
+    for (const candidate of pool) {
+      if ((symbolCounts[candidate.id] || 0) < maxPerSymbol) {
+        selectedSymbol = candidate;
+        break;
+      }
+    }
+    
+    // If pool is exhausted for valid picks, find ANY valid symbol
+    if (!selectedSymbol) {
+      for (const candidate of allSymbols) {
+        if ((symbolCounts[candidate.id] || 0) < maxPerSymbol) {
+          selectedSymbol = candidate;
+          break;
+        }
+      }
+    }
+    
+    // Last resort: if still no valid symbol (shouldn't happen with >= 5 symbols)
+    // This would mean we have fewer than 5 unique symbols
+    if (!selectedSymbol) {
+      // Find the symbol with the lowest count
+      let minCount = Infinity;
+      for (const s of allSymbols) {
+        const count = symbolCounts[s.id] || 0;
+        if (count < minCount) {
+          minCount = count;
+          selectedSymbol = s;
+        }
+      }
+    }
+    
+    if (selectedSymbol) {
+      symbolCounts[selectedSymbol.id] = (symbolCounts[selectedSymbol.id] || 0) + 1;
+      result.push({
+        position: i,
+        symbol_id: selectedSymbol.id,
+        image_url: selectedSymbol.image_url,
+        name: selectedSymbol.name,
+      });
+      
+      // Remove used symbol from pool to distribute more evenly
+      const idx = pool.findIndex(p => p.id === selectedSymbol!.id);
+      if (idx !== -1) pool.splice(idx, 1);
+    }
+  }
+
+  // VALIDATION: Ensure no symbol appears 3+ times
   const finalCounts: Record<string, number> = {};
-  for (const r of result) finalCounts[r.symbol_id] = (finalCounts[r.symbol_id] || 0) + 1;
-  const hasThreeOrMore = Object.values(finalCounts).some((c) => c >= 3);
-  if (hasThreeOrMore) {
-    console.warn(
-      `Could not guarantee a clean losing grid. Consider adding more symbols (recommended >= 5). Unique symbols: ${allSymbols.length}`,
-    );
+  for (const r of result) {
+    finalCounts[r.symbol_id] = (finalCounts[r.symbol_id] || 0) + 1;
+  }
+  
+  const problematicSymbols = Object.entries(finalCounts).filter(([_, count]) => count >= 3);
+  if (problematicSymbols.length > 0) {
+    console.error(`CRITICAL: Losing grid has 3+ matches! Symbols: ${JSON.stringify(problematicSymbols)}`);
+    // FIX IT: Replace excess occurrences with other symbols
+    for (const [symbolId, count] of problematicSymbols) {
+      const excessCount = count - 2;
+      let replaced = 0;
+      
+      for (let i = 0; i < result.length && replaced < excessCount; i++) {
+        if (result[i].symbol_id === symbolId) {
+          // Find a replacement symbol that has count < 2
+          const replacement = allSymbols.find(s => 
+            s.id !== symbolId && (finalCounts[s.id] || 0) < 2
+          );
+          
+          if (replacement) {
+            result[i] = {
+              position: i,
+              symbol_id: replacement.id,
+              image_url: replacement.image_url,
+              name: replacement.name,
+            };
+            finalCounts[symbolId]--;
+            finalCounts[replacement.id] = (finalCounts[replacement.id] || 0) + 1;
+            replaced++;
+          }
+        }
+      }
+    }
+  }
+
+  // Final shuffle to randomize positions
+  shuffle(result);
+  for (let i = 0; i < result.length; i++) {
+    result[i].position = i;
   }
 
   return result;
