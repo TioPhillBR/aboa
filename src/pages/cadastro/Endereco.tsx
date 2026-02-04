@@ -163,25 +163,7 @@ export default function Endereco() {
     setError(null);
 
     try {
-      // Upload avatar if provided
-      let avatarUrl: string | null = null;
-      if (personalData.avatarFile) {
-        const fileExt = personalData.avatarFile.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, personalData.avatarFile);
-        
-        if (!uploadError) {
-          const { data: { publicUrl } } = supabase.storage
-            .from('avatars')
-            .getPublicUrl(fileName);
-          avatarUrl = publicUrl;
-        }
-      }
-
-      // Sign up user
+      // Sign up user FIRST - we need to be authenticated to upload to storage
       const { error: signUpError, session } = await signUp(
         personalData.email, 
         personalData.password, 
@@ -196,6 +178,28 @@ export default function Endereco() {
 
       // Wait a moment for the trigger to create the profile
       await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Upload avatar AFTER signup (now we have authentication)
+      let avatarUrl: string | null = null;
+      if (personalData.avatarFile && session?.user) {
+        const fileName = `${session.user.id}/avatar-${Date.now()}.jpg`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, personalData.avatarFile, {
+            upsert: true,
+            contentType: 'image/jpeg'
+          });
+        
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(fileName);
+          avatarUrl = `${publicUrl}?t=${Date.now()}`;
+        } else {
+          console.error('Error uploading avatar:', uploadError);
+        }
+      }
 
       // Update profile with additional data
       if (session?.user) {
