@@ -137,6 +137,11 @@ export default function DadosPessoais() {
     const missingFields: string[] = [];
     const validationErrors: string[] = [];
     
+    // Validate profile photo (required)
+    if (!personalData.avatarFile) {
+      missingFields.push('Foto de Perfil');
+    }
+    
     if (!personalData.fullName.trim()) {
       missingFields.push('Nome Completo');
     }
@@ -264,9 +269,9 @@ export default function DadosPessoais() {
 
           {/* Avatar Upload */}
           <div className="flex flex-col items-center gap-4">
-            <Label className="text-center">Foto de Perfil</Label>
+            <Label className="text-center">Foto de Perfil *</Label>
             <div className="relative">
-              <Avatar className="h-24 w-24">
+              <Avatar className={`h-24 w-24 ${!personalData.avatarFile ? 'ring-2 ring-destructive/50' : 'ring-2 ring-primary'}`}>
                 <AvatarImage src={personalData.avatarPreview || undefined} />
                 <AvatarFallback className="bg-muted">
                   <User className="h-10 w-10 text-muted-foreground" />
@@ -287,7 +292,7 @@ export default function DadosPessoais() {
                 className="hidden"
               />
             </div>
-            <p className="text-xs text-muted-foreground">Opcional • Máximo 5MB</p>
+            <p className="text-xs text-muted-foreground">Obrigatório • Máximo 5MB</p>
           </div>
 
           {/* Image Cropper */}
