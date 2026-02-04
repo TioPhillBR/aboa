@@ -14,17 +14,23 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { 
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { 
   Share2, 
   Search, 
   MousePointer,
   UserPlus,
-  ShoppingCart,
   DollarSign,
   Loader2,
-  TrendingUp,
   Link as LinkIcon,
   Download,
-  Percent
+  Percent,
+  ChevronDown,
+  ChevronRight,
+  Gift
 } from 'lucide-react';
 import { useShareTracking } from '@/hooks/useShareTracking';
 import { useExport } from '@/hooks/useExport';
@@ -38,45 +44,57 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
-  LineChart,
-  Line
 } from 'recharts';
 
 export default function AdminCompartilhamentos() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
-  const { allShareTrackings, isLoadingAll, shareMetrics } = useShareTracking();
-  const { exportToCSV, exportToExcel } = useExport();
+  const { allReferralCodes, isLoadingAll, shareMetrics } = useShareTracking();
+  const { exportToExcel } = useExport();
 
-  const filteredShares = (allShareTrackings || []).filter(share => 
-    share.share_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    share.sharer?.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCodes = (allReferralCodes || []).filter(rc => 
+    rc.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    rc.owner?.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Prepare chart data
-  const topSharers = [...(allShareTrackings || [])]
+  // Prepare chart data - top 10 by signups
+  const topSharers = [...(allReferralCodes || [])]
+    .map(rc => ({
+      name: rc.owner?.full_name?.split(' ')[0] || rc.code,
+      code: rc.code,
+      clicks: rc.uses_count,
+      signups: rc.referrals?.length || 0,
+      bonus: rc.referrals?.reduce((sum, r) => sum + Number(r.bonus_awarded), 0) || 0,
+    }))
     .sort((a, b) => b.signups - a.signups)
-    .slice(0, 10)
-    .map(s => ({
-      code: s.share_code,
-      clicks: s.clicks,
-      signups: s.signups,
-      purchases: s.purchases,
-    }));
+    .slice(0, 10);
 
   const handleExport = () => {
-    exportToExcel(
-      filteredShares.map(s => ({
-        Código: s.share_code,
-        Cliques: s.clicks,
-        Cadastros: s.signups,
-        Compras: s.purchases,
-        Créditos: `R$ ${Number(s.credits_earned).toFixed(2)}`,
-        Status: s.is_active ? 'Ativo' : 'Inativo',
-        Criado: format(new Date(s.created_at), 'dd/MM/yyyy'),
-      })),
-      { filename: 'compartilhamentos', title: 'Compartilhamentos' }
-    );
+    const exportData = filteredCodes.flatMap(rc => {
+      const baseRow = {
+        Usuário: rc.owner?.full_name || 'Desconhecido',
+        Código: rc.code,
+        'Usos do Link': rc.uses_count,
+        Cadastros: rc.referrals?.length || 0,
+        'Bônus Total': `R$ ${(rc.referrals?.reduce((sum, r) => sum + Number(r.bonus_awarded), 0) || 0).toFixed(2)}`,
+        Status: rc.is_active ? 'Ativo' : 'Inativo',
+        Criado: format(new Date(rc.created_at), 'dd/MM/yyyy'),
+      };
+      return [baseRow];
+    });
+    
+    exportToExcel(exportData, { filename: 'compartilhamentos', title: 'Compartilhamentos e Indicações' });
+  };
+
+  const toggleRow = (id: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
   };
 
   if (isLoadingAll) {
@@ -112,7 +130,7 @@ export default function AdminCompartilhamentos() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -129,7 +147,7 @@ export default function AdminCompartilhamentos() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Cliques</p>
+                  <p className="text-sm text-muted-foreground">Usos</p>
                   <p className="text-2xl font-bold">{shareMetrics.totalClicks}</p>
                 </div>
                 <MousePointer className="h-8 w-8 text-accent opacity-50" />
@@ -153,19 +171,7 @@ export default function AdminCompartilhamentos() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Compras</p>
-                  <p className="text-2xl font-bold">{shareMetrics.totalPurchases}</p>
-                </div>
-                <ShoppingCart className="h-8 w-8 text-primary opacity-50" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Créditos</p>
+                  <p className="text-sm text-muted-foreground">Bônus Pagos</p>
                   <p className="text-2xl font-bold text-accent">
                     R$ {shareMetrics.totalCredits.toFixed(0)}
                   </p>
@@ -189,46 +195,51 @@ export default function AdminCompartilhamentos() {
         </div>
 
         {/* Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top 10 Compartilhadores</CardTitle>
-            <CardDescription>Links com maior número de conversões</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topSharers}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis 
-                    dataKey="code" 
-                    className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 10 }}
-                  />
-                  <YAxis className="text-xs fill-muted-foreground" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Bar dataKey="clicks" name="Cliques" fill="hsl(var(--muted-foreground))" />
-                  <Bar dataKey="signups" name="Cadastros" fill="hsl(var(--primary))" />
-                  <Bar dataKey="purchases" name="Compras" fill="hsl(var(--success))" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+        {topSharers.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Top 10 Indicadores</CardTitle>
+              <CardDescription>Usuários com maior número de indicações bem-sucedidas</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topSharers}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="name" 
+                      className="text-xs fill-muted-foreground"
+                      tick={{ fontSize: 10 }}
+                    />
+                    <YAxis className="text-xs fill-muted-foreground" />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value, name) => {
+                        if (name === 'bonus') return [`R$ ${Number(value).toFixed(2)}`, 'Bônus'];
+                        return [value, name === 'clicks' ? 'Usos' : 'Cadastros'];
+                      }}
+                    />
+                    <Bar dataKey="clicks" name="clicks" fill="hsl(var(--muted-foreground))" />
+                    <Bar dataKey="signups" name="signups" fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Share Tracking List */}
+        {/* Referral Codes List */}
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <CardTitle>Links de Compartilhamento</CardTitle>
+                <CardTitle>Códigos de Indicação</CardTitle>
                 <CardDescription>
-                  {filteredShares.length} links encontrados
+                  {filteredCodes.length} códigos encontrados
                 </CardDescription>
               </div>
             </div>
@@ -238,7 +249,7 @@ export default function AdminCompartilhamentos() {
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por código..."
+                placeholder="Buscar por código ou nome..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -250,78 +261,142 @@ export default function AdminCompartilhamentos() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[40px]"></TableHead>
                     <TableHead>Usuário</TableHead>
                     <TableHead>Código</TableHead>
-                    <TableHead>Cliques</TableHead>
+                    <TableHead>Usos</TableHead>
                     <TableHead>Cadastros</TableHead>
-                    <TableHead>Compras</TableHead>
-                    <TableHead>Créditos</TableHead>
+                    <TableHead>Bônus Total</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Criado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredShares.length === 0 ? (
+                  {filteredCodes.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         <Share2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>Nenhum link de compartilhamento encontrado</p>
+                        <p>Nenhum código de indicação encontrado</p>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredShares.map((share) => (
-                      <TableRow key={share.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={share.sharer?.avatar_url || ''} />
-                              <AvatarFallback className="text-xs">
-                                {share.sharer?.full_name?.slice(0, 2).toUpperCase() || '??'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium truncate max-w-[120px]">
-                              {share.sharer?.full_name || 'Usuário desconhecido'}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="font-mono">
-                            {share.share_code}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <MousePointer className="h-4 w-4 text-muted-foreground" />
-                            {share.clicks}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <UserPlus className="h-4 w-4 text-success" />
-                            <span className="text-success font-semibold">{share.signups}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <ShoppingCart className="h-4 w-4 text-primary" />
-                            {share.purchases}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-accent font-semibold">
-                          R$ {Number(share.credits_earned).toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          {share.is_active ? (
-                            <Badge className="bg-success/10 text-success">Ativo</Badge>
-                          ) : (
-                            <Badge variant="secondary">Inativo</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(share.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    filteredCodes.map((rc) => {
+                      const isExpanded = expandedRows.has(rc.id);
+                      const referralCount = rc.referrals?.length || 0;
+                      const totalBonus = rc.referrals?.reduce((sum, r) => sum + Number(r.bonus_awarded), 0) || 0;
+                      
+                      return (
+                        <Collapsible key={rc.id} open={isExpanded} onOpenChange={() => toggleRow(rc.id)} asChild>
+                          <>
+                            <TableRow className="cursor-pointer hover:bg-muted/50">
+                              <TableCell>
+                                <CollapsibleTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={referralCount === 0}>
+                                    {referralCount > 0 && (
+                                      isExpanded ? 
+                                        <ChevronDown className="h-4 w-4" /> : 
+                                        <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </CollapsibleTrigger>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarImage src={rc.owner?.avatar_url || ''} />
+                                    <AvatarFallback className="text-xs">
+                                      {rc.owner?.full_name?.slice(0, 2).toUpperCase() || '??'}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium truncate max-w-[150px]">
+                                    {rc.owner?.full_name || 'Usuário desconhecido'}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="font-mono">
+                                  {rc.code}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <MousePointer className="h-4 w-4 text-muted-foreground" />
+                                  {rc.uses_count}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <UserPlus className="h-4 w-4 text-success" />
+                                  <span className="text-success font-semibold">{referralCount}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-accent font-semibold">
+                                R$ {totalBonus.toFixed(2)}
+                              </TableCell>
+                              <TableCell>
+                                {rc.is_active ? (
+                                  <Badge className="bg-success/10 text-success">Ativo</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Inativo</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {format(new Date(rc.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                              </TableCell>
+                            </TableRow>
+                            
+                            {/* Expanded content - list of referred users */}
+                            <CollapsibleContent asChild>
+                              <TableRow className="bg-muted/30">
+                                <TableCell colSpan={8} className="p-0">
+                                  <div className="px-6 py-4">
+                                    <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                                      <Gift className="h-4 w-4 text-primary" />
+                                      Usuários Indicados ({referralCount})
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {rc.referrals?.map((referral) => (
+                                        <div 
+                                          key={referral.id} 
+                                          className="flex items-center justify-between p-3 rounded-lg bg-background border"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <Avatar className="h-8 w-8">
+                                              <AvatarImage src={referral.referred?.avatar_url || ''} />
+                                              <AvatarFallback className="text-xs">
+                                                {referral.referred?.full_name?.slice(0, 2).toUpperCase() || '??'}
+                                              </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                              <p className="font-medium">
+                                                {referral.referred?.full_name || 'Usuário'}
+                                              </p>
+                                              <p className="text-xs text-muted-foreground">
+                                                Cadastrado em {format(new Date(referral.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="text-right">
+                                            <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                                              + R$ {Number(referral.bonus_awarded).toFixed(2)}
+                                            </Badge>
+                                            {referral.bonus_awarded_at && (
+                                              <p className="text-xs text-muted-foreground mt-1">
+                                                Pago em {format(new Date(referral.bonus_awarded_at), "dd/MM/yyyy", { locale: ptBR })}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </CollapsibleContent>
+                          </>
+                        </Collapsible>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
