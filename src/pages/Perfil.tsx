@@ -380,12 +380,31 @@ export default function Perfil() {
         </div>
 
         <div className="space-y-6">
+          {/* Banner para usuários sem foto */}
+          {!displayAvatar && (
+            <Card className="border-orange-500/50 bg-orange-500/10">
+              <CardContent className="flex items-center gap-4 py-4">
+                <div className="p-3 rounded-full bg-orange-500/20">
+                  <Camera className="h-6 w-6 text-orange-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-orange-700 dark:text-orange-400">
+                    Complete seu perfil!
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Adicione uma foto de perfil para que outros jogadores possam te reconhecer nos sorteios e raspadinhas.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Card de Foto */}
-          <Card>
+          <Card className={!displayAvatar ? 'ring-2 ring-orange-500/50' : ''}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Camera className="h-5 w-5" />
-                Foto de Perfil
+                Foto de Perfil {!displayAvatar && <span className="text-xs text-orange-600 font-normal">(Obrigatório)</span>}
               </CardTitle>
               <CardDescription>
                 Sua foto será exibida nos sorteios e no seu perfil público

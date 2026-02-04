@@ -1,4 +1,4 @@
-import { Bell, Check, CheckCheck, Trash2, Trophy, Gift, Sparkles, Info } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, Trophy, Gift, Sparkles, Info, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,6 +22,8 @@ function NotificationIcon({ type }: { type: Notification['type'] }) {
       return <Sparkles className="h-4 w-4 text-green-500" />;
     case 'promotion':
       return <Gift className="h-4 w-4 text-primary" />;
+    case 'profile_incomplete':
+      return <Camera className="h-4 w-4 text-orange-500" />;
     default:
       return <Info className="h-4 w-4 text-muted-foreground" />;
   }
