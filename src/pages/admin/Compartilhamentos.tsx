@@ -49,7 +49,8 @@ export default function AdminCompartilhamentos() {
   const { exportToCSV, exportToExcel } = useExport();
 
   const filteredShares = (allShareTrackings || []).filter(share => 
-    share.share_code.toLowerCase().includes(searchTerm.toLowerCase())
+    share.share_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    share.sharer?.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Prepare chart data
@@ -249,6 +250,7 @@ export default function AdminCompartilhamentos() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Usuário</TableHead>
                     <TableHead>Código</TableHead>
                     <TableHead>Cliques</TableHead>
                     <TableHead>Cadastros</TableHead>
@@ -261,7 +263,7 @@ export default function AdminCompartilhamentos() {
                 <TableBody>
                   {filteredShares.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         <Share2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
                         <p>Nenhum link de compartilhamento encontrado</p>
                       </TableCell>
@@ -269,6 +271,19 @@ export default function AdminCompartilhamentos() {
                   ) : (
                     filteredShares.map((share) => (
                       <TableRow key={share.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={share.sharer?.avatar_url || ''} />
+                              <AvatarFallback className="text-xs">
+                                {share.sharer?.full_name?.slice(0, 2).toUpperCase() || '??'}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium truncate max-w-[120px]">
+                              {share.sharer?.full_name || 'Usuário desconhecido'}
+                            </span>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="font-mono">
                             {share.share_code}

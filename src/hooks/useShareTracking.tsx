@@ -35,13 +35,19 @@ export function useShareTracking() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch all share trackings (admin)
+  // Fetch all share trackings (admin) with sharer profile info
   const { data: allShareTrackings, isLoading: isLoadingAll } = useQuery({
     queryKey: ['all-share-trackings'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('share_tracking')
-        .select('*')
+        .select(`
+          *,
+          sharer:profiles!share_tracking_sharer_id_fkey(
+            full_name,
+            avatar_url
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
