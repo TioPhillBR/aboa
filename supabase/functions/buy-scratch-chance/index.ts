@@ -57,7 +57,7 @@ function shuffle<T>(arr: T[]): T[] {
 function generateWinningGrid(allSymbols: ScratchSymbolRow[], winning: ScratchSymbolRow): ScratchSymbolResult[] {
   const result: ScratchSymbolResult[] = [];
 
-  // First 3 are winners
+  // Exactly 3 winning symbols
   for (let i = 0; i < 3; i++) {
     result.push({
       position: i,
@@ -67,20 +67,51 @@ function generateWinningGrid(allSymbols: ScratchSymbolRow[], winning: ScratchSym
     });
   }
 
-  // Remaining 6 random (can include any)
+  // Get other symbols (excluding the winning one) for filling remaining positions
+  const otherSymbols = allSymbols.filter(s => s.id !== winning.id);
+  
+  // If we don't have other symbols, we need to be careful
+  // Each non-winning symbol can appear at most 2 times to avoid creating another "win"
+  const symbolCounts: Record<string, number> = {};
+  const maxPerSymbol = 2; // Max 2 of any other symbol to avoid 3+ matches
+  
+  // Fill remaining 6 positions ensuring no symbol appears 3+ times
   for (let i = 3; i < 9; i++) {
-    const randomSymbol = allSymbols[Math.floor(Math.random() * allSymbols.length)];
+    let selectedSymbol: ScratchSymbolRow;
+    
+    if (otherSymbols.length > 0) {
+      // Filter to symbols that haven't reached max count
+      const availableSymbols = otherSymbols.filter(
+        s => (symbolCounts[s.id] || 0) < maxPerSymbol
+      );
+      
+      if (availableSymbols.length > 0) {
+        selectedSymbol = availableSymbols[Math.floor(Math.random() * availableSymbols.length)];
+      } else {
+        // Fallback: pick any other symbol (shouldn't happen with enough symbols)
+        selectedSymbol = otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
+      }
+    } else {
+      // Edge case: only one symbol type exists - this is a config issue
+      // We have to use the winning symbol but limit to exactly 3
+      console.warn("Only one symbol configured - cannot guarantee clean grid");
+      selectedSymbol = winning;
+    }
+    
+    symbolCounts[selectedSymbol.id] = (symbolCounts[selectedSymbol.id] || 0) + 1;
+    
     result.push({
       position: i,
-      symbol_id: randomSymbol.id,
-      image_url: randomSymbol.image_url,
-      name: randomSymbol.name,
+      symbol_id: selectedSymbol.id,
+      image_url: selectedSymbol.image_url,
+      name: selectedSymbol.name,
     });
   }
 
   // Shuffle and reassign positions
   shuffle(result);
   for (let i = 0; i < result.length; i++) result[i].position = i;
+  
   return result;
 }
 
