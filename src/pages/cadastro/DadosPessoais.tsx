@@ -270,19 +270,22 @@ export default function DadosPessoais() {
           {/* Avatar Upload */}
           <div className="flex flex-col items-center gap-4">
             <Label className="text-center">Foto de Perfil *</Label>
-            <div className="relative">
-              <Avatar className={`h-24 w-24 ${!personalData.avatarFile ? 'ring-2 ring-destructive/50' : 'ring-2 ring-primary'}`}>
+            <label htmlFor="avatar-upload" className="relative cursor-pointer group">
+              <Avatar className={`h-24 w-24 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg ${!personalData.avatarFile ? 'ring-2 ring-destructive/50 group-hover:ring-primary' : 'ring-2 ring-primary'}`}>
                 <AvatarImage src={personalData.avatarPreview || undefined} />
                 <AvatarFallback className="bg-muted">
-                  <User className="h-10 w-10 text-muted-foreground" />
+                  <User className={`h-10 w-10 text-muted-foreground transition-transform duration-300 ${!personalData.avatarFile ? 'group-hover:scale-110' : ''}`} />
                 </AvatarFallback>
               </Avatar>
-              <label 
-                htmlFor="avatar-upload" 
-                className="absolute bottom-0 right-0 p-2 bg-primary rounded-full cursor-pointer hover:bg-primary/90 transition-colors"
-              >
+              {/* Overlay on hover */}
+              {!personalData.avatarFile && (
+                <div className="absolute inset-0 rounded-full bg-primary/0 group-hover:bg-primary/10 transition-colors duration-300 flex items-center justify-center">
+                  <Upload className="h-6 w-6 text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                </div>
+              )}
+              <div className="absolute bottom-0 right-0 p-2 bg-primary rounded-full hover:bg-primary/90 transition-all duration-300 group-hover:scale-110">
                 <Upload className="h-4 w-4 text-primary-foreground" />
-              </label>
+              </div>
               <input
                 ref={fileInputRef}
                 id="avatar-upload"
@@ -291,8 +294,10 @@ export default function DadosPessoais() {
                 onChange={handleAvatarChange}
                 className="hidden"
               />
-            </div>
-            <p className="text-xs text-muted-foreground">Obrigatório • Máximo 5MB</p>
+            </label>
+            <p className={`text-xs transition-colors duration-300 ${!personalData.avatarFile ? 'text-destructive group-hover:text-primary' : 'text-muted-foreground'}`}>
+              {!personalData.avatarFile ? 'Clique para adicionar foto' : 'Obrigatório • Máximo 5MB'}
+            </p>
           </div>
 
           {/* Image Cropper */}
