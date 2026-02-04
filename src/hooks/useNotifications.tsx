@@ -4,7 +4,7 @@ import { useAuth } from './useAuth';
 
 export interface Notification {
   id: string;
-  type: 'raffle_result' | 'prize_won' | 'promotion' | 'system';
+  type: 'raffle_result' | 'prize_won' | 'promotion' | 'system' | 'profile_incomplete';
   title: string;
   message: string;
   icon?: string;
@@ -21,15 +21,17 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearNotifications: () => void;
+  dismissProfilePhotoReminder: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [profilePhotoReminderDismissed, setProfilePhotoReminderDismissed] = useState(false);
 
-  // Carregar notificações do localStorage
+  // Carregar notificações e estado de dismissal do localStorage
   useEffect(() => {
     if (user) {
       const stored = localStorage.getItem(`notifications_${user.id}`);
@@ -44,8 +46,41 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           console.error('Error parsing notifications:', e);
         }
       }
+      
+      // Verificar se o lembrete de foto foi dispensado
+      const dismissed = localStorage.getItem(`profile_photo_reminder_dismissed_${user.id}`);
+      setProfilePhotoReminderDismissed(dismissed === 'true');
     }
   }, [user]);
+
+  // Verificar se usuário não tem foto e adicionar notificação
+  useEffect(() => {
+    if (user && profile && !profilePhotoReminderDismissed) {
+      // Verificar se o usuário não tem avatar_url
+      if (!profile.avatar_url) {
+        // Verificar se já existe uma notificação de foto de perfil não lida
+        const existingPhotoNotification = notifications.find(
+          n => n.type === 'profile_incomplete' && n.data?.reason === 'missing_photo' && !n.read
+        );
+        
+        if (!existingPhotoNotification) {
+          // Adicionar notificação após um pequeno delay para não atrapalhar o carregamento
+          const timer = setTimeout(() => {
+            addNotification({
+              type: 'profile_incomplete',
+              title: '📸 Complete seu perfil!',
+              message: 'Adicione uma foto de perfil para que outros jogadores possam te reconhecer nos sorteios e raspadinhas.',
+              icon: '📷',
+              link: '/perfil',
+              data: { reason: 'missing_photo' },
+            });
+          }, 2000);
+          
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [user, profile, profilePhotoReminderDismissed, notifications.length]);
 
   // Salvar no localStorage quando mudar
   useEffect(() => {
@@ -129,6 +164,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
+  const dismissProfilePhotoReminder = useCallback(() => {
+    if (user) {
+      localStorage.setItem(`profile_photo_reminder_dismissed_${user.id}`, 'true');
+      setProfilePhotoReminderDismissed(true);
+      // Marcar notificações de foto como lidas
+      setNotifications(prev => 
+        prev.map(n => 
+          n.type === 'profile_incomplete' && n.data?.reason === 'missing_photo'
+            ? { ...n, read: true }
+            : n
+        )
+      );
+    }
+  }, [user]);
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -140,6 +190,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         markAsRead, 
         markAllAsRead,
         clearNotifications,
+        dismissProfilePhotoReminder,
       }}
     >
       {children}
