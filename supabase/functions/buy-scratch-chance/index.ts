@@ -6,7 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type ScratchSymbolRow = {
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface ScratchSymbol {
   id: string;
   scratch_card_id: string;
   name: string;
@@ -15,259 +19,285 @@ type ScratchSymbolRow = {
   probability: number;
   total_quantity: number | null;
   remaining_quantity: number | null;
-};
+}
 
-type ScratchSymbolResult = {
+interface GridCell {
   position: number;
   symbol_id: string;
   image_url: string;
   name: string;
-};
+}
 
 interface BuyScratchChanceRequest {
   scratch_card_id: string;
 }
 
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+/**
+ * Normalize probability value (handles both 0.10 and 10 formats)
+ */
 function normalizeProbability(value: number): number {
-  // Defensive: some rows may have been stored as 10 (meaning 10%) instead of 0.10
-  const v = value > 1 ? value / 100 : value;
-  if (!Number.isFinite(v) || v < 0) return 0;
-  return v;
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return value > 1 ? value / 100 : value;
 }
 
-function pickWeighted<T>(items: Array<{ item: T; weight: number }>): T {
-  const total = items.reduce((sum, x) => sum + x.weight, 0);
-  const roll = Math.random() * total;
-  let cum = 0;
-  for (const { item, weight } of items) {
-    cum += weight;
-    if (roll <= cum) return item;
-  }
-  return items[items.length - 1].item;
-}
-
+/**
+ * Fisher-Yates shuffle
+ */
 function shuffle<T>(arr: T[]): T[] {
-  for (let i = arr.length - 1; i > 0; i--) {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+    [result[i], result[j]] = [result[j], result[i]];
   }
-  return arr;
-}
-
-function generateWinningGrid(allSymbols: ScratchSymbolRow[], winning: ScratchSymbolRow): ScratchSymbolResult[] {
-  const result: ScratchSymbolResult[] = [];
-
-  // Exactly 3 winning symbols
-  for (let i = 0; i < 3; i++) {
-    result.push({
-      position: i,
-      symbol_id: winning.id,
-      image_url: winning.image_url,
-      name: winning.name,
-    });
-  }
-
-  // Get other symbols (excluding the winning one) for filling remaining positions
-  const otherSymbols = allSymbols.filter(s => s.id !== winning.id);
-  
-  // If we don't have other symbols, we need to be careful
-  // Each non-winning symbol can appear at most 2 times to avoid creating another "win"
-  const symbolCounts: Record<string, number> = {};
-  const maxPerSymbol = 2; // Max 2 of any other symbol to avoid 3+ matches
-  
-  // Fill remaining 6 positions ensuring no symbol appears 3+ times
-  for (let i = 3; i < 9; i++) {
-    let selectedSymbol: ScratchSymbolRow;
-    
-    if (otherSymbols.length > 0) {
-      // Filter to symbols that haven't reached max count
-      const availableSymbols = otherSymbols.filter(
-        s => (symbolCounts[s.id] || 0) < maxPerSymbol
-      );
-      
-      if (availableSymbols.length > 0) {
-        selectedSymbol = availableSymbols[Math.floor(Math.random() * availableSymbols.length)];
-      } else {
-        // Fallback: pick any other symbol (shouldn't happen with enough symbols)
-        selectedSymbol = otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
-      }
-    } else {
-      // Edge case: only one symbol type exists - this is a config issue
-      // We have to use the winning symbol but limit to exactly 3
-      console.warn("Only one symbol configured - cannot guarantee clean grid");
-      selectedSymbol = winning;
-    }
-    
-    symbolCounts[selectedSymbol.id] = (symbolCounts[selectedSymbol.id] || 0) + 1;
-    
-    result.push({
-      position: i,
-      symbol_id: selectedSymbol.id,
-      image_url: selectedSymbol.image_url,
-      name: selectedSymbol.name,
-    });
-  }
-
-  // Shuffle and reassign positions
-  shuffle(result);
-  for (let i = 0; i < result.length; i++) result[i].position = i;
-  
   return result;
 }
 
-function generateLosingGrid(allSymbols: ScratchSymbolRow[]): ScratchSymbolResult[] {
-  if (allSymbols.length === 0) return [];
-
-  const maxPerSymbol = 2; // CRITICAL: Max 2 of any symbol to guarantee no 3+ matches
+/**
+ * Pick a random item based on weights
+ */
+function pickWeighted<T>(items: Array<{ item: T; weight: number }>): T | null {
+  if (items.length === 0) return null;
   
-  // We need at least 5 unique symbols to fill 9 positions with max 2 each (5*2=10 >= 9)
-  // If fewer symbols, we need to handle it carefully
-  const uniqueSymbolCount = allSymbols.length;
+  const total = items.reduce((sum, x) => sum + x.weight, 0);
+  if (total <= 0) return items[0].item;
   
-  if (uniqueSymbolCount < 5) {
-    console.warn(`Only ${uniqueSymbolCount} symbols configured. Minimum 5 recommended for clean losing grids.`);
-  }
-
-  // Build a deterministic pool: each symbol appears exactly twice
-  // This guarantees we have enough variety
-  let pool: ScratchSymbolRow[] = [];
-  for (const s of allSymbols) {
-    pool.push(s, s); // Each symbol twice
+  const roll = Math.random() * total;
+  let cumulative = 0;
+  
+  for (const { item, weight } of items) {
+    cumulative += weight;
+    if (roll <= cumulative) return item;
   }
   
-  // If pool is still too small (less than 9), duplicate more
-  while (pool.length < 9) {
-    pool = [...pool, ...allSymbols.slice(0, Math.min(allSymbols.length, 9 - pool.length))];
+  return items[items.length - 1].item;
+}
+
+// =============================================================================
+// GRID GENERATION - CORE LOGIC
+// =============================================================================
+
+/**
+ * Generate a WINNING grid:
+ * - Exactly 3 of the winning symbol
+ * - Remaining 6 positions filled with OTHER symbols (max 2 each)
+ * - Total: 9 cells
+ */
+function generateWinningGrid(allSymbols: ScratchSymbol[], winningSymbol: ScratchSymbol): GridCell[] {
+  const grid: GridCell[] = [];
+  
+  // Add exactly 3 winning symbols
+  for (let i = 0; i < 3; i++) {
+    grid.push({
+      position: i,
+      symbol_id: winningSymbol.id,
+      image_url: winningSymbol.image_url,
+      name: winningSymbol.name,
+    });
   }
-
-  // Shuffle the pool
-  shuffle(pool);
-
-  const result: ScratchSymbolResult[] = [];
-  const symbolCounts: Record<string, number> = {};
-
-  // Pick 9 symbols ensuring no symbol exceeds maxPerSymbol
-  for (let i = 0; i < 9; i++) {
-    // Find a valid symbol from the shuffled pool
-    let selectedSymbol: ScratchSymbolRow | null = null;
+  
+  // Get other symbols (excluding the winner)
+  const otherSymbols = allSymbols.filter(s => s.id !== winningSymbol.id);
+  
+  // Fill remaining 6 positions with other symbols (max 2 each)
+  const counts: Record<string, number> = {};
+  const MAX_PER_SYMBOL = 2;
+  
+  for (let i = 3; i < 9; i++) {
+    // Find symbols that haven't reached the limit
+    const available = otherSymbols.filter(s => (counts[s.id] || 0) < MAX_PER_SYMBOL);
     
-    // First, try to pick from pool in order
-    for (const candidate of pool) {
-      if ((symbolCounts[candidate.id] || 0) < maxPerSymbol) {
-        selectedSymbol = candidate;
+    let selected: ScratchSymbol;
+    if (available.length > 0) {
+      selected = available[Math.floor(Math.random() * available.length)];
+    } else if (otherSymbols.length > 0) {
+      // Fallback: use any other symbol (shouldn't happen with >= 4 other symbols)
+      selected = otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
+    } else {
+      // Edge case: only 1 symbol exists (bad config)
+      console.error("CRITICAL: Only 1 symbol configured. Cannot generate valid winning grid.");
+      selected = winningSymbol;
+    }
+    
+    counts[selected.id] = (counts[selected.id] || 0) + 1;
+    
+    grid.push({
+      position: i,
+      symbol_id: selected.id,
+      image_url: selected.image_url,
+      name: selected.name,
+    });
+  }
+  
+  // Shuffle and reassign positions
+  const shuffled = shuffle(grid);
+  return shuffled.map((cell, idx) => ({ ...cell, position: idx }));
+}
+
+/**
+ * Generate a LOSING grid:
+ * - NO symbol appears more than 2 times
+ * - Requires at least 5 unique symbols for guaranteed valid distribution (9 cells / 2 = 4.5)
+ * - If fewer symbols, we force-fix any violations
+ */
+function generateLosingGrid(allSymbols: ScratchSymbol[]): GridCell[] {
+  if (allSymbols.length === 0) {
+    console.error("No symbols available for grid generation");
+    return [];
+  }
+  
+  const MAX_PER_SYMBOL = 2;
+  const GRID_SIZE = 9;
+  
+  // Minimum symbols needed: ceil(9 / 2) = 5
+  if (allSymbols.length < 5) {
+    console.warn(`Only ${allSymbols.length} symbols. Minimum 5 required for guaranteed clean losing grid.`);
+  }
+  
+  const grid: GridCell[] = [];
+  const counts: Record<string, number> = {};
+  
+  // Create a pool with balanced distribution
+  // Each symbol appears exactly MAX_PER_SYMBOL times in the pool
+  let pool: ScratchSymbol[] = [];
+  for (const symbol of allSymbols) {
+    for (let i = 0; i < MAX_PER_SYMBOL; i++) {
+      pool.push(symbol);
+    }
+  }
+  
+  // Shuffle the pool
+  pool = shuffle(pool);
+  
+  // Pick 9 items from pool, respecting the limit
+  let poolIndex = 0;
+  
+  for (let i = 0; i < GRID_SIZE; i++) {
+    let selected: ScratchSymbol | null = null;
+    
+    // Try to find a valid symbol from the pool
+    for (let attempt = 0; attempt < pool.length; attempt++) {
+      const candidate = pool[(poolIndex + attempt) % pool.length];
+      if ((counts[candidate.id] || 0) < MAX_PER_SYMBOL) {
+        selected = candidate;
+        poolIndex = (poolIndex + attempt + 1) % pool.length;
         break;
       }
     }
     
-    // If pool is exhausted for valid picks, find ANY valid symbol
-    if (!selectedSymbol) {
-      for (const candidate of allSymbols) {
-        if ((symbolCounts[candidate.id] || 0) < maxPerSymbol) {
-          selectedSymbol = candidate;
+    // If pool exhausted, find any symbol under limit
+    if (!selected) {
+      for (const symbol of allSymbols) {
+        if ((counts[symbol.id] || 0) < MAX_PER_SYMBOL) {
+          selected = symbol;
           break;
         }
       }
     }
     
-    // Last resort: if still no valid symbol (shouldn't happen with >= 5 symbols)
-    // This would mean we have fewer than 5 unique symbols
-    if (!selectedSymbol) {
-      // Find the symbol with the lowest count
+    // Last resort: pick symbol with lowest count (bad config scenario)
+    if (!selected) {
       let minCount = Infinity;
-      for (const s of allSymbols) {
-        const count = symbolCounts[s.id] || 0;
+      for (const symbol of allSymbols) {
+        const count = counts[symbol.id] || 0;
         if (count < minCount) {
           minCount = count;
-          selectedSymbol = s;
+          selected = symbol;
         }
       }
     }
     
-    if (selectedSymbol) {
-      symbolCounts[selectedSymbol.id] = (symbolCounts[selectedSymbol.id] || 0) + 1;
-      result.push({
+    if (selected) {
+      counts[selected.id] = (counts[selected.id] || 0) + 1;
+      grid.push({
         position: i,
-        symbol_id: selectedSymbol.id,
-        image_url: selectedSymbol.image_url,
-        name: selectedSymbol.name,
+        symbol_id: selected.id,
+        image_url: selected.image_url,
+        name: selected.name,
       });
-      
-      // Remove used symbol from pool to distribute more evenly
-      const idx = pool.findIndex(p => p.id === selectedSymbol!.id);
-      if (idx !== -1) pool.splice(idx, 1);
     }
   }
-
-  // VALIDATION: Ensure no symbol appears 3+ times
+  
+  // VALIDATION: Ensure no 3+ matches
   const finalCounts: Record<string, number> = {};
-  for (const r of result) {
-    finalCounts[r.symbol_id] = (finalCounts[r.symbol_id] || 0) + 1;
+  for (const cell of grid) {
+    finalCounts[cell.symbol_id] = (finalCounts[cell.symbol_id] || 0) + 1;
   }
   
-  const problematicSymbols = Object.entries(finalCounts).filter(([_, count]) => count >= 3);
-  if (problematicSymbols.length > 0) {
-    console.error(`CRITICAL: Losing grid has 3+ matches! Symbols: ${JSON.stringify(problematicSymbols)}`);
-    // FIX IT: Replace excess occurrences with other symbols
-    for (const [symbolId, count] of problematicSymbols) {
-      const excessCount = count - 2;
-      let replaced = 0;
-      
-      for (let i = 0; i < result.length && replaced < excessCount; i++) {
-        if (result[i].symbol_id === symbolId) {
-          // Find a replacement symbol that has count < 2
-          const replacement = allSymbols.find(s => 
-            s.id !== symbolId && (finalCounts[s.id] || 0) < 2
-          );
-          
-          if (replacement) {
-            result[i] = {
-              position: i,
-              symbol_id: replacement.id,
-              image_url: replacement.image_url,
-              name: replacement.name,
-            };
-            finalCounts[symbolId]--;
-            finalCounts[replacement.id] = (finalCounts[replacement.id] || 0) + 1;
-            replaced++;
-          }
+  // Fix any violations
+  const violations = Object.entries(finalCounts).filter(([_, count]) => count >= 3);
+  
+  for (const [violatingId, count] of violations) {
+    const excess = count - MAX_PER_SYMBOL;
+    let fixed = 0;
+    
+    for (let i = 0; i < grid.length && fixed < excess; i++) {
+      if (grid[i].symbol_id === violatingId) {
+        // Find a replacement symbol
+        const replacement = allSymbols.find(s => 
+          s.id !== violatingId && (finalCounts[s.id] || 0) < MAX_PER_SYMBOL
+        );
+        
+        if (replacement) {
+          grid[i] = {
+            position: i,
+            symbol_id: replacement.id,
+            image_url: replacement.image_url,
+            name: replacement.name,
+          };
+          finalCounts[violatingId]--;
+          finalCounts[replacement.id] = (finalCounts[replacement.id] || 0) + 1;
+          fixed++;
         }
       }
     }
+    
+    if (fixed < excess) {
+      console.error(`CRITICAL: Could not fix all violations for symbol ${violatingId}. Need more unique symbols.`);
+    }
   }
-
-  // Final shuffle to randomize positions
-  shuffle(result);
-  for (let i = 0; i < result.length; i++) {
-    result[i].position = i;
-  }
-
-  return result;
+  
+  // Final shuffle
+  const shuffled = shuffle(grid);
+  return shuffled.map((cell, idx) => ({ ...cell, position: idx }));
 }
 
+// =============================================================================
+// MAIN HANDLER
+// =============================================================================
+
 serve(async (req) => {
+  // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Validate authorization
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // Create Supabase client with user auth
     const supabaseAuth = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
+      { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Get user ID from token
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    
     if (claimsError || !claimsData?.claims?.sub) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -275,42 +305,50 @@ serve(async (req) => {
 
     const userId = claimsData.claims.sub as string;
 
-    const body = (await req.json()) as BuyScratchChanceRequest;
+    // Parse request body
+    const body = await req.json() as BuyScratchChanceRequest;
     if (!body?.scratch_card_id) {
-      return new Response(JSON.stringify({ error: "Missing scratch_card_id" }), {
+      return new Response(JSON.stringify({ error: "ID da raspadinha não informado" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // Admin client for database operations
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Validate scratch card exists
+    // ==========================================================================
+    // STEP 1: Validate scratch card
+    // ==========================================================================
     const { data: card, error: cardError } = await supabaseAdmin
       .from("scratch_cards")
-      .select("id, is_active, title")
+      .select("id, is_active, title, price")
       .eq("id", body.scratch_card_id)
       .single();
+
     if (cardError || !card) {
-      return new Response(JSON.stringify({ error: "Scratch card not found" }), {
+      return new Response(JSON.stringify({ error: "Raspadinha não encontrada" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
     if (!card.is_active) {
-      return new Response(JSON.stringify({ error: "Scratch card is not active" }), {
+      return new Response(JSON.stringify({ error: "Raspadinha não está ativa" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch active batch (enforce total_cards)
+    // ==========================================================================
+    // STEP 2: Validate active batch
+    // ==========================================================================
     const { data: batch, error: batchError } = await supabaseAdmin
       .from("scratch_card_batches")
-      .select("id, total_cards, cards_sold, prizes_distributed")
+      .select("id, total_cards, cards_sold, prizes_distributed, total_prizes")
       .eq("scratch_card_id", body.scratch_card_id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -318,91 +356,122 @@ serve(async (req) => {
       .maybeSingle();
 
     if (batchError || !batch) {
-      return new Response(JSON.stringify({ error: "No active batch for this scratch card" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if ((batch.cards_sold ?? 0) >= batch.total_cards) {
-      return new Response(JSON.stringify({ error: "Batch sold out" }), {
+      return new Response(JSON.stringify({ error: "Nenhum lote ativo para esta raspadinha" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch symbols
+    if ((batch.cards_sold ?? 0) >= batch.total_cards) {
+      return new Response(JSON.stringify({ error: "Lote esgotado" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ==========================================================================
+    // STEP 3: Fetch symbols
+    // ==========================================================================
     const { data: symbols, error: symbolsError } = await supabaseAdmin
       .from("scratch_symbols")
       .select("*")
       .eq("scratch_card_id", body.scratch_card_id);
 
     if (symbolsError) throw symbolsError;
-    const allSymbols = (symbols ?? []) as ScratchSymbolRow[];
+    
+    const allSymbols = (symbols ?? []) as ScratchSymbol[];
+    
     if (allSymbols.length === 0) {
-      return new Response(JSON.stringify({ error: "No symbols configured for this scratch card" }), {
+      return new Response(JSON.stringify({ error: "Nenhum símbolo configurado" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Determine if winner (and which prize) respecting probability + remaining_quantity
+    if (allSymbols.length < 5) {
+      console.warn(`Raspadinha ${card.title} tem apenas ${allSymbols.length} símbolos. Mínimo recomendado: 5`);
+    }
+
+    // ==========================================================================
+    // STEP 4: Determine if winner based on probabilities
+    // ==========================================================================
+    
+    // Build list of eligible winning symbols
     const winCandidates = allSymbols
-      .map((s) => ({
-        symbol: s,
-        prob: normalizeProbability(s.probability),
+      .map(symbol => ({
+        symbol,
+        probability: normalizeProbability(symbol.probability),
       }))
-      .filter(({ symbol, prob }) => {
-        if (prob <= 0) return false;
+      .filter(({ symbol, probability }) => {
+        // Must have valid probability
+        if (probability <= 0) return false;
+        // Must have positive prize value
         if (!Number.isFinite(symbol.prize_value) || symbol.prize_value <= 0) return false;
-        if (symbol.remaining_quantity === null) return true; // unlimited
-        return symbol.remaining_quantity > 0;
+        // Must have remaining quantity (or unlimited)
+        if (symbol.remaining_quantity !== null && symbol.remaining_quantity <= 0) return false;
+        return true;
       });
 
-    const totalWinProbability = Math.min(
-      1,
-      winCandidates.reduce((sum, x) => sum + x.prob, 0),
-    );
+    // Calculate total win probability
+    const totalWinProbability = Math.min(1, winCandidates.reduce((sum, x) => sum + x.probability, 0));
 
-    let isWinner = Math.random() < totalWinProbability && winCandidates.length > 0;
-    let winningSymbol: ScratchSymbolRow | null = null;
+    // Roll the dice
+    let isWinner = winCandidates.length > 0 && Math.random() < totalWinProbability;
+    let winningSymbol: ScratchSymbol | null = null;
 
     if (isWinner) {
-      winningSymbol = pickWeighted(winCandidates.map((x) => ({ item: x.symbol, weight: x.prob })));
+      // Pick which prize was won (weighted by probability)
+      winningSymbol = pickWeighted(
+        winCandidates.map(x => ({ item: x.symbol, weight: x.probability }))
+      );
 
-      // If limited, try to decrement atomically-ish (optimistic concurrency)
-      if (winningSymbol.remaining_quantity !== null) {
-        const current = winningSymbol.remaining_quantity;
-        const { data: updated, error: decError } = await supabaseAdmin
+      // If symbol has limited quantity, try to claim it
+      if (winningSymbol && winningSymbol.remaining_quantity !== null) {
+        const currentQty = winningSymbol.remaining_quantity;
+        
+        const { data: updated, error: updateError } = await supabaseAdmin
           .from("scratch_symbols")
-          .update({ remaining_quantity: current - 1 })
+          .update({ remaining_quantity: currentQty - 1 })
           .eq("id", winningSymbol.id)
-          .eq("remaining_quantity", current)
+          .eq("remaining_quantity", currentQty) // Optimistic locking
           .select("id")
           .maybeSingle();
 
-        if (decError || !updated) {
-          // Someone else consumed the last one; fallback to losing
-          console.warn("Prize quantity race detected; falling back to losing grid", decError);
+        if (updateError || !updated) {
+          // Race condition: someone else got the last prize
+          console.warn(`Concorrência: prêmio ${winningSymbol.name} esgotado. Convertendo para derrota.`);
           isWinner = false;
           winningSymbol = null;
         }
       }
     }
 
-    const gridSymbols = isWinner && winningSymbol
-      ? generateWinningGrid(allSymbols, winningSymbol)
-      : generateLosingGrid(allSymbols);
+    // ==========================================================================
+    // STEP 5: Generate grid
+    // ==========================================================================
+    let grid: GridCell[];
+    let prizeWon: number | null = null;
+    let winningSymbolId: string | null = null;
 
-    const prizeWon = isWinner && winningSymbol ? winningSymbol.prize_value : null;
-    const winningSymbolId = isWinner && winningSymbol ? winningSymbol.id : null;
+    if (isWinner && winningSymbol) {
+      grid = generateWinningGrid(allSymbols, winningSymbol);
+      prizeWon = winningSymbol.prize_value;
+      winningSymbolId = winningSymbol.id;
+      console.log(`🎉 Vitória! Prêmio: R$ ${prizeWon} (${winningSymbol.name})`);
+    } else {
+      grid = generateLosingGrid(allSymbols);
+      console.log(`❌ Derrota. Grid gerado com ${allSymbols.length} símbolos.`);
+    }
 
-    // Insert chance
+    // ==========================================================================
+    // STEP 6: Save chance to database
+    // ==========================================================================
     const { data: chance, error: chanceError } = await supabaseAdmin
       .from("scratch_chances")
       .insert({
         scratch_card_id: body.scratch_card_id,
         user_id: userId,
-        symbols: gridSymbols as unknown as any,
+        symbols: grid,
         is_revealed: false,
         prize_won: prizeWon,
         winning_symbol_id: winningSymbolId,
@@ -412,26 +481,35 @@ serve(async (req) => {
 
     if (chanceError) throw chanceError;
 
-    // Update batch counters
-    const nextCardsSold = (batch.cards_sold ?? 0) + 1;
-    const nextPrizesDistributed = (batch.prizes_distributed ?? 0) + (isWinner ? 1 : 0);
-    const { error: batchUpdateError } = await supabaseAdmin
+    // ==========================================================================
+    // STEP 7: Update batch counters
+    // ==========================================================================
+    const newCardsSold = (batch.cards_sold ?? 0) + 1;
+    const newPrizesDistributed = (batch.prizes_distributed ?? 0) + (isWinner ? 1 : 0);
+
+    await supabaseAdmin
       .from("scratch_card_batches")
-      .update({ cards_sold: nextCardsSold, prizes_distributed: nextPrizesDistributed })
+      .update({
+        cards_sold: newCardsSold,
+        prizes_distributed: newPrizesDistributed,
+      })
       .eq("id", batch.id);
 
-    if (batchUpdateError) {
-      // Don't fail the request after the chance is created.
-      console.error("Failed to update batch counters:", batchUpdateError);
-    }
-
-    return new Response(JSON.stringify({ chance }), {
+    // ==========================================================================
+    // RESPONSE
+    // ==========================================================================
+    return new Response(JSON.stringify({ 
+      chance,
+      is_winner: isWinner,
+      prize_won: prizeWon,
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (error) {
-    console.error("Error buying scratch chance:", error);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    console.error("Erro ao comprar raspadinha:", error);
+    return new Response(JSON.stringify({ error: "Erro interno do servidor" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScratchSymbolResult } from '@/types';
-import { Trophy, RotateCcw, Sparkles, Plus, Wallet } from 'lucide-react';
+import { Trophy, Sparkles, Plus, Wallet, RotateCcw } from 'lucide-react';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
+
+// =============================================================================
+// TYPES
+// =============================================================================
 
 interface ScratchCardProps {
   symbols: ScratchSymbolResult[];
@@ -13,19 +17,25 @@ interface ScratchCardProps {
   onReveal?: (isWinner: boolean, prize: number) => void;
   isRevealed?: boolean;
   prizeWon?: number | null;
-  // Props para o botão "Comprar Novamente"
   onBuyAgain?: () => void;
   isBuying?: boolean;
   canBuyAgain?: boolean;
   price?: number;
 }
 
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
 const CARD_WIDTH = 300;
 const CARD_HEIGHT = 300;
 const GRID_SIZE = 3;
-const CELL_SIZE = CARD_WIDTH / GRID_SIZE;
-const SCRATCH_RADIUS = 25;
-const REVEAL_THRESHOLD = 0.6; // 60% raspado para revelar
+const SCRATCH_RADIUS = 30;
+const REVEAL_THRESHOLD = 0.55; // 55% raspado para revelar automaticamente
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
 
 export function ScratchCard({
   symbols,
@@ -38,58 +48,36 @@ export function ScratchCard({
   canBuyAgain = true,
   price,
 }: ScratchCardProps) {
+  // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const hasCalledRevealRef = useRef(false);
+  const lastScratchSoundRef = useRef(0);
+  
+  // State
   const [isScratching, setIsScratching] = useState(false);
   const [scratchPercentage, setScratchPercentage] = useState(0);
   const [isRevealed, setIsRevealed] = useState(externalRevealed);
-  const [hasCalledOnReveal, setHasCalledOnReveal] = useState(false);
-  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
-  const onRevealCalledRef = useRef(false);
-  const lastScratchSoundRef = useRef(0);
+  
+  // Hooks
   const { playScratch, playReveal, playWin, playBigWin } = useSoundEffects();
 
-  // Sincronizar estado quando uma nova chance é carregada (props mudam)
+  // Determinar se é vitória baseado no prize_won (fonte da verdade do servidor)
+  const isWinner = prizeWon !== null && prizeWon !== undefined && prizeWon > 0;
+
+  // ==========================================================================
+  // RESET quando uma nova chance é carregada
+  // ==========================================================================
   useEffect(() => {
     setIsRevealed(externalRevealed);
     setScratchPercentage(0);
-    setHasCalledOnReveal(externalRevealed);
-    onRevealCalledRef.current = externalRevealed;
-    
-    // Re-inicializar o canvas quando não revelado
-    if (!externalRevealed && canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        // Limpar e redesenhar
-        ctx.globalCompositeOperation = 'source-over';
-      }
-    }
+    hasCalledRevealRef.current = externalRevealed;
+    lastPosRef.current = null;
   }, [externalRevealed, symbols]);
 
-  // Verificar vitória
-  // IMPORTANTE: o resultado (ganhou/perdeu) é definido no sorteio ao comprar a chance.
-  // Se a gente inferir vitória apenas por contagem de símbolos, com poucos símbolos cadastrados
-  // fica impossível montar uma grade 3x3 sem repetir 3+ vezes algum símbolo, dando “vitória” sempre.
-  const checkWin = useCallback(() => {
-    if (symbols.length !== 9) return { isWinner: false, prize: 0, symbolId: undefined as string | undefined };
-
-    // Se não há prêmio, é derrota (independente da distribuição visual dos símbolos)
-    if (!prizeWon || prizeWon <= 0) {
-      return { isWinner: false, prize: 0, symbolId: undefined as string | undefined };
-    }
-
-    // Para efeitos visuais (highlight), tentamos encontrar um símbolo que apareça 3+ vezes
-    // (em chances vencedoras geradas pelo sistema isso deve existir).
-    const symbolCounts: Record<string, number> = {};
-    for (const s of symbols) {
-      symbolCounts[s.symbol_id] = (symbolCounts[s.symbol_id] || 0) + 1;
-    }
-    const symbolId = Object.entries(symbolCounts).find(([, count]) => count >= 3)?.[0];
-
-    return { isWinner: true, prize: prizeWon, symbolId };
-  }, [symbols, prizeWon]);
-
-  // Inicializar canvas com cobertura
-  // Adicionamos `symbols` como dependência para reinicializar quando uma nova chance é comprada
+  // ==========================================================================
+  // INICIALIZAR CANVAS com cobertura
+  // ==========================================================================
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || isRevealed) return;
@@ -97,10 +85,8 @@ export function ScratchCard({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Resetar composite operation para desenhar normalmente
     ctx.globalCompositeOperation = 'source-over';
 
-    // Preencher com cor/pattern de cobertura
     if (coverImage) {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -110,32 +96,34 @@ export function ScratchCard({
       };
       img.src = coverImage;
     } else {
-      // Gradiente padrão
+      // Gradiente padrão moderno
       const gradient = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
-      gradient.addColorStop(0, '#6366f1');
-      gradient.addColorStop(0.5, '#8b5cf6');
-      gradient.addColorStop(1, '#a855f7');
+      gradient.addColorStop(0, '#f59e0b');
+      gradient.addColorStop(0.5, '#f97316');
+      gradient.addColorStop(1, '#ea580c');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
-      // Adicionar texto
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.font = 'bold 24px sans-serif';
+      // Texto principal
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = 'bold 28px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('RASPE AQUI', CARD_WIDTH / 2, CARD_HEIGHT / 2 - 20);
-      
-      ctx.font = '16px sans-serif';
-      ctx.fillText('🎰 🎰 🎰', CARD_WIDTH / 2, CARD_HEIGHT / 2 + 20);
 
-      // Adicionar partículas decorativas
-      for (let i = 0; i < 30; i++) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.3})`;
+      // Subtexto
+      ctx.font = '18px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillText('🎰 Boa sorte! 🎰', CARD_WIDTH / 2, CARD_HEIGHT / 2 + 20);
+
+      // Partículas decorativas
+      for (let i = 0; i < 40; i++) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.4})`;
         ctx.beginPath();
         ctx.arc(
           Math.random() * CARD_WIDTH,
           Math.random() * CARD_HEIGHT,
-          Math.random() * 3 + 1,
+          Math.random() * 4 + 1,
           0,
           Math.PI * 2
         );
@@ -144,7 +132,9 @@ export function ScratchCard({
     }
   }, [coverImage, isRevealed, symbols]);
 
-  // Calcular porcentagem raspada
+  // ==========================================================================
+  // CALCULAR porcentagem raspada
+  // ==========================================================================
   const calculateScratchPercentage = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return 0;
@@ -157,15 +147,15 @@ export function ScratchCard({
     let transparentPixels = 0;
 
     for (let i = 3; i < pixels.length; i += 4) {
-      if (pixels[i] === 0) {
-        transparentPixels++;
-      }
+      if (pixels[i] === 0) transparentPixels++;
     }
 
     return transparentPixels / (pixels.length / 4);
   }, []);
 
-  // Função de raspar
+  // ==========================================================================
+  // FUNÇÃO DE RASPAR
+  // ==========================================================================
   const scratch = useCallback((x: number, y: number) => {
     const canvas = canvasRef.current;
     if (!canvas || isRevealed) return;
@@ -174,8 +164,8 @@ export function ScratchCard({
     if (!ctx) return;
 
     ctx.globalCompositeOperation = 'destination-out';
-    
-    // Se temos posição anterior, desenhar linha
+
+    // Desenhar linha se houver posição anterior
     if (lastPosRef.current) {
       ctx.beginPath();
       ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
@@ -185,16 +175,16 @@ export function ScratchCard({
       ctx.stroke();
     }
 
-    // Desenhar círculo na posição atual
+    // Círculo na posição atual
     ctx.beginPath();
     ctx.arc(x, y, SCRATCH_RADIUS, 0, Math.PI * 2);
     ctx.fill();
 
     lastPosRef.current = { x, y };
 
-    // Play scratch sound (throttled)
+    // Som de raspar (throttled)
     const now = Date.now();
-    if (now - lastScratchSoundRef.current > 100) {
+    if (now - lastScratchSoundRef.current > 80) {
       playScratch();
       lastScratchSoundRef.current = now;
     }
@@ -203,32 +193,36 @@ export function ScratchCard({
     const percentage = calculateScratchPercentage();
     setScratchPercentage(percentage);
 
-    // Verificar se deve revelar (apenas se ainda não chamou onReveal)
-    if (percentage >= REVEAL_THRESHOLD && !hasCalledOnReveal && !onRevealCalledRef.current) {
-      onRevealCalledRef.current = true;
-      setHasCalledOnReveal(true);
+    // Auto-revelar quando atingir threshold
+    if (percentage >= REVEAL_THRESHOLD && !hasCalledRevealRef.current) {
+      hasCalledRevealRef.current = true;
       setIsRevealed(true);
-      
-      const result = checkWin();
-      playReveal();
-      
-      // Play win sound if winner
-      if (result.isWinner) {
-        setTimeout(() => {
-          if (result.prize >= 50) {
-            playBigWin();
-          } else {
-            playWin();
-          }
-        }, 300);
-      }
-      
-      // Chamar onReveal apenas uma vez
-      onReveal?.(result.isWinner, result.prize);
+      triggerReveal();
     }
-  }, [isRevealed, hasCalledOnReveal, calculateScratchPercentage, checkWin, onReveal, playScratch, playReveal, playWin, playBigWin]);
+  }, [isRevealed, calculateScratchPercentage, playScratch]);
 
-  // Event handlers
+  // ==========================================================================
+  // TRIGGER REVEAL
+  // ==========================================================================
+  const triggerReveal = useCallback(() => {
+    playReveal();
+    
+    if (isWinner) {
+      setTimeout(() => {
+        if ((prizeWon || 0) >= 50) {
+          playBigWin();
+        } else {
+          playWin();
+        }
+      }, 300);
+    }
+    
+    onReveal?.(isWinner, prizeWon || 0);
+  }, [isWinner, prizeWon, onReveal, playReveal, playWin, playBigWin]);
+
+  // ==========================================================================
+  // EVENT HANDLERS
+  // ==========================================================================
   const getPosition = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -243,12 +237,12 @@ export function ScratchCard({
         x: (touch.clientX - rect.left) * scaleX,
         y: (touch.clientY - rect.top) * scaleY,
       };
-    } else {
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY,
-      };
     }
+    
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    };
   };
 
   const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
@@ -271,80 +265,73 @@ export function ScratchCard({
     lastPosRef.current = null;
   };
 
-  const revealAll = () => {
-    if (hasCalledOnReveal || onRevealCalledRef.current) return;
-    
-    onRevealCalledRef.current = true;
-    setHasCalledOnReveal(true);
+  const handleRevealAll = () => {
+    if (hasCalledRevealRef.current) return;
+    hasCalledRevealRef.current = true;
     setIsRevealed(true);
-    
-    playReveal();
-    const result = checkWin();
-    
-    if (result.isWinner) {
-      setTimeout(() => {
-        if (result.prize >= 50) {
-          playBigWin();
-        } else {
-          playWin();
-        }
-      }, 300);
-    }
-    
-    onReveal?.(result.isWinner, result.prize);
+    triggerReveal();
   };
 
-  // Encontrar símbolos que formam trio vencedor
-  const winResult = checkWin();
-  const winningSymbolId = winResult.isWinner ? 
-    symbols.find((_, i, arr) => {
-      const count = arr.filter(s => s.symbol_id === arr[i].symbol_id).length;
-      return count >= 3;
-    })?.symbol_id : null;
+  // Encontrar símbolo vencedor para highlight visual
+  const winningSymbolId = isWinner ? (() => {
+    const counts: Record<string, number> = {};
+    for (const s of symbols) {
+      counts[s.symbol_id] = (counts[s.symbol_id] || 0) + 1;
+    }
+    return Object.entries(counts).find(([_, count]) => count >= 3)?.[0] || null;
+  })() : null;
 
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
   return (
-    <div className="flex flex-col items-center gap-4">
-      {/* Card da Raspadinha */}
-      <Card className="relative overflow-hidden p-1 bg-gradient-to-br from-yellow-400 via-yellow-500 to-orange-500">
-        <div 
-          className="relative rounded-lg overflow-hidden"
+    <div className="flex flex-col items-center gap-4 w-full max-w-[320px]">
+      {/* Card Principal */}
+      <Card className="relative overflow-hidden p-1.5 bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 shadow-xl">
+        <div
+          className="relative rounded-lg overflow-hidden bg-white"
           style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}
         >
-          {/* Camada de símbolos (por baixo) */}
-          <div 
-            className="absolute inset-0 grid grid-cols-3 grid-rows-3 bg-white"
-            style={{ 
-              opacity: isRevealed ? 1 : 1,
-              pointerEvents: 'none',
-            }}
-          >
+          {/* Grid de Símbolos */}
+          <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
             {symbols.map((symbol, index) => {
               const isWinningSymbol = symbol.symbol_id === winningSymbolId;
-              
+
               return (
-                <div
-                  key={index}
+                <motion.div
+                  key={`${symbol.symbol_id}-${index}`}
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ 
+                    scale: isRevealed ? 1 : 0.9, 
+                    opacity: 1,
+                  }}
+                  transition={{ delay: isRevealed ? index * 0.05 : 0, duration: 0.3 }}
                   className={`
                     flex items-center justify-center p-2 border border-gray-100
                     transition-all duration-300
-                    ${isRevealed && isWinningSymbol ? 'bg-yellow-100 animate-pulse' : 'bg-white'}
+                    ${isRevealed && isWinningSymbol 
+                      ? 'bg-gradient-to-br from-yellow-100 to-amber-200 ring-2 ring-yellow-400' 
+                      : 'bg-white'
+                    }
                   `}
                 >
                   {symbol.image_url ? (
-                    <img 
-                      src={symbol.image_url} 
+                    <img
+                      src={symbol.image_url}
                       alt={symbol.name}
-                      className="w-full h-full object-contain"
+                      className={`w-full h-full object-contain ${
+                        isRevealed && isWinningSymbol ? 'animate-pulse' : ''
+                      }`}
                     />
                   ) : (
                     <span className="text-4xl">{symbol.name}</span>
                   )}
-                </div>
+                </motion.div>
               );
             })}
           </div>
 
-          {/* Camada de raspar (por cima) */}
+          {/* Canvas de Raspar */}
           {!isRevealed && (
             <canvas
               ref={canvasRef}
@@ -362,120 +349,156 @@ export function ScratchCard({
             />
           )}
 
-          {/* Overlay de vitória */}
-          {isRevealed && winResult.isWinner && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="bg-yellow-500/90 text-white px-6 py-3 rounded-full font-bold text-xl animate-scale-in shadow-lg flex items-center gap-2">
-                <Trophy className="h-6 w-6" />
-                GANHOU!
-              </div>
-            </div>
-          )}
+          {/* Badge de Vitória */}
+          <AnimatePresence>
+            {isRevealed && isWinner && (
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              >
+                <div className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white px-6 py-3 rounded-full font-bold text-xl shadow-lg flex items-center gap-2">
+                  <Trophy className="h-6 w-6" />
+                  GANHOU!
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </Card>
 
-      {/* Barra de progresso */}
+      {/* Barra de Progresso */}
       {!isRevealed && (
-        <div className="w-full max-w-[300px] space-y-2">
+        <div className="w-full space-y-2">
           <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Raspado</span>
+            <span>Progresso</span>
             <span>{Math.round(scratchPercentage * 100)}%</span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-primary transition-all duration-200"
-              style={{ width: `${scratchPercentage * 100}%` }}
+            <motion.div
+              className="h-full bg-gradient-to-r from-amber-500 to-orange-500"
+              initial={{ width: 0 }}
+              animate={{ width: `${scratchPercentage * 100}%` }}
+              transition={{ duration: 0.1 }}
             />
           </div>
+          
+          {/* Botão Revelar Tudo */}
+          {scratchPercentage > 0.15 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRevealAll}
+                className="w-full gap-2 mt-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Revelar Tudo
+              </Button>
+            </motion.div>
+          )}
         </div>
       )}
 
       {/* Resultado */}
-      {isRevealed && (
-        <Card className={`
-          w-full max-w-[300px] p-4 text-center animate-fade-in
-          ${winResult.isWinner 
-            ? 'bg-gradient-to-r from-yellow-100 to-orange-100 border-yellow-400' 
-            : 'bg-muted/50'
-          }
-        `}>
-          {winResult.isWinner ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-center gap-2 text-yellow-600">
-                <Sparkles className="h-5 w-5" />
-                <span className="font-bold text-lg">Parabéns!</span>
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <p className="text-2xl font-bold text-yellow-700">
-                R$ {(prizeWon || 0).toFixed(2)}
-              </p>
-              <p className="text-sm text-yellow-600/80">
-                Prêmio creditado na sua carteira!
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="font-medium text-muted-foreground">Não foi dessa vez...</p>
-              <p className="text-sm text-muted-foreground">
-                Tente novamente! A sorte pode estar no próximo!
-              </p>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Botão Comprar Novamente - aparece após revelar */}
-      {isRevealed && onBuyAgain && price !== undefined && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.4 }}
-          className="w-full max-w-[300px] space-y-3"
-        >
+      <AnimatePresence mode="wait">
+        {isRevealed && (
           <motion.div
-            animate={{ scale: [1, 1.02, 1] }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full"
           >
-            <Button
-              onClick={onBuyAgain}
-              disabled={isBuying || !canBuyAgain}
-              className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 shadow-lg"
-              size="lg"
-            >
-              {isBuying ? (
-                'Comprando...'
+            <Card className={`
+              p-5 text-center
+              ${isWinner
+                ? 'bg-gradient-to-br from-yellow-50 to-amber-100 border-yellow-300'
+                : 'bg-muted/50 border-muted'
+              }
+            `}>
+              {isWinner ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-amber-600">
+                    <Sparkles className="h-5 w-5" />
+                    <span className="font-bold text-lg">Parabéns!</span>
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <p className="text-3xl font-bold text-amber-700">
+                    R$ {(prizeWon || 0).toFixed(2)}
+                  </p>
+                  <p className="text-sm text-amber-600/80">
+                    Prêmio creditado na sua carteira!
+                  </p>
+                </div>
               ) : (
-                <>
-                  <Plus className="h-5 w-5" />
-                  Comprar Novamente - R$ {price.toFixed(2)}
-                </>
+                <div className="space-y-2">
+                  <p className="font-medium text-muted-foreground">
+                    Não foi dessa vez...
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Tente novamente! A sorte pode estar na próxima!
+                  </p>
+                </div>
               )}
-            </Button>
+            </Card>
           </motion.div>
+        )}
+      </AnimatePresence>
 
-          {!canBuyAgain && (
-            <Button variant="outline" className="w-full" asChild>
-              <Link to="/carteira">
-                <Wallet className="h-4 w-4 mr-2" />
-                Adicionar Créditos
-              </Link>
-            </Button>
-          )}
-        </motion.div>
-      )}
+      {/* Botão Comprar Novamente */}
+      <AnimatePresence>
+        {isRevealed && onBuyAgain && price !== undefined && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.3, duration: 0.4 }}
+            className="w-full space-y-3"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.02, 1] }}
+              transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
+            >
+              <Button
+                onClick={onBuyAgain}
+                disabled={isBuying || !canBuyAgain}
+                size="lg"
+                className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg text-white font-semibold"
+              >
+                {isBuying ? (
+                  <span className="flex items-center gap-2">
+                    <motion.span
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                    >
+                      ⏳
+                    </motion.span>
+                    Comprando...
+                  </span>
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5" />
+                    Comprar Novamente - R$ {price.toFixed(2)}
+                  </>
+                )}
+              </Button>
+            </motion.div>
 
-      {/* Botão revelar tudo */}
-      {!isRevealed && scratchPercentage > 0.1 && (
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={revealAll}
-          className="gap-2"
-        >
-          <RotateCcw className="h-4 w-4" />
-          Revelar Tudo
-        </Button>
-      )}
+            {!canBuyAgain && (
+              <Button variant="outline" className="w-full gap-2" asChild>
+                <Link to="/carteira">
+                  <Wallet className="h-4 w-4" />
+                  Adicionar Créditos
+                </Link>
+              </Button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
