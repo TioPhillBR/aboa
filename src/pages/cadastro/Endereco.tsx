@@ -207,7 +207,9 @@ export default function Endereco() {
         const cleanPhone = personalData.whatsapp.replace(/[^\d]/g, '');
         const cleanCep = addressData.cep.replace(/[^\d]/g, '');
         
-        await supabase
+        console.log('Updating profile with avatar_url:', avatarUrl);
+        
+        const { error: profileError, data: profileData } = await supabase
           .from('profiles')
           .update({
             phone: cleanPhone,
@@ -226,7 +228,16 @@ export default function Endereco() {
             pix_key: personalData.pixKey.trim() || null,
             pix_key_type: personalData.pixKey.trim() ? personalData.pixKeyType : null,
           })
-          .eq('id', session.user.id);
+          .eq('id', session.user.id)
+          .select('avatar_url')
+          .single();
+
+        if (profileError) {
+          console.error('Error updating profile:', profileError);
+          setError('Conta criada, mas houve erro ao salvar dados adicionais. Por favor, atualize no perfil.');
+        } else {
+          console.log('Profile updated successfully. Saved avatar_url:', profileData?.avatar_url);
+        }
 
         // Process referral
         await processReferral(session);
