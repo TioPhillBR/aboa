@@ -23,7 +23,9 @@ import {
   ArrowDownRight,
   Loader2,
   Play,
-  Crown
+  Crown,
+  ThumbsDown,
+  Target
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -37,6 +39,10 @@ interface DashboardStats {
   totalPrizesAwarded: number;
   totalWalletBalance: number;
   totalDeposits: number;
+  // Scratch card game stats
+  totalScratchPlays: number;
+  totalScratchWins: number;
+  totalScratchLosses: number;
 }
 
 interface RecentWinner {
@@ -67,6 +73,9 @@ export default function AdminDashboard() {
     totalPrizesAwarded: 0,
     totalWalletBalance: 0,
     totalDeposits: 0,
+    totalScratchPlays: 0,
+    totalScratchWins: 0,
+    totalScratchLosses: 0,
   });
   const [recentWinners, setRecentWinners] = useState<RecentWinner[]>([]);
   const [activeRaffles, setActiveRaffles] = useState<ActiveRaffle[]>([]);
@@ -89,7 +98,8 @@ export default function AdminDashboard() {
         walletsResult,
         depositsResult,
         activeRafflesResult,
-        recentWinnersResult
+        recentWinnersResult,
+        scratchPlaysResult
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('raffles').select('*', { count: 'exact', head: true }),
@@ -100,13 +110,20 @@ export default function AdminDashboard() {
         supabase.from('wallets').select('balance'),
         supabase.from('wallet_transactions').select('amount').eq('type', 'deposit'),
         supabase.from('raffles').select('id, title, total_numbers, draw_date, price').eq('status', 'open').limit(5),
-        supabase.from('raffles').select('id, title, winner_id, updated_at').eq('status', 'completed').not('winner_id', 'is', null).order('updated_at', { ascending: false }).limit(5)
+        supabase.from('raffles').select('id, title, winner_id, updated_at').eq('status', 'completed').not('winner_id', 'is', null).order('updated_at', { ascending: false }).limit(5),
+        supabase.from('scratch_chances').select('prize_won, is_revealed').eq('is_revealed', true)
       ]);
 
       // Calculate totals
       const totalPrizes = (prizesResult.data || []).reduce((sum, p) => sum + (p.prize_won || 0), 0);
       const totalBalance = (walletsResult.data || []).reduce((sum, w) => sum + (w.balance || 0), 0);
       const totalDeposits = (depositsResult.data || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+
+      // Calculate scratch card game stats (wins vs losses)
+      const scratchPlays = scratchPlaysResult.data || [];
+      const totalScratchPlays = scratchPlays.length;
+      const totalScratchWins = scratchPlays.filter(p => p.prize_won && p.prize_won > 0).length;
+      const totalScratchLosses = totalScratchPlays - totalScratchWins;
 
       setStats({
         totalUsers: usersResult.count || 0,
@@ -117,6 +134,9 @@ export default function AdminDashboard() {
         totalPrizesAwarded: totalPrizes,
         totalWalletBalance: totalBalance,
         totalDeposits: totalDeposits,
+        totalScratchPlays,
+        totalScratchWins,
+        totalScratchLosses,
       });
 
       // Process active raffles with ticket counts
@@ -299,15 +319,22 @@ export default function AdminDashboard() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Raspadinhas</p>
-                  <p className="text-2xl font-bold">{stats.totalScratchCards}</p>
+                  <p className="text-sm text-muted-foreground">Raspadinhas Jogadas</p>
+                  <p className="text-2xl font-bold">{stats.totalScratchPlays}</p>
                 </div>
                 <div className="p-3 rounded-full bg-accent/20">
                   <Sparkles className="h-6 w-6 text-accent" />
                 </div>
               </div>
-              <div className="mt-4">
-                <p className="text-xs text-muted-foreground">Tipos disponíveis na plataforma</p>
+              <div className="mt-4 flex items-center gap-2">
+                <Badge variant="secondary" className="bg-success/10 text-success">
+                  <Trophy className="h-3 w-3 mr-1" />
+                  {stats.totalScratchWins} vitórias
+                </Badge>
+                <Badge variant="secondary" className="bg-destructive/10 text-destructive">
+                  <ThumbsDown className="h-3 w-3 mr-1" />
+                  {stats.totalScratchLosses} derrotas
+                </Badge>
               </div>
             </CardContent>
           </Card>
@@ -316,19 +343,21 @@ export default function AdminDashboard() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Taxa de Conversão</p>
+                  <p className="text-sm text-muted-foreground">Taxa de Vitória</p>
                   <p className="text-2xl font-bold">
-                    {stats.totalUsers > 0 
-                      ? ((stats.totalTicketsSold / stats.totalUsers)).toFixed(1)
-                      : 0}
+                    {stats.totalScratchPlays > 0 
+                      ? ((stats.totalScratchWins / stats.totalScratchPlays) * 100).toFixed(1)
+                      : 0}%
                   </p>
                 </div>
                 <div className="p-3 rounded-full bg-success/10">
-                  <TrendingUp className="h-6 w-6 text-success" />
+                  <Target className="h-6 w-6 text-success" />
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-xs text-muted-foreground">Tickets por usuário</p>
+                <p className="text-xs text-muted-foreground">
+                  {stats.totalScratchWins} vitórias de {stats.totalScratchPlays} jogadas
+                </p>
               </div>
             </CardContent>
           </Card>
