@@ -66,10 +66,10 @@ export interface AffiliateWithdrawal {
 }
 
 export function useAffiliates() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch all affiliates (admin)
+  // Fetch all affiliates (admin only)
   const { data: affiliates, isLoading: isLoadingAffiliates } = useQuery({
     queryKey: ['affiliates'],
     queryFn: async () => {
@@ -81,6 +81,7 @@ export function useAffiliates() {
       if (error) throw error;
       return data as Affiliate[];
     },
+    enabled: isAdmin, // Only fetch for admins
   });
 
   // Fetch current user's affiliate profile
