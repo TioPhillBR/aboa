@@ -67,11 +67,24 @@ export function useWallet() {
   };
 
   // Calculate bonus balance from referral and admin bonus transactions
+  // Bonus is calculated by summing all bonus credits received minus bonus used in purchases
   const bonusBalance = useMemo(() => {
-    return transactions
+    // Sum all bonus credits received
+    const bonusReceived = transactions
       .filter(tx => (tx.source_type === 'referral' || tx.source_type === 'admin_bonus') && tx.amount > 0)
       .reduce((sum, tx) => sum + tx.amount, 0);
-  }, [transactions]);
+    
+    // The bonus can't go negative and can't exceed what was received
+    // Since we can't track exactly which purchases used bonus vs principal,
+    // we show the minimum between bonus received and current wallet balance
+    return Math.min(bonusReceived, wallet?.balance ?? 0);
+  }, [transactions, wallet?.balance]);
+
+  // Main balance is wallet balance minus bonus balance
+  const mainBalance = useMemo(() => {
+    const total = wallet?.balance ?? 0;
+    return Math.max(0, total - bonusBalance);
+  }, [wallet?.balance, bonusBalance]);
 
   const addTransaction = async (
     amount: number,
@@ -134,7 +147,8 @@ export function useWallet() {
     wallet,
     transactions,
     isLoading,
-    balance: wallet?.balance ?? 0,
+    balance: mainBalance,
+    totalBalance: wallet?.balance ?? 0,
     bonusBalance,
     deposit,
     purchase,

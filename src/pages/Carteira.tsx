@@ -354,7 +354,7 @@ export default function Carteira() {
             {/* Saldo Total */}
             <div className="p-4 rounded-lg bg-muted/50 border text-center">
               <p className="text-muted-foreground mb-1">Saldo Total (Principal + Bônus)</p>
-              <p className="text-3xl font-bold">R$ {balance.toFixed(2)}</p>
+              <p className="text-3xl font-bold">R$ {(balance + bonusBalance).toFixed(2)}</p>
             </div>
 
             {/* Histórico de Transações */}
