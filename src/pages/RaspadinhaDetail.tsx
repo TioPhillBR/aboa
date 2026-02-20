@@ -119,8 +119,8 @@ export default function RaspadinhaDetail() {
       });
     }
 
-    // Atualizar lista de chances
-    refetch();
+    // Atualizar lista de chances em background (sem mostrar loading skeleton)
+    refetch(true);
   }, [activeChance, revealChance, awardPrize, scratchCard, addNotification, refetch]);
 
   const handleCloseCelebration = () => {
