@@ -220,7 +220,7 @@ export default function RaspadinhaDetail() {
       <Header />
 
       <main className="container py-6 lg:py-8">
-        <BackButton className="mb-6" />
+        <BackButton className="mb-6" to="/raspadinhas" />
 
         {/* Header da Raspadinha */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
