@@ -36,17 +36,11 @@ interface BuyScratchChanceRequest {
 // UTILITY FUNCTIONS
 // =============================================================================
 
-/**
- * Normalize probability value (handles both 0.10 and 10 formats)
- */
 function normalizeProbability(value: number): number {
   if (!Number.isFinite(value) || value < 0) return 0;
   return value > 1 ? value / 100 : value;
 }
 
-/**
- * Fisher-Yates shuffle
- */
 function shuffle<T>(arr: T[]): T[] {
   const result = [...arr];
   for (let i = result.length - 1; i > 0; i--) {
@@ -56,40 +50,25 @@ function shuffle<T>(arr: T[]): T[] {
   return result;
 }
 
-/**
- * Pick a random item based on weights
- */
 function pickWeighted<T>(items: Array<{ item: T; weight: number }>): T | null {
   if (items.length === 0) return null;
-  
   const total = items.reduce((sum, x) => sum + x.weight, 0);
   if (total <= 0) return items[0].item;
-  
   const roll = Math.random() * total;
   let cumulative = 0;
-  
   for (const { item, weight } of items) {
     cumulative += weight;
     if (roll <= cumulative) return item;
   }
-  
   return items[items.length - 1].item;
 }
 
 // =============================================================================
-// GRID GENERATION - CORE LOGIC
+// GRID GENERATION
 // =============================================================================
 
-/**
- * Generate a WINNING grid:
- * - Exactly 3 of the winning symbol
- * - Remaining 6 positions filled with OTHER symbols (max 2 each)
- * - Total: 9 cells
- */
 function generateWinningGrid(allSymbols: ScratchSymbol[], winningSymbol: ScratchSymbol): GridCell[] {
   const grid: GridCell[] = [];
-  
-  // Add exactly 3 winning symbols
   for (let i = 0; i < 3; i++) {
     grid.push({
       position: i,
@@ -98,161 +77,62 @@ function generateWinningGrid(allSymbols: ScratchSymbol[], winningSymbol: Scratch
       name: winningSymbol.name,
     });
   }
-  
-  // Get other symbols (excluding the winner)
   const otherSymbols = allSymbols.filter(s => s.id !== winningSymbol.id);
-  
-  // Fill remaining 6 positions with other symbols (max 2 each)
   const counts: Record<string, number> = {};
   const MAX_PER_SYMBOL = 2;
-  
   for (let i = 3; i < 9; i++) {
-    // Find symbols that haven't reached the limit
     const available = otherSymbols.filter(s => (counts[s.id] || 0) < MAX_PER_SYMBOL);
-    
     let selected: ScratchSymbol;
     if (available.length > 0) {
       selected = available[Math.floor(Math.random() * available.length)];
     } else if (otherSymbols.length > 0) {
-      // Fallback: use any other symbol (shouldn't happen with >= 4 other symbols)
       selected = otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
     } else {
-      // Edge case: only 1 symbol exists (bad config)
-      console.error("CRITICAL: Only 1 symbol configured. Cannot generate valid winning grid.");
       selected = winningSymbol;
     }
-    
     counts[selected.id] = (counts[selected.id] || 0) + 1;
-    
-    grid.push({
-      position: i,
-      symbol_id: selected.id,
-      image_url: selected.image_url,
-      name: selected.name,
-    });
+    grid.push({ position: i, symbol_id: selected.id, image_url: selected.image_url, name: selected.name });
   }
-  
-  // Shuffle and reassign positions
   const shuffled = shuffle(grid);
   return shuffled.map((cell, idx) => ({ ...cell, position: idx }));
 }
 
-/**
- * Generate a LOSING grid:
- * - NO symbol appears more than 2 times (STRICT)
- * - For 4 symbols: grid can only use 8 cells max at 2 each, 
- *   so we need a different approach - allow exactly 1 symbol to appear only 1 time
- * - Uses retry mechanism to guarantee valid grid
- */
 function generateLosingGrid(allSymbols: ScratchSymbol[]): GridCell[] {
-  if (allSymbols.length === 0) {
-    console.error("No symbols available for grid generation");
-    return [];
-  }
-  
+  if (allSymbols.length === 0) return [];
   const GRID_SIZE = 9;
-  const numSymbols = allSymbols.length;
-  
-  // Special handling for fewer than 5 symbols
-  if (numSymbols < 5) {
-    console.warn(`Only ${numSymbols} symbols. Using special distribution algorithm.`);
-  }
-  
-  // For N symbols, we can have at most 2*N cells if we limit to 2 each
-  // With 4 symbols: 4*2 = 8 cells, but we need 9!
-  // Solution: One symbol must appear 3 times... but that's a win!
-  // Real solution: We need at least 5 symbols. With 4, we MUST allow 3 of one symbol.
-  
-  // CRITICAL FIX: With 4 symbols, the best we can do is:
-  // - 3 symbols with 2 each = 6 cells
-  // - 1 symbol with 3 = 9 cells (but this is a WIN visually!)
-  // 
-  // This is a configuration problem. BUT we can work around it by:
-  // Showing that the SERVER says "no prize" so even if visually there are 3 equal,
-  // the user gets nothing. The UI should trust prize_won, not the grid.
-  //
-  // However, for better UX, let's try multiple times to get a valid grid
-  
   const MAX_ATTEMPTS = 100;
   const MAX_PER_SYMBOL = 2;
-  
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const grid: GridCell[] = [];
     const counts: Record<string, number> = {};
-    
-    // Shuffle symbols for random distribution
     const shuffledSymbols = shuffle([...allSymbols]);
-    
-    // Fill grid cell by cell
     for (let i = 0; i < GRID_SIZE; i++) {
-      // Get symbols that haven't reached their limit
       const available = shuffledSymbols.filter(s => (counts[s.id] || 0) < MAX_PER_SYMBOL);
-      
-      if (available.length === 0) {
-        // No valid symbols available - this grid is invalid, retry
-        break;
-      }
-      
-      // Pick a random available symbol
+      if (available.length === 0) break;
       const selected = available[Math.floor(Math.random() * available.length)];
       counts[selected.id] = (counts[selected.id] || 0) + 1;
-      
-      grid.push({
-        position: i,
-        symbol_id: selected.id,
-        image_url: selected.image_url,
-        name: selected.name,
-      });
+      grid.push({ position: i, symbol_id: selected.id, image_url: selected.image_url, name: selected.name });
     }
-    
-    // Validate: must have exactly 9 cells with no symbol appearing 3+ times
-    if (grid.length === GRID_SIZE) {
-      const finalCounts = Object.values(counts);
-      const hasViolation = finalCounts.some(c => c >= 3);
-      
-      if (!hasViolation) {
-        console.log(`✓ Valid losing grid generated on attempt ${attempt + 1}`);
-        const shuffled = shuffle(grid);
-        return shuffled.map((cell, idx) => ({ ...cell, position: idx }));
-      }
+    if (grid.length === GRID_SIZE && !Object.values(counts).some(c => c >= 3)) {
+      const shuffled = shuffle(grid);
+      return shuffled.map((cell, idx) => ({ ...cell, position: idx }));
     }
   }
-  
-  // If we get here with 4 symbols, it's mathematically impossible to get a valid grid
-  // Generate the best we can: distribute as evenly as possible
-  // The UI will trust prize_won (null/0) as the source of truth
-  console.warn(`Could not generate perfect losing grid after ${MAX_ATTEMPTS} attempts.`);
-  console.warn(`Generating best-effort grid. UI should trust prize_won, not grid pattern.`);
-  
+  // Best-effort fallback
+  const numSymbols = allSymbols.length;
   const grid: GridCell[] = [];
   const shuffledSymbols = shuffle([...allSymbols]);
-  
-  // Distribute evenly: each symbol gets floor(9/N) or ceil(9/N) appearances
   const baseCount = Math.floor(GRID_SIZE / numSymbols);
   const remainder = GRID_SIZE % numSymbols;
-  
   for (let i = 0; i < numSymbols; i++) {
     const symbol = shuffledSymbols[i];
     const count = baseCount + (i < remainder ? 1 : 0);
-    
     for (let j = 0; j < count; j++) {
-      grid.push({
-        position: grid.length,
-        symbol_id: symbol.id,
-        image_url: symbol.image_url,
-        name: symbol.name,
-      });
+      grid.push({ position: grid.length, symbol_id: symbol.id, image_url: symbol.image_url, name: symbol.name });
     }
   }
-  
-  // With 4 symbols: 9/4 = 2.25, so distribution is 3,2,2,2 (one symbol gets 3)
-  // This is unavoidable with <5 symbols
-  console.warn(`Best-effort grid generated. Distribution: ${JSON.stringify(
-    shuffledSymbols.map((s, i) => `${s.name}:${baseCount + (i < remainder ? 1 : 0)}`).join(', ')
-  )}`);
-  
   const shuffled = shuffle(grid);
-  return shuffled.map((cell, idx) => ({ ...cell, position: idx }))
+  return shuffled.map((cell, idx) => ({ ...cell, position: idx }));
 }
 
 // =============================================================================
@@ -260,13 +140,11 @@ function generateLosingGrid(allSymbols: ScratchSymbol[]): GridCell[] {
 // =============================================================================
 
 serve(async (req) => {
-  // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Validate authorization
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -275,27 +153,22 @@ serve(async (req) => {
       });
     }
 
-    // Create Supabase client with user auth
     const supabaseAuth = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Get user ID from token
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    
     if (claimsError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
     const userId = claimsData.claims.sub as string;
 
-    // Parse request body
     const body = await req.json() as BuyScratchChanceRequest;
     if (!body?.scratch_card_id) {
       return new Response(JSON.stringify({ error: "ID da raspadinha não informado" }), {
@@ -304,7 +177,6 @@ serve(async (req) => {
       });
     }
 
-    // Admin client for database operations
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -325,7 +197,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
     if (!card.is_active) {
       return new Response(JSON.stringify({ error: "Raspadinha não está ativa" }), {
         status: 400,
@@ -351,7 +222,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
     if ((batch.cards_sold ?? 0) >= batch.total_cards) {
       return new Response(JSON.stringify({ error: "Lote esgotado" }), {
         status: 400,
@@ -360,7 +230,56 @@ serve(async (req) => {
     }
 
     // ==========================================================================
-    // STEP 3: Fetch symbols
+    // STEP 3: Debit wallet atomically (inside edge function to avoid race conditions)
+    // ==========================================================================
+    const { data: walletData, error: walletFetchError } = await supabaseAdmin
+      .from("wallets")
+      .select("id, balance")
+      .eq("user_id", userId)
+      .single();
+
+    if (walletFetchError || !walletData) {
+      return new Response(JSON.stringify({ error: "Carteira não encontrada" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (walletData.balance < card.price) {
+      return new Response(JSON.stringify({ error: "Saldo insuficiente" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Debit with optimistic locking to prevent double-spend
+    const newBalance = walletData.balance - card.price;
+    const { error: walletUpdateError } = await supabaseAdmin
+      .from("wallets")
+      .update({ balance: newBalance })
+      .eq("id", walletData.id)
+      .eq("balance", walletData.balance); // optimistic lock
+
+    if (walletUpdateError) {
+      return new Response(JSON.stringify({ error: "Erro ao debitar saldo. Tente novamente." }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Insert purchase transaction record
+    await supabaseAdmin
+      .from("wallet_transactions")
+      .insert({
+        wallet_id: walletData.id,
+        amount: -card.price,
+        type: "purchase",
+        description: `Raspadinha - ${card.title}`,
+        reference_id: body.scratch_card_id,
+      });
+
+    // ==========================================================================
+    // STEP 4: Fetch symbols
     // ==========================================================================
     const { data: symbols, error: symbolsError } = await supabaseAdmin
       .from("scratch_symbols")
@@ -368,68 +287,44 @@ serve(async (req) => {
       .eq("scratch_card_id", body.scratch_card_id);
 
     if (symbolsError) throw symbolsError;
-    
     const allSymbols = (symbols ?? []) as ScratchSymbol[];
-    
     if (allSymbols.length === 0) {
+      // Refund if no symbols
+      await supabaseAdmin.from("wallets").update({ balance: walletData.balance }).eq("id", walletData.id);
       return new Response(JSON.stringify({ error: "Nenhum símbolo configurado" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (allSymbols.length < 5) {
-      console.warn(`Raspadinha ${card.title} tem apenas ${allSymbols.length} símbolos. Mínimo recomendado: 5`);
-    }
-
     // ==========================================================================
-    // STEP 4: Determine if winner based on probabilities
+    // STEP 5: Determine winner
     // ==========================================================================
-    
-    // Build list of eligible winning symbols
     const winCandidates = allSymbols
-      .map(symbol => ({
-        symbol,
-        probability: normalizeProbability(symbol.probability),
-      }))
+      .map(symbol => ({ symbol, probability: normalizeProbability(symbol.probability) }))
       .filter(({ symbol, probability }) => {
-        // Must have valid probability
         if (probability <= 0) return false;
-        // Must have positive prize value
         if (!Number.isFinite(symbol.prize_value) || symbol.prize_value <= 0) return false;
-        // Must have remaining quantity (or unlimited)
         if (symbol.remaining_quantity !== null && symbol.remaining_quantity <= 0) return false;
         return true;
       });
 
-    // Calculate total win probability
     const totalWinProbability = Math.min(1, winCandidates.reduce((sum, x) => sum + x.probability, 0));
-
-    // Roll the dice
     let isWinner = winCandidates.length > 0 && Math.random() < totalWinProbability;
     let winningSymbol: ScratchSymbol | null = null;
 
     if (isWinner) {
-      // Pick which prize was won (weighted by probability)
-      winningSymbol = pickWeighted(
-        winCandidates.map(x => ({ item: x.symbol, weight: x.probability }))
-      );
-
-      // If symbol has limited quantity, try to claim it
+      winningSymbol = pickWeighted(winCandidates.map(x => ({ item: x.symbol, weight: x.probability })));
       if (winningSymbol && winningSymbol.remaining_quantity !== null) {
         const currentQty = winningSymbol.remaining_quantity;
-        
         const { data: updated, error: updateError } = await supabaseAdmin
           .from("scratch_symbols")
           .update({ remaining_quantity: currentQty - 1 })
           .eq("id", winningSymbol.id)
-          .eq("remaining_quantity", currentQty) // Optimistic locking
+          .eq("remaining_quantity", currentQty)
           .select("id")
           .maybeSingle();
-
         if (updateError || !updated) {
-          // Race condition: someone else got the last prize
-          console.warn(`Concorrência: prêmio ${winningSymbol.name} esgotado. Convertendo para derrota.`);
           isWinner = false;
           winningSymbol = null;
         }
@@ -437,7 +332,7 @@ serve(async (req) => {
     }
 
     // ==========================================================================
-    // STEP 5: Generate grid
+    // STEP 6: Generate grid
     // ==========================================================================
     let grid: GridCell[];
     let prizeWon: number | null = null;
@@ -447,14 +342,12 @@ serve(async (req) => {
       grid = generateWinningGrid(allSymbols, winningSymbol);
       prizeWon = winningSymbol.prize_value;
       winningSymbolId = winningSymbol.id;
-      console.log(`🎉 Vitória! Prêmio: R$ ${prizeWon} (${winningSymbol.name})`);
     } else {
       grid = generateLosingGrid(allSymbols);
-      console.log(`❌ Derrota. Grid gerado com ${allSymbols.length} símbolos.`);
     }
 
     // ==========================================================================
-    // STEP 6: Save chance to database
+    // STEP 7: Save chance to database
     // ==========================================================================
     const { data: chance, error: chanceError } = await supabaseAdmin
       .from("scratch_chances")
@@ -472,33 +365,28 @@ serve(async (req) => {
     if (chanceError) throw chanceError;
 
     // ==========================================================================
-    // STEP 7: Update batch counters
+    // STEP 8: Update batch counters
     // ==========================================================================
-    const newCardsSold = (batch.cards_sold ?? 0) + 1;
-    const newPrizesDistributed = (batch.prizes_distributed ?? 0) + (isWinner ? 1 : 0);
-
     await supabaseAdmin
       .from("scratch_card_batches")
       .update({
-        cards_sold: newCardsSold,
-        prizes_distributed: newPrizesDistributed,
+        cards_sold: (batch.cards_sold ?? 0) + 1,
+        prizes_distributed: (batch.prizes_distributed ?? 0) + (isWinner ? 1 : 0),
       })
       .eq("id", batch.id);
 
-    // ==========================================================================
-    // RESPONSE
-    // ==========================================================================
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       chance,
       is_winner: isWinner,
       prize_won: prizeWon,
+      new_balance: newBalance,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error) {
-    console.error("Erro ao comprar raspadinha:", error);
+    console.error("Unexpected error:", error);
     return new Response(JSON.stringify({ error: "Erro interno do servidor" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
