@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
 import { RouletteWheel } from '@/components/games/RouletteWheel';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useRaffle } from '@/hooks/useRaffles';
 import { useWallet } from '@/hooks/useWallet';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +39,7 @@ export default function SorteioDetail() {
   const { user } = useAuth();
   const { raffle, participants, myTickets, soldNumbers, isLoading, buyMultipleTickets } = useRaffle(id || '');
   const { balance, purchase } = useWallet();
+  const isMobile = useIsMobile();
   const { addNotification } = useNotifications();
   const { toast } = useToast();
   const { playPurchase, playSuccess, playClick, playError } = useSoundEffects();
@@ -573,6 +575,45 @@ export default function SorteioDetail() {
             )}
           </div>
         </div>
+        {/* Floating purchase button - mobile */}
+        {isMobile && isOpen && selectedNumbers.length > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-background/95 backdrop-blur-md border-t shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm">
+                <span className="text-muted-foreground">{selectedNumbers.length} número(s)</span>
+              </div>
+              <span className="text-lg font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
+            </div>
+            {user ? (
+              <Button
+                className="w-full h-12 text-base font-semibold bg-gradient-primary hover:opacity-90 shadow-lg shadow-primary/25"
+                disabled={isBuying || balance < totalPrice}
+                onClick={handleBuyTickets}
+              >
+                {isBuying ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                    Comprando...
+                  </span>
+                ) : balance < totalPrice ? (
+                  <>
+                    <Wallet className="h-5 w-5 mr-2" />
+                    Saldo insuficiente
+                  </>
+                ) : (
+                  <>
+                    <Ticket className="h-5 w-5 mr-2" />
+                    Comprar Números
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button className="w-full h-12" asChild>
+                <Link to="/login">Fazer Login para Comprar</Link>
+              </Button>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
