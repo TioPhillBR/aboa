@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
@@ -47,6 +47,53 @@ export default function SorteioDetail() {
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [isBuying, setIsBuying] = useState(false);
   const [recentlyBought, setRecentlyBought] = useState<number[]>([]);
+  const [fabExpanded, setFabExpanded] = useState(false);
+
+  // Draggable FAB state
+  const fabRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ isDragging: false, startX: 0, startY: 0, startLeft: 0, startTop: 0, hasMoved: false });
+  const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!fabPos) {
+      setFabPos({ x: window.innerWidth - 80, y: window.innerHeight - 140 });
+    }
+  }, [fabPos]);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    const el = fabRef.current;
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    dragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: fabPos?.x ?? 0,
+      startTop: fabPos?.y ?? 0,
+      hasMoved: false,
+    };
+  }, [fabPos]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragState.current.isDragging) return;
+    const dx = e.clientX - dragState.current.startX;
+    const dy = e.clientY - dragState.current.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      dragState.current.hasMoved = true;
+    }
+    const newX = Math.max(0, Math.min(window.innerWidth - 64, dragState.current.startLeft + dx));
+    const newY = Math.max(0, Math.min(window.innerHeight - 64, dragState.current.startTop + dy));
+    setFabPos({ x: newX, y: newY });
+  }, []);
+
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    const wasDrag = dragState.current.hasMoved;
+    dragState.current.isDragging = false;
+    dragState.current.hasMoved = false;
+    if (!wasDrag) {
+      setFabExpanded(prev => !prev);
+    }
+  }, []);
 
   const getInitials = (name: string) => {
     return name
@@ -575,43 +622,72 @@ export default function SorteioDetail() {
             )}
           </div>
         </div>
-        {/* Floating purchase button - mobile */}
-        {isMobile && isOpen && selectedNumbers.length > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-background/95 backdrop-blur-md border-t shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm">
-                <span className="text-muted-foreground">{selectedNumbers.length} número(s)</span>
-              </div>
-              <span className="text-lg font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
-            </div>
-            {user ? (
-              <Button
-                className="w-full h-12 text-base font-semibold bg-gradient-primary hover:opacity-90 shadow-lg shadow-primary/25"
-                disabled={isBuying || balance < totalPrice}
-                onClick={handleBuyTickets}
-              >
-                {isBuying ? (
-                  <span className="flex items-center gap-2">
-                    <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
-                    Comprando...
-                  </span>
-                ) : balance < totalPrice ? (
-                  <>
-                    <Wallet className="h-5 w-5 mr-2" />
-                    Saldo insuficiente
-                  </>
+        {/* Draggable Floating Action Button */}
+        {isOpen && selectedNumbers.length > 0 && fabPos && (
+          <div
+            ref={fabRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            style={{ 
+              position: 'fixed', 
+              left: fabPos.x, 
+              top: fabPos.y, 
+              zIndex: 9999,
+              touchAction: 'none',
+            }}
+            className="select-none"
+          >
+            {/* Expanded panel */}
+            {fabExpanded && (
+              <div className="absolute bottom-16 right-0 w-64 rounded-xl bg-background/95 backdrop-blur-md border shadow-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">{selectedNumbers.length} número(s)</span>
+                  <span className="text-lg font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Wallet className="h-3.5 w-3.5" />
+                  Saldo: R$ {balance.toFixed(2)}
+                </div>
+                {user ? (
+                  <Button
+                    className="w-full h-10 text-sm font-semibold bg-gradient-primary hover:opacity-90"
+                    disabled={isBuying || balance < totalPrice}
+                    onClick={(e) => { e.stopPropagation(); handleBuyTickets(); }}
+                  >
+                    {isBuying ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                        Comprando...
+                      </span>
+                    ) : balance < totalPrice ? (
+                      <>
+                        <Wallet className="h-4 w-4 mr-1" />
+                        Saldo insuficiente
+                      </>
+                    ) : (
+                      <>
+                        <Ticket className="h-4 w-4 mr-1" />
+                        Comprar Números
+                      </>
+                    )}
+                  </Button>
                 ) : (
-                  <>
-                    <Ticket className="h-5 w-5 mr-2" />
-                    Comprar Números
-                  </>
+                  <Button className="w-full h-10 text-sm" asChild>
+                    <Link to="/login">Fazer Login</Link>
+                  </Button>
                 )}
-              </Button>
-            ) : (
-              <Button className="w-full h-12" asChild>
-                <Link to="/login">Fazer Login para Comprar</Link>
-              </Button>
+              </div>
             )}
+            {/* FAB circle */}
+            <div className="w-14 h-14 rounded-full bg-gradient-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 cursor-grab active:cursor-grabbing">
+              <div className="relative">
+                <Ticket className="h-6 w-6" />
+                <span className="absolute -top-2 -right-3 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {selectedNumbers.length}
+                </span>
+              </div>
+            </div>
           </div>
         )}
       </main>
