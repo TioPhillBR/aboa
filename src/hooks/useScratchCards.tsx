@@ -50,9 +50,9 @@ export function useScratchCard(scratchCardId: string) {
     }
   }, [scratchCardId, user]);
 
-  const fetchScratchCardData = async () => {
+  const fetchScratchCardData = async (background = false) => {
     try {
-      setIsLoading(true);
+      if (!background) setIsLoading(true);
 
       // Buscar raspadinha
       const { data: cardData, error: cardError } = await supabase
@@ -165,6 +165,6 @@ export function useScratchCard(scratchCardId: string) {
     isLoading,
     buyChance,
     revealChance,
-    refetch: fetchScratchCardData,
+    refetch: (background?: boolean) => fetchScratchCardData(background),
   };
 }
