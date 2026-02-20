@@ -38,7 +38,9 @@ export default function RaspadinhaDetail() {
   const [activeChance, setActiveChance] = useState<ScratchChance | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationPrize, setCelebrationPrize] = useState(0);
+  const [gamePhase, setGamePhase] = useState<'idle' | 'playing' | 'revealed'>('idle');
   const hasRevealedRef = useRef(false);
+  const activeChanceRef = useRef<ScratchChance | null>(null);
 
   // ==========================================================================
   // HANDLERS
@@ -69,8 +71,6 @@ export default function RaspadinhaDetail() {
     hasRevealedRef.current = false;
 
     try {
-      // A edge function agora cuida do débito da carteira + geração da raspadinha
-      // em uma operação atômica, evitando race conditions e re-renders problemáticos
       const { error, chance } = await buyChance();
 
       if (error || !chance) {
@@ -82,7 +82,7 @@ export default function RaspadinhaDetail() {
         return;
       }
 
-      // Atualizar saldo da carteira sem disparar refetch completo
+      // Atualizar saldo da carteira em background
       refetchWallet();
 
       toast({
@@ -90,42 +90,65 @@ export default function RaspadinhaDetail() {
         description: 'Boa sorte! Raspe para descobrir seu prêmio.',
       });
 
+      // Guardar referência estável e atualizar estado
+      activeChanceRef.current = chance;
       setActiveChance(chance);
+      setGamePhase('playing');
     } finally {
       setIsBuying(false);
     }
   }, [user, scratchCard, balance, buyChance, refetchWallet, toast]);
 
   const handleReveal = useCallback(async (isWinner: boolean, prize: number) => {
-    if (!activeChance || hasRevealedRef.current) return;
+    // Use ref para garantir que a chance ativa não foi perdida por re-render
+    const chance = activeChanceRef.current || activeChance;
+    if (!chance || hasRevealedRef.current) return;
     hasRevealedRef.current = true;
+    setGamePhase('revealed');
 
-    // Marcar como revelada no banco
-    await revealChance(activeChance.id, isWinner, prize);
+    try {
+      // Marcar como revelada no banco (fire-and-forget para não bloquear UI)
+      revealChance(chance.id, isWinner, prize).catch(err => 
+        console.error('Error revealing chance:', err)
+      );
 
-    // Se ganhou, creditar prêmio e mostrar celebração
-    if (isWinner && prize > 0) {
-      await awardPrize(prize, `Prêmio raspadinha - ${scratchCard?.title}`, scratchCard?.id);
+      // Se ganhou, creditar prêmio e mostrar celebração
+      if (isWinner && prize > 0) {
+        // Creditar prêmio em background - não bloquear a UI
+        awardPrize(prize, `Prêmio raspadinha - ${scratchCard?.title}`, scratchCard?.id)
+          .then(() => refetchWallet())
+          .catch(err => console.error('Error awarding prize:', err));
 
-      setCelebrationPrize(prize);
-      setShowCelebration(true);
+        setCelebrationPrize(prize);
+        setShowCelebration(true);
 
-      addNotification({
-        type: 'prize_won',
-        title: '🎉 Você Ganhou!',
-        message: `Parabéns! Você ganhou R$ ${prize.toFixed(2)} na raspadinha "${scratchCard?.title}"!`,
-        icon: '🏆',
-        link: `/raspadinha/${scratchCard?.id}`,
-      });
+        addNotification({
+          type: 'prize_won',
+          title: '🎉 Você Ganhou!',
+          message: `Parabéns! Você ganhou R$ ${prize.toFixed(2)} na raspadinha "${scratchCard?.title}"!`,
+          icon: '🏆',
+          link: `/raspadinha/${scratchCard?.id}`,
+        });
+      }
+    } catch (err) {
+      console.error('Error in handleReveal:', err);
     }
-
-    // Atualizar lista de chances em background (sem mostrar loading skeleton)
-    refetch(true);
-  }, [activeChance, revealChance, awardPrize, scratchCard, addNotification, refetch]);
+  }, [activeChance, revealChance, awardPrize, scratchCard, addNotification, refetchWallet]);
 
   const handleCloseCelebration = () => {
     setShowCelebration(false);
   };
+
+  const handleBuyAgain = useCallback(() => {
+    // Limpar estado do jogo anterior com transição suave
+    setGamePhase('idle');
+    setActiveChance(null);
+    activeChanceRef.current = null;
+    // Pequeno delay para a transição visual antes de comprar
+    setTimeout(() => {
+      handleBuyChance();
+    }, 300);
+  }, [handleBuyChance]);
 
   // ==========================================================================
   // COMPUTED
@@ -235,73 +258,90 @@ export default function RaspadinhaDetail() {
               </CardHeader>
 
               <CardContent className="flex flex-col items-center py-8">
-                {activeChance ? (
-                  <ScratchCard
-                    key={activeChance.id}
-                    symbols={activeChance.symbols}
-                    coverImage={scratchCard.cover_image_url || undefined}
-                    onReveal={handleReveal}
-                    isRevealed={activeChance.is_revealed}
-                    prizeWon={activeChance.prize_won}
-                    onBuyAgain={handleBuyChance}
-                    isBuying={isBuying}
-                    canBuyAgain={balance >= scratchCard.price}
-                    price={scratchCard.price}
-                  />
-                ) : (
-                  <div className="text-center space-y-6 py-4 w-full max-w-[320px]">
-                    {/* Preview Card */}
+                <AnimatePresence mode="wait">
+                  {activeChance ? (
                     <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className="w-[300px] h-[300px] mx-auto rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 shadow-xl flex items-center justify-center cursor-pointer"
-                      onClick={user ? handleBuyChance : undefined}
+                      key={`game-${activeChance.id}`}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
                     >
-                      <div className="text-white text-center">
-                        <Sparkles className="h-16 w-16 mx-auto mb-4 opacity-90" />
-                        <p className="text-2xl font-bold">RASPADINHA</p>
-                        <p className="text-sm opacity-80 mt-2">
-                          {user ? 'Clique para comprar' : 'Faça login para jogar'}
-                        </p>
-                      </div>
+                      <ScratchCard
+                        key={activeChance.id}
+                        symbols={activeChance.symbols}
+                        coverImage={scratchCard.cover_image_url || undefined}
+                        onReveal={handleReveal}
+                        isRevealed={activeChance.is_revealed}
+                        prizeWon={activeChance.prize_won}
+                        onBuyAgain={handleBuyAgain}
+                        isBuying={isBuying}
+                        canBuyAgain={balance >= scratchCard.price}
+                        price={scratchCard.price}
+                      />
                     </motion.div>
-
-                    {user ? (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
-                          <Wallet className="h-4 w-4" />
-                          <span>Seu saldo: R$ {balance.toFixed(2)}</span>
+                  ) : (
+                    <motion.div
+                      key="buy-screen"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
+                      className="text-center space-y-6 py-4 w-full max-w-[320px]"
+                    >
+                      {/* Preview Card */}
+                      <motion.div
+                        whileHover={{ scale: 1.02 }}
+                        className="w-[300px] h-[300px] mx-auto rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 shadow-xl flex items-center justify-center cursor-pointer"
+                        onClick={user ? handleBuyChance : undefined}
+                      >
+                        <div className="text-white text-center">
+                          <Sparkles className="h-16 w-16 mx-auto mb-4 opacity-90" />
+                          <p className="text-2xl font-bold">RASPADINHA</p>
+                          <p className="text-sm opacity-80 mt-2">
+                            {user ? 'Clique para comprar' : 'Faça login para jogar'}
+                          </p>
                         </div>
+                      </motion.div>
 
-                        <Button
-                          onClick={handleBuyChance}
-                          disabled={isBuying || balance < scratchCard.price}
-                          size="lg"
-                          className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
-                        >
-                          {isBuying ? 'Comprando...' : (
-                            <>
-                              <Sparkles className="h-5 w-5" />
-                              Comprar por R$ {scratchCard.price.toFixed(2)}
-                            </>
-                          )}
-                        </Button>
+                      {user ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+                            <Wallet className="h-4 w-4" />
+                            <span>Seu saldo: R$ {balance.toFixed(2)}</span>
+                          </div>
 
-                        {balance < scratchCard.price && (
-                          <Button variant="outline" className="w-full" asChild>
-                            <Link to="/carteira">
-                              <Wallet className="h-4 w-4 mr-2" />
-                              Adicionar Créditos
-                            </Link>
+                          <Button
+                            onClick={handleBuyChance}
+                            disabled={isBuying || balance < scratchCard.price}
+                            size="lg"
+                            className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
+                          >
+                            {isBuying ? 'Comprando...' : (
+                              <>
+                                <Sparkles className="h-5 w-5" />
+                                Comprar por R$ {scratchCard.price.toFixed(2)}
+                              </>
+                            )}
                           </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <Button size="lg" className="w-full" asChild>
-                        <Link to="/login">Fazer Login para Jogar</Link>
-                      </Button>
-                    )}
-                  </div>
-                )}
+
+                          {balance < scratchCard.price && (
+                            <Button variant="outline" className="w-full" asChild>
+                              <Link to="/carteira">
+                                <Wallet className="h-4 w-4 mr-2" />
+                                Adicionar Créditos
+                              </Link>
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <Button size="lg" className="w-full" asChild>
+                          <Link to="/login">Fazer Login para Jogar</Link>
+                        </Button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </CardContent>
             </Card>
 
@@ -402,7 +442,9 @@ export default function RaspadinhaDetail() {
                             className="w-full justify-between"
                             onClick={() => {
                               hasRevealedRef.current = false;
+                              activeChanceRef.current = chance;
                               setActiveChance(chance);
+                              setGamePhase('playing');
                             }}
                           >
                             <span className="flex items-center gap-2">
