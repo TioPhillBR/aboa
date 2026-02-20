@@ -87,6 +87,23 @@ export default function Raspadinhas() {
                       </div>
                     </div>
                   ))}
+                  {/* Prize info inside accordion */}
+                  <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 border border-yellow-500/20 p-4 mt-2">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-gold text-white shrink-0">
+                        <Gift className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold mb-0.5 flex items-center justify-center gap-1.5">
+                          <span className="text-gradient-gold">Prêmios de até R$ 1.000!</span>
+                          <Sparkles className="h-4 w-4 text-yellow-500" />
+                        </h3>
+                        <p className="text-muted-foreground text-xs">
+                          Cada raspadinha oferece diferentes valores de prêmio. Quanto mais raro o símbolo, maior o prêmio!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CollapsibleContent>
             </Card>
@@ -118,24 +135,26 @@ export default function Raspadinhas() {
           </div>
         )}
 
-        {/* Prize info banner */}
-        <div className="relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 border border-yellow-500/20 p-4 md:p-6 mb-8 md:mb-10 animate-fade-in">
-          <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 to-transparent animate-pulse" />
-          <div className="relative flex flex-col sm:flex-row items-center gap-3 md:gap-4">
-            <div className="flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-gold text-white shrink-0">
-              <Gift className="h-6 w-6 md:h-8 md:w-8" />
-            </div>
-            <div className="text-center sm:text-left">
-              <h2 className="text-base md:text-xl font-bold mb-0.5 md:mb-1 flex items-center justify-center sm:justify-start gap-1.5 md:gap-2">
-                <span className="text-gradient-gold">Prêmios de até R$ 1.000!</span>
-                <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-yellow-500" />
-              </h2>
-              <p className="text-muted-foreground text-xs md:text-sm lg:text-base">
-                Cada raspadinha oferece diferentes valores de prêmio. Quanto mais raro o símbolo, maior o prêmio!
-              </p>
+        {/* Prize info banner - desktop only */}
+        {!isMobile && (
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 border border-yellow-500/20 p-6 mb-10 animate-fade-in">
+            <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 to-transparent animate-pulse" />
+            <div className="relative flex flex-row items-center gap-4">
+              <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-gold text-white shrink-0">
+                <Gift className="h-8 w-8" />
+              </div>
+              <div className="text-left">
+                <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
+                  <span className="text-gradient-gold">Prêmios de até R$ 1.000!</span>
+                  <Sparkles className="h-5 w-5 text-yellow-500" />
+                </h2>
+                <p className="text-muted-foreground text-sm lg:text-base">
+                  Cada raspadinha oferece diferentes valores de prêmio. Quanto mais raro o símbolo, maior o prêmio!
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Lista de raspadinhas */}
         <section>
