@@ -194,8 +194,11 @@ export default function SorteioDetail() {
       setRecentlyBought(selectedNumbers);
       setSelectedNumbers([]);
 
-      // Limpar animação após um tempo
-      setTimeout(() => setRecentlyBought([]), 3000);
+      // Fechar FAB e limpar animação após 3 segundos
+      setTimeout(() => {
+        setRecentlyBought([]);
+        setFabExpanded(false);
+      }, 3000);
     }
 
     setIsBuying(false);
