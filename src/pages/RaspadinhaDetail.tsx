@@ -24,13 +24,19 @@ import {
   Gift,
   TrendingUp,
   History,
+  HelpCircle,
+  ChevronDown,
 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function RaspadinhaDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { scratchCard, symbols, myChances, isLoading, buyChance, revealChance, refetch } = useScratchCard(id || '');
   const { balance, awardPrize, refetch: refetchWallet } = useWallet();
+  const isMobile = useIsMobile();
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const { addNotification } = useNotifications();
   const { toast } = useToast();
 
@@ -345,7 +351,43 @@ export default function RaspadinhaDetail() {
               </CardContent>
             </Card>
 
-            {/* Estatísticas do Usuário */}
+            {/* Como Jogar - Sanfona mobile */}
+            {isMobile && (
+              <Collapsible open={instructionsOpen} onOpenChange={setInstructionsOpen}>
+                <Card>
+                  <CollapsibleTrigger className="w-full">
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <HelpCircle className="h-5 w-5 text-primary" />
+                        Como Jogar
+                      </div>
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${instructionsOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="px-4 pb-4 space-y-3 text-sm text-muted-foreground">
+                      <div className="flex items-start gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">1</span>
+                        <p>Compre uma raspadinha clicando no botão de compra. O valor será debitado da sua carteira.</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">2</span>
+                        <p>Use o dedo para raspar a área dourada e revelar os símbolos escondidos.</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">3</span>
+                        <p>Se encontrar <strong>3 símbolos iguais</strong>, você ganha o prêmio correspondente!</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">4</span>
+                        <p>O prêmio é creditado automaticamente na sua carteira. Você pode sacar via PIX a qualquer momento.</p>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            )}
+
             {user && revealed.length > 0 && (
               <div className="grid grid-cols-3 gap-4">
                 <Card className="p-4 text-center">
