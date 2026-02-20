@@ -30,7 +30,7 @@ export default function RaspadinhaDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { scratchCard, symbols, myChances, isLoading, buyChance, revealChance, refetch } = useScratchCard(id || '');
-  const { balance, purchase, awardPrize } = useWallet();
+  const { balance, awardPrize, refetch: refetchWallet } = useWallet();
   const { addNotification } = useNotifications();
   const { toast } = useToast();
 
@@ -69,33 +69,21 @@ export default function RaspadinhaDetail() {
     hasRevealedRef.current = false;
 
     try {
-      // Debitar da carteira
-      const { error: walletError } = await purchase(
-        scratchCard.price,
-        `Raspadinha - ${scratchCard.title}`,
-        scratchCard.id
-      );
-
-      if (walletError) {
-        toast({
-          title: 'Erro no pagamento',
-          description: walletError.message,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Comprar chance (Edge Function)
+      // A edge function agora cuida do débito da carteira + geração da raspadinha
+      // em uma operação atômica, evitando race conditions e re-renders problemáticos
       const { error, chance } = await buyChance();
 
       if (error || !chance) {
         toast({
           title: 'Erro',
-          description: 'Não foi possível comprar a raspadinha. Tente novamente.',
+          description: error?.message || 'Não foi possível comprar a raspadinha. Tente novamente.',
           variant: 'destructive',
         });
         return;
       }
+
+      // Atualizar saldo da carteira sem disparar refetch completo
+      refetchWallet();
 
       toast({
         title: '🎰 Raspadinha comprada!',
@@ -106,7 +94,7 @@ export default function RaspadinhaDetail() {
     } finally {
       setIsBuying(false);
     }
-  }, [user, scratchCard, balance, purchase, buyChance, toast]);
+  }, [user, scratchCard, balance, buyChance, refetchWallet, toast]);
 
   const handleReveal = useCallback(async (isWinner: boolean, prize: number) => {
     if (!activeChance || hasRevealedRef.current) return;
