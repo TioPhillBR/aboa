@@ -1,12 +1,18 @@
+import { useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import { BackButton } from '@/components/ui/back-button';
 import { ScratchCardItem } from '@/components/games/ScratchCardItem';
 import { useScratchCards } from '@/hooks/useScratchCards';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sparkles, Coins, Zap, Gift, Star, Trophy } from 'lucide-react';
+import { Sparkles, Coins, Zap, Gift, Star, Trophy, HelpCircle, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Card } from '@/components/ui/card';
 
 export default function Raspadinhas() {
   const { scratchCards, isLoading } = useScratchCards();
+  const isMobile = useIsMobile();
+  const [howToPlayOpen, setHowToPlayOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
@@ -52,48 +58,65 @@ export default function Raspadinhas() {
         </div>
 
         {/* How it works */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-8 md:mb-10">
-          {[
-            { 
-              step: '1', 
-              title: 'Compre sua chance', 
-              desc: 'Escolha uma raspadinha e adquira sua chance',
-              icon: Coins,
-              color: 'from-purple-500 to-pink-500'
-            },
-            { 
-              step: '2', 
-              title: 'Raspe a cartela', 
-              desc: 'Use o dedo ou mouse para revelar os símbolos',
-              icon: Sparkles,
-              color: 'from-orange-500 to-yellow-500'
-            },
-            { 
-              step: '3', 
-              title: 'Ganhe prêmios', 
-              desc: '3 símbolos iguais = prêmio instantâneo!',
-              icon: Trophy,
-              color: 'from-green-500 to-emerald-500'
-            },
-          ].map((item, i) => (
-            <div 
-              key={item.step}
-              className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-card p-4 md:p-6 border shadow-sm hover:shadow-lg transition-all duration-300 card-hover animate-fade-in"
-              style={{ animationDelay: `${i * 100}ms` }}
-            >
-              <div className={`absolute top-0 right-0 w-16 md:w-24 h-16 md:h-24 bg-gradient-to-br ${item.color} opacity-10 rounded-full blur-2xl group-hover:opacity-20 transition-opacity`} />
-              <div className="flex items-start gap-3 md:gap-4">
-                <div className={`flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-gradient-to-br ${item.color} text-white font-bold text-base md:text-lg shrink-0`}>
-                  {item.step}
+        {isMobile ? (
+          <Collapsible open={howToPlayOpen} onOpenChange={setHowToPlayOpen} className="mb-8">
+            <Card>
+              <CollapsibleTrigger className="w-full">
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <HelpCircle className="h-5 w-5 text-primary" />
+                    Como Jogar
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${howToPlayOpen ? 'rotate-180' : ''}`} />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-sm md:text-base mb-0.5 md:mb-1">{item.title}</h3>
-                  <p className="text-xs md:text-sm text-muted-foreground">{item.desc}</p>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="px-4 pb-4 space-y-3">
+                  {[
+                    { step: '1', title: 'Compre sua chance', desc: 'Escolha uma raspadinha e adquira sua chance', color: 'from-purple-500 to-pink-500' },
+                    { step: '2', title: 'Raspe a cartela', desc: 'Use o dedo ou mouse para revelar os símbolos', color: 'from-orange-500 to-yellow-500' },
+                    { step: '3', title: 'Ganhe prêmios', desc: '3 símbolos iguais = prêmio instantâneo!', color: 'from-green-500 to-emerald-500' },
+                  ].map((item) => (
+                    <div key={item.step} className="flex items-start gap-3">
+                      <div className={`flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br ${item.color} text-white font-bold text-base shrink-0`}>
+                        {item.step}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm">{item.title}</h3>
+                        <p className="text-xs text-muted-foreground">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        ) : (
+          <div className="grid grid-cols-3 gap-4 mb-10">
+            {[
+              { step: '1', title: 'Compre sua chance', desc: 'Escolha uma raspadinha e adquira sua chance', icon: Coins, color: 'from-purple-500 to-pink-500' },
+              { step: '2', title: 'Raspe a cartela', desc: 'Use o dedo ou mouse para revelar os símbolos', icon: Sparkles, color: 'from-orange-500 to-yellow-500' },
+              { step: '3', title: 'Ganhe prêmios', desc: '3 símbolos iguais = prêmio instantâneo!', icon: Trophy, color: 'from-green-500 to-emerald-500' },
+            ].map((item, i) => (
+              <div 
+                key={item.step}
+                className="group relative overflow-hidden rounded-2xl bg-card p-6 border shadow-sm hover:shadow-lg transition-all duration-300 card-hover animate-fade-in"
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
+                <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${item.color} opacity-10 rounded-full blur-2xl group-hover:opacity-20 transition-opacity`} />
+                <div className="flex items-start gap-4">
+                  <div className={`flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${item.color} text-white font-bold text-lg shrink-0`}>
+                    {item.step}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base mb-1">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground">{item.desc}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Prize info banner */}
         <div className="relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 border border-yellow-500/20 p-4 md:p-6 mb-8 md:mb-10 animate-fade-in">
