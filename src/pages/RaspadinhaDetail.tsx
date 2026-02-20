@@ -47,6 +47,7 @@ export default function RaspadinhaDetail() {
   const [gamePhase, setGamePhase] = useState<'idle' | 'playing' | 'revealed'>('idle');
   const hasRevealedRef = useRef(false);
   const activeChanceRef = useRef<ScratchChance | null>(null);
+  const gameAreaRef = useRef<HTMLDivElement>(null);
 
   // ==========================================================================
   // HANDLERS
@@ -249,7 +250,7 @@ export default function RaspadinhaDetail() {
         <div className="grid lg:grid-cols-5 gap-6 lg:gap-8">
           {/* Área de Jogo (3 colunas) */}
           <div className="lg:col-span-3 space-y-6">
-            <Card className="overflow-hidden">
+            <Card ref={gameAreaRef} className="overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20">
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-amber-500" />
@@ -487,6 +488,9 @@ export default function RaspadinhaDetail() {
                               activeChanceRef.current = chance;
                               setActiveChance(chance);
                               setGamePhase('playing');
+                              setTimeout(() => {
+                                gameAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }, 100);
                             }}
                           >
                             <span className="flex items-center gap-2">
