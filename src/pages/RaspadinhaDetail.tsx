@@ -249,6 +249,7 @@ export default function RaspadinhaDetail() {
               <CardContent className="flex flex-col items-center py-8">
                 {activeChance ? (
                   <ScratchCard
+                    key={activeChance.id}
                     symbols={activeChance.symbols}
                     coverImage={scratchCard.cover_image_url || undefined}
                     onReveal={handleReveal}
