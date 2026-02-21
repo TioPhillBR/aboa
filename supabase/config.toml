@@ -5,3 +5,15 @@ verify_jwt = false
 
 [functions.confirm-pix]
 verify_jwt = false
+
+[functions.process-referral]
+verify_jwt = false
+
+[functions.buy-scratch-chance]
+verify_jwt = false
+
+[functions.cleanup-database]
+verify_jwt = false
+
+[functions.cleanup-sessions]
+verify_jwt = false
