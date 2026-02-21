@@ -33,6 +33,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import confetti from 'canvas-confetti';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function SorteioDetail() {
   const { id } = useParams<{ id: string }>();
@@ -473,94 +474,34 @@ export default function SorteioDetail() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Card de Compra */}
-            {isOpen && showPurchaseCard && (
-              <Card className="sticky top-24 border-2 border-primary/20 shadow-lg shadow-primary/5 relative">
-                <button
-                  onClick={() => setShowPurchaseCard(false)}
-                  className="absolute top-3 right-3 p-1 rounded-full hover:bg-muted transition-colors z-10"
-                  aria-label="Fechar resumo"
+            <AnimatePresence>
+              {isOpen && showPurchaseCard && (
+                <motion.div
+                  initial={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
                 >
-                  <X className="h-4 w-4 text-muted-foreground" />
-                </button>
-                <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent pb-4">
-                  <CardTitle className="flex items-center gap-2">
-                    <Gift className="h-5 w-5 text-primary" />
-                    Resumo da Compra
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground text-sm">Números selecionados</span>
-                    <Badge variant={selectedNumbers.length > 0 ? 'default' : 'secondary'}>
-                      {selectedNumbers.length}
-                    </Badge>
-                  </div>
-                  
-                  {selectedNumbers.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 p-3 bg-muted/50 rounded-xl">
-                      {selectedNumbers.sort((a, b) => a - b).map(num => (
-                        <Badge key={num} variant="outline" className="tabular-nums">
-                          {num}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Preço unitário</span>
-                    <span>R$ {raffle.price.toFixed(2)}</span>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between text-lg">
-                      <span className="font-semibold">Total</span>
-                      <span className="font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  {user ? (
-                    <>
-                      <div className="flex items-center gap-2 text-sm bg-muted/50 rounded-xl p-3">
-                        <Wallet className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Saldo:</span>
-                        <span className="font-semibold ml-auto">R$ {balance.toFixed(2)}</span>
-                      </div>
-
-                      <Button 
-                        className="w-full h-12 text-base font-semibold bg-gradient-primary hover:opacity-90 shadow-lg shadow-primary/25" 
-                        disabled={selectedNumbers.length === 0 || isBuying || balance < totalPrice}
-                        onClick={handleBuyTickets}
-                      >
-                        {isBuying ? (
-                          <span className="flex items-center gap-2">
-                            <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
-                            Comprando...
-                          </span>
-                        ) : (
-                          <>
-                            <Ticket className="h-5 w-5 mr-2" />
-                            Comprar Números
-                          </>
-                        )}
-                      </Button>
-
-                      {balance < totalPrice && selectedNumbers.length > 0 && (
-                        <Button variant="outline" className="w-full" asChild>
-                          <Link to="/carteira">
-                            <Wallet className="h-4 w-4 mr-2" />
-                            Adicionar Créditos
-                          </Link>
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <Button className="w-full h-12" asChild>
-                      <Link to="/login">Fazer Login para Comprar</Link>
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                  <Card className="sticky top-24 border-2 border-primary/20 shadow-lg shadow-primary/5 relative">
+                    <button
+                      onClick={() => setShowPurchaseCard(false)}
+                      className="absolute top-3 right-3 p-1 rounded-full hover:bg-muted transition-colors z-10"
+                      aria-label="Fechar resumo"
+                    >
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                    <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent pb-4">
+                      <CardTitle className="flex items-center gap-2">
+                        <Gift className="h-5 w-5 text-primary" />
+                        Resumo da Compra
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+...
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Informações */}
             <Card>
