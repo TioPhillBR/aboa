@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,7 @@ interface FeaturedRaffle {
 }
 
 export default function Index() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<Stats>({
     totalPrizes: 0,
     totalUsers: 0,
@@ -382,7 +384,7 @@ export default function Index() {
       )}
 
       {/* Seção de Jogos */}
-      <section className="bg-gradient-to-b from-muted/50 to-background py-16 md:py-24">
+      <section id="escolha-como-jogar" className="bg-gradient-to-b from-muted/50 to-background py-16 md:py-24">
         <div className="container">
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Escolha Como Jogar</h2>
@@ -583,10 +585,17 @@ export default function Index() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" asChild className="h-14 px-8 text-lg">
-                <Link to="/cadastro">
-                  Criar Conta Grátis
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
+                {user ? (
+                  <a href="#escolha-como-jogar">
+                    Escolha Como Jogar
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </a>
+                ) : (
+                  <Link to="/cadastro">
+                    Criar Conta Grátis
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                )}
               </Button>
               <Button size="lg" variant="outline" asChild className="h-14 px-8">
                 <Link to="/ganhadores">
