@@ -48,6 +48,7 @@ export default function SorteioDetail() {
   const [isBuying, setIsBuying] = useState(false);
   const [recentlyBought, setRecentlyBought] = useState<number[]>([]);
   const [fabExpanded, setFabExpanded] = useState(false);
+  const [showPurchaseCard, setShowPurchaseCard] = useState(true);
 
   // Draggable FAB state
   const fabRef = useRef<HTMLDivElement>(null);
@@ -108,6 +109,7 @@ export default function SorteioDetail() {
     if (soldNumbers.includes(num)) return;
     
     playClick();
+    if (!showPurchaseCard) setShowPurchaseCard(true);
     setSelectedNumbers(prev => 
       prev.includes(num) 
         ? prev.filter(n => n !== num)
@@ -471,8 +473,15 @@ export default function SorteioDetail() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Card de Compra */}
-            {isOpen && (
-              <Card className="sticky top-24 border-2 border-primary/20 shadow-lg shadow-primary/5">
+            {isOpen && showPurchaseCard && (
+              <Card className="sticky top-24 border-2 border-primary/20 shadow-lg shadow-primary/5 relative">
+                <button
+                  onClick={() => setShowPurchaseCard(false)}
+                  className="absolute top-3 right-3 p-1 rounded-full hover:bg-muted transition-colors z-10"
+                  aria-label="Fechar resumo"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
                 <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent pb-4">
                   <CardTitle className="flex items-center gap-2">
                     <Gift className="h-5 w-5 text-primary" />
