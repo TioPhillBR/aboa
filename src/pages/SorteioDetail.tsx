@@ -643,7 +643,12 @@ export default function SorteioDetail() {
           >
             {/* Expanded panel */}
             {fabExpanded && (
-              <div className="absolute bottom-16 right-0 w-64 rounded-xl bg-background/95 backdrop-blur-md border shadow-2xl p-4 space-y-3">
+              <div 
+                className="absolute bottom-16 right-0 w-64 rounded-xl bg-background/95 backdrop-blur-md border shadow-2xl p-4 space-y-3"
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerMove={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{selectedNumbers.length} número(s)</span>
                   <span className="text-lg font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
