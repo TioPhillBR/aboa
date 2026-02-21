@@ -165,34 +165,34 @@ export default function Indicacoes() {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <main className="container py-8">
+      <main className="container py-6 md:py-8">
         <BackButton className="mb-4" />
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20">
-            <Users className="h-8 w-8 text-purple-500" />
+        <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="p-2.5 md:p-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 shrink-0">
+            <Users className="h-6 w-6 md:h-8 md:w-8 text-purple-500" />
           </div>
-          <div>
-            <h1 className="text-3xl font-bold">Programa de Indicação</h1>
-            <p className="text-muted-foreground">
+          <div className="min-w-0">
+            <h1 className="text-2xl md:text-3xl font-bold">Programa de Indicação</h1>
+            <p className="text-muted-foreground text-sm md:text-base">
               Convide amigos e ganhe R$ {bonusPerReferral.toFixed(2)} por cada indicação!
             </p>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-6 md:gap-8">
           {/* Coluna Principal */}
           <div className="lg:col-span-2 space-y-6">
             {/* Card do Link de Indicação */}
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 p-6 text-white">
-                <div className="flex items-center gap-2 mb-4">
-                  <Gift className="h-6 w-6" />
-                  <span className="font-semibold">Seu Link de Indicação</span>
+              <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 p-4 md:p-6 text-white">
+                <div className="flex items-center gap-2 mb-3 md:mb-4">
+                  <Gift className="h-5 w-5 md:h-6 md:w-6" />
+                  <span className="font-semibold text-sm md:text-base">Seu Link de Indicação</span>
                 </div>
                 
                 <motion.div 
-                  className="bg-white/20 backdrop-blur-sm rounded-xl p-6"
+                  className="bg-white/20 backdrop-blur-sm rounded-xl p-4 md:p-6"
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: 'spring', stiffness: 300 }}
                 >
