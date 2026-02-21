@@ -651,7 +651,16 @@ export default function SorteioDetail() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{selectedNumbers.length} número(s)</span>
-                  <span className="text-lg font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setFabExpanded(false); }}
+                      className="ml-1 p-0.5 rounded-full hover:bg-muted transition-colors"
+                      aria-label="Fechar resumo"
+                    >
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Wallet className="h-3.5 w-3.5" />
