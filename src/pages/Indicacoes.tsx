@@ -164,8 +164,7 @@ export default function Indicacoes() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-
-      <main className="container py-6 md:py-8">
+      <main className="container py-6 md:py-8 overflow-x-hidden">
         <BackButton className="mb-4" />
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
@@ -197,8 +196,8 @@ export default function Indicacoes() {
                   transition={{ type: 'spring', stiffness: 300 }}
                 >
                   <p className="text-sm opacity-80 mb-2">Compartilhe este link:</p>
-                  <div className="flex gap-2 items-center">
-                    <div className="flex-1 p-3 bg-white/20 rounded-lg text-sm font-mono truncate">
+                  <div className="flex gap-2 items-center min-w-0">
+                    <div className="flex-1 min-w-0 p-3 bg-white/20 rounded-lg text-sm font-mono truncate overflow-hidden">
                       {getReferralLink()}
                     </div>
                     <Button
