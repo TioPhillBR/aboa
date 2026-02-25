@@ -87,6 +87,7 @@ export function useRaffle(raffleId: string) {
   const [participants, setParticipants] = useState<Profile[]>([]);
   const [myTickets, setMyTickets] = useState<RaffleTicket[]>([]);
   const [soldNumbers, setSoldNumbers] = useState<number[]>([]);
+  const [prizes, setPrizes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -210,6 +211,37 @@ export function useRaffle(raffleId: string) {
         if (profilesError) throw profilesError;
         setParticipants((profilesData || []) as Profile[]);
       }
+
+      // Buscar prêmios com dados do vencedor
+      const { data: prizesData } = await supabase
+        .from('raffle_prizes')
+        .select('*')
+        .eq('raffle_id', raffleId)
+        .order('created_at', { ascending: true });
+
+      if (prizesData && prizesData.length > 0) {
+        // Buscar perfis dos vencedores
+        const winnerIds = prizesData.filter(p => p.winner_id).map(p => p.winner_id!);
+        let winnersMap: Record<string, Profile> = {};
+        
+        if (winnerIds.length > 0) {
+          const { data: winnersData } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', winnerIds);
+          
+          (winnersData || []).forEach((w: any) => {
+            winnersMap[w.id] = w as Profile;
+          });
+        }
+
+        setPrizes(prizesData.map(p => ({
+          ...p,
+          winner: p.winner_id ? winnersMap[p.winner_id] || null : null,
+        })));
+      } else {
+        setPrizes([]);
+      }
     } catch (error) {
       console.error('Error fetching raffle data:', error);
     } finally {
@@ -269,6 +301,7 @@ export function useRaffle(raffleId: string) {
     participants,
     myTickets,
     soldNumbers,
+    prizes,
     isLoading,
     buyTicket,
     buyMultipleTickets,
