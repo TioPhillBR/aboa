@@ -4,8 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Profile } from '@/types';
-import { Trophy, Zap, Crown, Home, Users, Ticket } from 'lucide-react';
+import { Profile, RafflePrize } from '@/types';
+import { Trophy, Zap, Crown, Home, Users, Ticket, Gift } from 'lucide-react';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -33,6 +33,8 @@ export default function SorteioAoVivo() {
   const [participants, setParticipants] = useState<Profile[]>([]);
   const [ticketsSold, setTicketsSold] = useState(0);
   const [winner, setWinner] = useState<Profile | null>(null);
+  const [prizes, setPrizes] = useState<(RafflePrize & { winner?: Profile | null })[]>([]);
+  const [currentPrizeIndex, setCurrentPrizeIndex] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
@@ -146,6 +148,33 @@ export default function SorteioAoVivo() {
         }
       }
 
+      // Fetch prizes
+      const { data: prizesData } = await supabase
+        .from('raffle_prizes')
+        .select('*')
+        .eq('raffle_id', id)
+        .order('created_at', { ascending: true });
+
+      if (prizesData && prizesData.length > 0) {
+        const winnerIds = prizesData.filter(p => p.winner_id).map(p => p.winner_id!);
+        let winnersMap: Record<string, Profile> = {};
+        if (winnerIds.length > 0) {
+          const { data: winnersData } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', winnerIds);
+          (winnersData || []).forEach((w: any) => { winnersMap[w.id] = w as Profile; });
+        }
+        setPrizes(prizesData.map(p => ({
+          ...p,
+          winner: p.winner_id ? winnersMap[p.winner_id] || null : null,
+        })) as any);
+        
+        // Find first undrawn prize
+        const firstUndrawn = prizesData.findIndex(p => !p.winner_id);
+        if (firstUndrawn >= 0) setCurrentPrizeIndex(firstUndrawn);
+      }
+
       setLoading(false);
     }
 
@@ -165,12 +194,10 @@ export default function SorteioAoVivo() {
           const updated = payload.new as Raffle;
           setRaffle(updated);
 
-          // Se mudou para 'drawing', inicia animação
           if (updated.status === 'drawing' && !isDrawing) {
             startDrawAnimation(updated);
           }
 
-          // Se completou e tem ganhador
           if (updated.status === 'completed' && updated.winner_id && !winner) {
             const { data: winnerData } = await supabase
               .from('profiles')
@@ -183,6 +210,26 @@ export default function SorteioAoVivo() {
               playBigWin();
               triggerEpicConfetti();
             }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'raffle_prizes' },
+        async (payload) => {
+          const updatedPrize = payload.new as any;
+          if (updatedPrize.winner_id) {
+            const { data: prizeWinner } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', updatedPrize.winner_id)
+              .single();
+            
+            setPrizes(prev => prev.map(p => 
+              p.id === updatedPrize.id 
+                ? { ...p, ...updatedPrize, winner: prizeWinner || null }
+                : p
+            ));
           }
         }
       )

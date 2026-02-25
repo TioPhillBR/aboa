@@ -38,7 +38,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function SorteioDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const { raffle, participants, myTickets, soldNumbers, isLoading, buyMultipleTickets } = useRaffle(id || '');
+  const { raffle, participants, myTickets, soldNumbers, prizes, isLoading, buyMultipleTickets } = useRaffle(id || '');
   const { balance, purchase } = useWallet();
   const isMobile = useIsMobile();
   const { addNotification } = useNotifications();
@@ -346,6 +346,73 @@ export default function SorteioDetail() {
                     autoSpin={isDrawing}
                     raffleTitle={raffle.title}
                   />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Prêmios e Ganhadores */}
+            {prizes.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gift className="h-5 w-5 text-primary" />
+                    Prêmios {isCompleted ? '& Ganhadores' : ''}
+                  </CardTitle>
+                  <CardDescription>
+                    {prizes.length} prêmio{prizes.length > 1 ? 's' : ''} {isCompleted ? 'sorteados' : 'disponíveis'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {prizes.map((prize: any, index: number) => (
+                    <div 
+                      key={prize.id} 
+                      className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
+                        prize.winner 
+                          ? 'bg-gradient-to-r from-yellow-500/5 to-orange-500/5 border-yellow-500/30' 
+                          : 'bg-muted/30 border-border'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
+                        {index + 1}º
+                      </div>
+                      
+                      {prize.image_url && (
+                        <img src={prize.image_url} alt={prize.name} className="h-12 w-12 rounded-lg object-cover shrink-0" />
+                      )}
+                      
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{prize.name}</p>
+                        {prize.estimated_value && (
+                          <p className="text-sm text-primary font-medium">R$ {Number(prize.estimated_value).toFixed(2)}</p>
+                        )}
+                        {prize.description && (
+                          <p className="text-xs text-muted-foreground truncate">{prize.description}</p>
+                        )}
+                      </div>
+                      
+                      {prize.winner ? (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Avatar className="h-8 w-8 border-2 border-yellow-500">
+                            <AvatarImage src={prize.winner.avatar_url || undefined} />
+                            <AvatarFallback className="text-xs bg-primary/10">
+                              {getInitials(prize.winner.full_name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="text-right">
+                            <p className="text-sm font-medium">{prize.winner.full_name}</p>
+                            <p className="text-xs text-yellow-600 flex items-center gap-1">
+                              <Trophy className="h-3 w-3" /> Vencedor
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <Badge variant="secondary" className="shrink-0">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Aguardando
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             )}

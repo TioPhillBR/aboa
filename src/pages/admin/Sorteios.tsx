@@ -30,7 +30,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Raffle, Profile } from '@/types';
+import { Raffle, Profile, RafflePrize } from '@/types';
 import { 
   Ticket, 
   Plus, 
@@ -86,6 +86,7 @@ interface RaffleWithStats extends Raffle {
   tickets_sold: number;
   participants: Profile[];
   prizes_count?: number;
+  prizes?: RafflePrize[];
 }
 
 export default function AdminSorteios() {
@@ -153,10 +154,18 @@ export default function AdminSorteios() {
             participants = (profilesData || []) as Profile[];
           }
 
+          // Buscar prêmios
+          const { data: prizesData } = await supabase
+            .from('raffle_prizes')
+            .select('*')
+            .eq('raffle_id', raffle.id)
+            .order('created_at', { ascending: true });
+
           return {
             ...raffle,
             tickets_sold: ticketsData?.length || 0,
             participants,
+            prizes: (prizesData || []) as RafflePrize[],
           } as RaffleWithStats;
         })
       );
@@ -743,45 +752,77 @@ function DrawRaffleDialog({ raffle, open, onOpenChange, onComplete }: DrawRaffle
   const { toast } = useToast();
   const [winner, setWinner] = useState<Profile | null>(null);
 
-  const handleWinnerSelected = async (selectedWinner: Profile) => {
+  const handleWinnerSelected = async (selectedWinner: Profile, prize: RafflePrize) => {
     setWinner(selectedWinner);
 
-    // Atualizar status para 'drawing' primeiro
-    await supabase
-      .from('raffles')
-      .update({ status: 'drawing' })
-      .eq('id', raffle.id);
+    // Atualizar status para 'drawing' se ainda não estiver
+    if (raffle.status !== 'drawing') {
+      await supabase
+        .from('raffles')
+        .update({ status: 'drawing' })
+        .eq('id', raffle.id);
+    }
 
-    // Buscar um ticket aleatório do vencedor
-    const { data: tickets } = await supabase
-      .from('raffle_tickets')
-      .select('ticket_number')
-      .eq('raffle_id', raffle.id)
-      .eq('user_id', selectedWinner.id);
+    // Salvar vencedor no prêmio específico
+    const { error: prizeError } = await supabase
+      .from('raffle_prizes')
+      .update({
+        winner_id: selectedWinner.id,
+        status: 'processing' as const,
+      })
+      .eq('id', prize.id);
 
-    const winningTicket = tickets?.[Math.floor(Math.random() * (tickets?.length || 1))]?.ticket_number || 1;
+    if (prizeError) {
+      console.error('Error updating prize winner:', prizeError);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível salvar o vencedor do prêmio.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: `🎉 ${prize.name}`,
+        description: `${selectedWinner.full_name} ganhou o prêmio!`,
+      });
+    }
+  };
 
-    // Atualizar o sorteio com o vencedor
+  const handleAllPrizesDrawn = async () => {
+    // Buscar um ticket aleatório do último vencedor para manter compatibilidade
+    const lastWinnerId = winner?.id;
+    let winningTicket = 1;
+
+    if (lastWinnerId) {
+      const { data: tickets } = await supabase
+        .from('raffle_tickets')
+        .select('ticket_number')
+        .eq('raffle_id', raffle.id)
+        .eq('user_id', lastWinnerId);
+
+      winningTicket = tickets?.[Math.floor(Math.random() * (tickets?.length || 1))]?.ticket_number || 1;
+    }
+
+    // Marcar sorteio como completed
     const { error } = await supabase
       .from('raffles')
       .update({
         status: 'completed',
-        winner_id: selectedWinner.id,
+        winner_id: lastWinnerId || null,
         winner_ticket_number: winningTicket,
       })
       .eq('id', raffle.id);
 
     if (error) {
-      console.error('Error updating winner:', error);
+      console.error('Error completing raffle:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível salvar o vencedor.',
+        description: 'Não foi possível finalizar o sorteio.',
         variant: 'destructive',
       });
     } else {
       toast({
-        title: '🎉 Sorteio Realizado!',
-        description: `${selectedWinner.full_name} foi o vencedor!`,
+        title: '🏆 Sorteio Finalizado!',
+        description: 'Todos os prêmios foram sorteados com sucesso!',
       });
     }
   };
@@ -802,6 +843,8 @@ function DrawRaffleDialog({ raffle, open, onOpenChange, onComplete }: DrawRaffle
       open={open}
       onClose={handleClose}
       onWinnerSelected={handleWinnerSelected}
+      onAllPrizesDrawn={handleAllPrizesDrawn}
+      prizes={raffle.prizes || []}
       winner={winner}
     />
   );
