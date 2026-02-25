@@ -79,17 +79,22 @@ export function useAffiliates() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      console.log('[useAffiliates] Raw affiliates data sample:', data?.[0]);
       // Merge profile data as fallback for empty affiliate fields
-      return (data || []).map((a: any) => ({
-        ...a,
-        avatar_url: a.avatar_url || a.profiles?.avatar_url || null,
-        phone: a.phone || a.profiles?.phone || null,
-        cpf: a.cpf || a.profiles?.cpf || '',
-        address_street: a.address_street || a.profiles?.address_street || null,
-        address_city: a.address_city || a.profiles?.address_city || null,
-        address_state: a.address_state || a.profiles?.address_state || null,
-        address_zip: a.address_zip || a.profiles?.address_cep || null,
-      })) as Affiliate[];
+      const profileKey = 'profiles';
+      return (data || []).map((a: any) => {
+        const profile = a[profileKey] || {};
+        return {
+          ...a,
+          avatar_url: a.avatar_url || profile.avatar_url || null,
+          phone: a.phone || profile.phone || null,
+          cpf: a.cpf || profile.cpf || '',
+          address_street: a.address_street || profile.address_street || null,
+          address_city: a.address_city || profile.address_city || null,
+          address_state: a.address_state || profile.address_state || null,
+          address_zip: a.address_zip || profile.address_cep || null,
+        };
+      }) as Affiliate[];
     },
     enabled: isAdmin, // Only fetch for admins
   });
