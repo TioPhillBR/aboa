@@ -136,6 +136,59 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
+  // Escutar créditos de prêmios na carteira em tempo real
+  useEffect(() => {
+    if (!user) return;
+
+    let walletId: string | null = null;
+
+    const setup = async () => {
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!wallet) return;
+      walletId = wallet.id;
+
+      const channel = supabase
+        .channel('prize-credits')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'wallet_transactions',
+            filter: `wallet_id=eq.${walletId}`,
+          },
+          (payload) => {
+            const tx = payload.new as any;
+            if (tx.type === 'prize' && tx.amount > 0) {
+              addNotification({
+                type: 'prize_won',
+                title: '💰 Prêmio Creditado!',
+                message: `R$ ${Number(tx.amount).toFixed(2)} foi creditado na sua carteira! ${tx.description || ''}`.trim(),
+                icon: '🎉',
+                link: '/carteira',
+                data: { transactionId: tx.id, amount: tx.amount },
+              });
+            }
+          }
+        )
+        .subscribe();
+
+      return channel;
+    };
+
+    let channelRef: any;
+    setup().then(ch => { channelRef = ch; });
+
+    return () => {
+      if (channelRef) supabase.removeChannel(channelRef);
+    };
+  }, [user]);
+
   const addNotification = useCallback((notification: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
     const newNotification: Notification = {
       ...notification,
