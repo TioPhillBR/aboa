@@ -44,7 +44,10 @@ export function FullscreenRaffleDraw({
   const [currentPrizeIndex, setCurrentPrizeIndex] = useState(0);
   const [drawnWinners, setDrawnWinners] = useState<Map<string, Profile>>(new Map());
   const [allDone, setAllDone] = useState(false);
+  const [autoAdvanceCountdown, setAutoAdvanceCountdown] = useState<number | null>(null);
   const animationRef = useRef<number>();
+  const autoAdvanceTimerRef = useRef<NodeJS.Timeout>();
+  const autoAdvanceCountdownRef = useRef<NodeJS.Timeout>();
   const { playClick, playBigWin, playDrumHit } = useSoundEffects();
 
   // Filter out prizes that already have winners (from DB)
@@ -163,6 +166,29 @@ export function FullscreenRaffleDraw({
         setTimeout(() => {
           onWinnerSelected(selectedWinner, currentPrize!);
         }, 500);
+
+        // Auto-advance after 5 seconds
+        const remainingPrizes = prizes.filter(p => !p.winner_id && !drawnWinners.has(p.id) && p.id !== currentPrize!.id);
+        setAutoAdvanceCountdown(5);
+        let count = 5;
+        autoAdvanceCountdownRef.current = setInterval(() => {
+          count--;
+          setAutoAdvanceCountdown(count);
+          if (count <= 0) {
+            clearInterval(autoAdvanceCountdownRef.current!);
+            setAutoAdvanceCountdown(null);
+            if (remainingPrizes.length > 0) {
+              // Go to next prize
+              setWinner(null);
+              setPhase('idle');
+              setOffset(0);
+            } else {
+              // Last prize - finalize
+              setAllDone(true);
+              onAllPrizesDrawn?.();
+            }
+          }
+        }, 1000);
         
         return;
       }
@@ -198,8 +224,26 @@ export function FullscreenRaffleDraw({
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current);
+      }
+      if (autoAdvanceCountdownRef.current) {
+        clearInterval(autoAdvanceCountdownRef.current);
+      }
     };
   }, []);
+
+  // Auto-start spin when returning to idle after auto-advance
+  const autoStartRef = useRef(false);
+  useEffect(() => {
+    if (phase === 'idle' && !winner && !allDone && drawnWinners.size > 0 && currentPrize) {
+      // This means we just auto-advanced; auto-start the next spin
+      const timer = setTimeout(() => {
+        startSpin();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, winner, allDone, drawnWinners.size, currentPrize]);
 
   useEffect(() => {
     if (externalWinner) {
@@ -707,30 +751,16 @@ export function FullscreenRaffleDraw({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 1 }}
-                  className="flex items-center justify-center gap-4"
+                  className="flex flex-col items-center justify-center gap-3"
                 >
-                  {undrawnPrizes.length > 1 ? (
-                    <Button
-                      size="lg"
-                      onClick={goToNextPrize}
-                      className="gap-2 text-lg px-8 py-6 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-xl rounded-xl"
-                    >
-                      Próximo Prêmio
-                      <ArrowRight className="h-5 w-5" />
-                    </Button>
-                  ) : (
-                    <Button
-                      size="lg"
-                      onClick={() => {
-                        setAllDone(true);
-                        onAllPrizesDrawn?.();
-                      }}
-                      className="gap-2 text-lg px-8 py-6 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white shadow-xl rounded-xl"
-                    >
-                      <Trophy className="h-5 w-5" />
-                      Finalizar Sorteio
-                    </Button>
-                  )}
+                  {autoAdvanceCountdown !== null && autoAdvanceCountdown > 0 ? (
+                    <p className="text-lg text-muted-foreground">
+                      {undrawnPrizes.length > 1
+                        ? <>Próximo prêmio em <span className="font-bold text-primary text-2xl">{autoAdvanceCountdown}s</span></>
+                        : <>Finalizando em <span className="font-bold text-primary text-2xl">{autoAdvanceCountdown}s</span></>
+                      }
+                    </p>
+                  ) : null}
                 </motion.div>
               </div>
             </motion.div>
