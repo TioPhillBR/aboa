@@ -784,6 +784,42 @@ function DrawRaffleDialog({ raffle, open, onOpenChange, onComplete }: DrawRaffle
         title: `🎉 ${prize.name}`,
         description: `${selectedWinner.full_name} ganhou o prêmio!`,
       });
+
+      // Creditar o valor do prêmio automaticamente na carteira do vencedor
+      const prizeValue = prize.estimated_value;
+      if (prizeValue && prizeValue > 0) {
+        try {
+          // Buscar carteira do vencedor
+          const { data: winnerWallet } = await supabase
+            .from('wallets')
+            .select('id, balance')
+            .eq('user_id', selectedWinner.id)
+            .single();
+
+          if (winnerWallet) {
+            // Inserir transação de prêmio
+            await supabase
+              .from('wallet_transactions')
+              .insert({
+                wallet_id: winnerWallet.id,
+                amount: prizeValue,
+                type: 'prize' as const,
+                description: `Prêmio sorteio - ${raffle.title} - ${prize.name}`,
+                reference_id: prize.id,
+              });
+
+            // Atualizar saldo da carteira
+            await supabase
+              .from('wallets')
+              .update({ balance: winnerWallet.balance + prizeValue })
+              .eq('id', winnerWallet.id);
+
+            console.log(`Prize R$ ${prizeValue.toFixed(2)} credited to ${selectedWinner.full_name}'s wallet`);
+          }
+        } catch (creditError) {
+          console.error('Error crediting prize to winner wallet:', creditError);
+        }
+      }
     }
   };
 
