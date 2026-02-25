@@ -75,11 +75,21 @@ export function useAffiliates() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('affiliates')
-        .select('*')
+        .select('*, profiles:user_id(full_name, avatar_url, phone, cpf, address_street, address_city, address_state, address_cep)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as Affiliate[];
+      // Merge profile data as fallback for empty affiliate fields
+      return (data || []).map((a: any) => ({
+        ...a,
+        avatar_url: a.avatar_url || a.profiles?.avatar_url || null,
+        phone: a.phone || a.profiles?.phone || null,
+        cpf: a.cpf || a.profiles?.cpf || '',
+        address_street: a.address_street || a.profiles?.address_street || null,
+        address_city: a.address_city || a.profiles?.address_city || null,
+        address_state: a.address_state || a.profiles?.address_state || null,
+        address_zip: a.address_zip || a.profiles?.address_cep || null,
+      })) as Affiliate[];
     },
     enabled: isAdmin, // Only fetch for admins
   });
