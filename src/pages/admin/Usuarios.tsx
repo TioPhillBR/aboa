@@ -217,9 +217,14 @@ export default function AdminUsuarios() {
       
       if (transactionError) throw transactionError;
       
-      // Note: We do NOT update wallet.balance here
-      // Bonus credits are tracked separately via source_type = 'admin_bonus' or 'referral'
-      // The bonusBalance is calculated in useWallet from these transactions
+      // Update wallet balance to include the bonus amount
+      // bonusBalance in useWallet is capped by wallet.balance, so we must reflect it here
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .update({ balance: bonusUser.wallet.balance + amount })
+        .eq('id', bonusUser.wallet.id);
+      
+      if (walletError) throw walletError;
       
       toast({ 
         title: 'Créditos bônus adicionados!', 

@@ -102,11 +102,11 @@ serve(async (req) => {
     }
 
     // Buscar depósito pendente
-    let deposit: { id: string; user_id: string; amount: number; external_id?: string } | null = null;
+    let deposit: { id: string; user_id: string; amount: number; external_id?: string; status?: string } | null = null;
     for (const ref of refs) {
       const { data } = await supabaseAdmin
         .from("pix_deposits")
-        .select("id, user_id, amount, external_id")
+        .select("id, user_id, amount, external_id, status")
         .eq("external_id", ref)
         .eq("status", "pending")
         .single();
@@ -119,7 +119,7 @@ serve(async (req) => {
     if (!deposit && (transactionId || externalId)) {
       const { data: byTransactionId } = await supabaseAdmin
         .from("pix_deposits")
-        .select("id, user_id, amount, external_id")
+        .select("id, user_id, amount, external_id, status")
         .eq("transaction_id", transactionId || externalId)
         .eq("status", "pending")
         .single();
