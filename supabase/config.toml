@@ -6,6 +6,12 @@ verify_jwt = false
 [functions.confirm-pix]
 verify_jwt = false
 
+[functions.webhook-gatebox]
+verify_jwt = false
+
+[functions.check-deposit-status]
+verify_jwt = false
+
 [functions.process-referral]
 verify_jwt = false
 

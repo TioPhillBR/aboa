@@ -28,6 +28,8 @@ interface PixData {
   qrCodeBase64: string;
   copyPasteCode: string;
   expiresAt: string;
+  externalId?: string;
+  useGatebox?: boolean;
 }
 
 type PaymentStatus = 'generating' | 'waiting' | 'processing' | 'success' | 'expired' | 'error';
@@ -62,6 +64,33 @@ export function PixPayment({ amount, onSuccess, onCancel }: PixPaymentProps) {
 
     return () => clearInterval(timer);
   }, [status, pixData]);
+
+  // Polling para verificar pagamento quando usar Gatebox
+  useEffect(() => {
+    if (status !== 'waiting' || !pixData?.useGatebox || !pixData?.externalId) return;
+
+    const checkStatus = async () => {
+      try {
+        const { data } = await supabase.functions.invoke('check-deposit-status', {
+          body: { externalId: pixData.externalId, transactionId: pixData.transactionId },
+        });
+        if (data?.paid) {
+          setStatus('success');
+          playSuccess();
+          toast({
+            title: '🎉 Pagamento confirmado!',
+            description: `R$ ${amount.toFixed(2)} adicionados à sua carteira`,
+          });
+          setTimeout(onSuccess, 2000);
+        }
+      } catch {
+        // Ignora erros de polling
+      }
+    };
+
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, [status, pixData?.useGatebox, pixData?.externalId, pixData?.transactionId, amount, onSuccess, playSuccess, toast]);
 
   const generatePix = async () => {
     setStatus('generating');
@@ -280,18 +309,60 @@ export function PixPayment({ amount, onSuccess, onCancel }: PixPaymentProps) {
               >
                 Cancelar
               </Button>
-              <Button 
-                className="flex-1 bg-[#32BCAD] hover:bg-[#2aa99b] gap-2"
-                onClick={handleConfirmPayment}
-              >
-                <Check className="w-4 h-4" />
-                Já Paguei
-              </Button>
+              {pixData?.useGatebox ? (
+                <Button 
+                  className="flex-1 bg-[#32BCAD] hover:bg-[#2aa99b] gap-2"
+                  onClick={async () => {
+                    setStatus('processing');
+                    try {
+                      const { data } = await supabase.functions.invoke('check-deposit-status', {
+                        body: { externalId: pixData.externalId, transactionId: pixData.transactionId },
+                      });
+                      if (data?.paid) {
+                        setStatus('success');
+                        playSuccess();
+                        toast({
+                          title: '🎉 Pagamento confirmado!',
+                          description: `R$ ${amount.toFixed(2)} adicionados à sua carteira`,
+                        });
+                        setTimeout(onSuccess, 2000);
+                      } else {
+                        setStatus('waiting');
+                        toast({
+                          title: 'Pagamento ainda não identificado',
+                          description: 'Aguarde alguns segundos e tente novamente',
+                          variant: 'default',
+                        });
+                      }
+                    } catch {
+                      setStatus('waiting');
+                      toast({
+                        title: 'Erro ao verificar',
+                        description: 'Tente novamente',
+                        variant: 'destructive',
+                      });
+                    }
+                  }}
+                >
+                  <Check className="w-4 h-4" />
+                  Verificar pagamento
+                </Button>
+              ) : (
+                <Button 
+                  className="flex-1 bg-[#32BCAD] hover:bg-[#2aa99b] gap-2"
+                  onClick={handleConfirmPayment}
+                >
+                  <Check className="w-4 h-4" />
+                  Já Paguei
+                </Button>
+              )}
             </div>
 
-            <p className="text-xs text-center text-muted-foreground">
-              Ambiente de simulação - clique em "Já Paguei" para simular a confirmação
-            </p>
+            {!pixData?.useGatebox && (
+              <p className="text-xs text-center text-muted-foreground">
+                Ambiente de simulação - clique em &quot;Já Paguei&quot; para simular a confirmação
+              </p>
+            )}
           </motion.div>
         )}
 
