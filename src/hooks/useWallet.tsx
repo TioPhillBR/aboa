@@ -66,24 +66,29 @@ export function useWallet() {
     }
   };
 
-  // Calculate bonus balance: credits received minus bonus spent
-  const bonusBalance = useMemo(() => {
-    const bonusReceived = transactions
-      .filter(tx => (tx.source_type === 'referral' || tx.source_type === 'admin_bonus') && tx.amount > 0)
-      .reduce((sum, tx) => sum + tx.amount, 0);
-    
-    const bonusUsed = transactions
-      .filter(tx => tx.source_type === 'bonus_used' && tx.amount < 0)
-      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    
-    return Math.max(0, Math.min(bonusReceived - bonusUsed, wallet?.balance ?? 0));
-  }, [transactions, wallet?.balance]);
-
-  // Main balance is wallet balance minus bonus balance
-  const mainBalance = useMemo(() => {
+  // Calculate principal and bonus balances from transaction origins
+  const { mainBalance, bonusBalance } = useMemo(() => {
     const total = wallet?.balance ?? 0;
-    return Math.max(0, total - bonusBalance);
-  }, [wallet?.balance, bonusBalance]);
+
+    // Créditos principais: depósitos, prêmios, estornos etc. (qualquer crédito que não seja bônus explícito)
+    const principalCredits = transactions
+      .filter(tx => tx.amount > 0 && tx.source_type !== 'referral' && tx.source_type !== 'admin_bonus')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    // Débitos principais: compras que não consumiram bônus
+    const principalDebits = transactions
+      .filter(tx => tx.amount < 0 && tx.source_type !== 'bonus_used')
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+    const principalRaw = principalCredits - principalDebits;
+    const principal = Math.max(0, Math.min(principalRaw, total));
+    const bonus = Math.max(0, total - principal);
+
+    return {
+      mainBalance: principal,
+      bonusBalance: bonus,
+    };
+  }, [transactions, wallet?.balance]);
 
   const addTransaction = async (
     amount: number,
