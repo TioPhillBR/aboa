@@ -26,7 +26,7 @@ import logoABoa from '@/assets/logo-a-boa.png';
 
 export function Header() {
   const { user, profile, signOut, isLoading, isAffiliate } = useAuth();
-  const { balance, bonusBalance } = useWallet();
+  const { balance } = useWallet();
   const { myAffiliateProfile } = useAffiliates();
   const navigate = useNavigate();
 
@@ -97,12 +97,6 @@ export function Header() {
                   <Wallet className="h-4 w-4" />
                   <span>R$ {balance.toFixed(2)}</span>
                 </Button>
-                {bonusBalance > 0 && (
-                  <Button variant="ghost" size="sm" className="gap-1 text-primary font-semibold px-2">
-                    <Gift className="h-4 w-4" />
-                    <span>+R$ {bonusBalance.toFixed(2)}</span>
-                  </Button>
-                )}
               </Link>
 
               {/* Menu do Usuário - Desktop */}
@@ -260,9 +254,6 @@ export function Header() {
                       </div>
                       <div className="text-right">
                         <span className="font-bold text-primary">R$ {balance.toFixed(2)}</span>
-                        {bonusBalance > 0 && (
-                          <p className="text-xs text-muted-foreground">+R$ {bonusBalance.toFixed(2)} bônus</p>
-                        )}
                       </div>
                     </Link>
                     <div className="h-px bg-border my-2" />

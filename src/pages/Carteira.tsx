@@ -38,9 +38,7 @@ import {
   Sparkles,
   Clock,
   QrCode,
-  Gift,
-  Banknote,
-  AlertCircle
+  Banknote
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -52,7 +50,7 @@ type PaymentStep = 'select-amount' | 'pix-payment';
 
 export default function Carteira() {
   const { user } = useAuth();
-  const { wallet, transactions, balance, bonusBalance, isLoading, deposit, refetch } = useWallet();
+  const { wallet, transactions, balance, isLoading, deposit, refetch } = useWallet();
   const { toast } = useToast();
   
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -323,38 +321,6 @@ export default function Carteira() {
                 </CardContent>
               </Card>
 
-              {/* Card de Saldo Bônus */}
-              <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20 overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-                
-                <CardHeader className="relative pb-2">
-                  <CardDescription className="text-amber-600 flex items-center gap-2">
-                    <Gift className="h-4 w-4" />
-                    Saldo Bônus
-                  </CardDescription>
-                  <CardTitle className="text-4xl font-bold text-amber-600">
-                    R$ {bonusBalance.toFixed(2)}
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Bônus de indicações • Não sacável
-                  </p>
-                </CardHeader>
-                
-                <CardContent className="relative pt-2">
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
-                    <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-muted-foreground">
-                      O saldo bônus só pode ser usado para jogar e não pode ser sacado.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Saldo Total */}
-            <div className="p-4 rounded-lg bg-muted/50 border text-center">
-              <p className="text-muted-foreground mb-1">Saldo Total (Principal + Bônus)</p>
-              <p className="text-3xl font-bold">R$ {(balance + bonusBalance).toFixed(2)}</p>
             </div>
 
             {/* Histórico de Transações */}
