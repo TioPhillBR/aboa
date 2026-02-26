@@ -135,7 +135,7 @@ serve(async (req) => {
         .single();
 
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
-      const email = authUser?.data?.user?.email || "";
+      const email = authUser?.user?.email || "";
 
       const externalId = `deposito_${userId}_${Date.now()}`;
       const cpfLimpo = (profile?.cpf || "").replace(/\D/g, "");
