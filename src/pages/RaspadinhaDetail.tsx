@@ -34,7 +34,7 @@ export default function RaspadinhaDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { scratchCard, symbols, myChances, isLoading, buyChance, revealChance, refetch } = useScratchCard(id || '');
-  const { balance, awardPrize, refetch: refetchWallet } = useWallet();
+  const { totalBalance, awardPrize, refetch: refetchWallet } = useWallet();
   const isMobile = useIsMobile();
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const { addNotification } = useNotifications();
@@ -65,7 +65,7 @@ export default function RaspadinhaDetail() {
 
     if (!scratchCard) return;
 
-    if (balance < scratchCard.price) {
+    if (totalBalance < scratchCard.price) {
       toast({
         title: 'Saldo insuficiente',
         description: 'Adicione mais créditos à sua carteira',
@@ -104,7 +104,7 @@ export default function RaspadinhaDetail() {
     } finally {
       setIsBuying(false);
     }
-  }, [user, scratchCard, balance, buyChance, refetchWallet, toast]);
+  }, [user, scratchCard, totalBalance, buyChance, refetchWallet, toast]);
 
   const handleReveal = useCallback(async (isWinner: boolean, prize: number) => {
     // Use ref para garantir que a chance ativa não foi perdida por re-render
@@ -283,7 +283,7 @@ export default function RaspadinhaDetail() {
                         prizeWon={activeChance.prize_won}
                         onBuyAgain={handleBuyAgain}
                         isBuying={isBuying}
-                        canBuyAgain={balance >= scratchCard.price}
+                        canBuyAgain={totalBalance >= scratchCard.price}
                         price={scratchCard.price}
                       />
                     </motion.div>
@@ -315,12 +315,12 @@ export default function RaspadinhaDetail() {
                         <div className="space-y-4">
                           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                             <Wallet className="h-4 w-4" />
-                            <span>Seu saldo: R$ {balance.toFixed(2)}</span>
+                            <span>Seu saldo: R$ {totalBalance.toFixed(2)}</span>
                           </div>
 
                           <Button
                             onClick={handleBuyChance}
-                            disabled={isBuying || balance < scratchCard.price}
+                            disabled={isBuying || totalBalance < scratchCard.price}
                             size="lg"
                             className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
                           >
@@ -332,7 +332,7 @@ export default function RaspadinhaDetail() {
                             )}
                           </Button>
 
-                          {balance < scratchCard.price && (
+                          {totalBalance < scratchCard.price && (
                             <Button variant="outline" className="w-full" asChild>
                               <Link to="/carteira">
                                 <Wallet className="h-4 w-4 mr-2" />
