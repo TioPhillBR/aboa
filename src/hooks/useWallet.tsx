@@ -66,6 +66,25 @@ export function useWallet() {
     }
   };
 
+  // Calculate bonus balance: credits received minus bonus spent
+  const bonusBalance = useMemo(() => {
+    const bonusReceived = transactions
+      .filter(tx => (tx.source_type === 'referral' || tx.source_type === 'admin_bonus') && tx.amount > 0)
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    
+    const bonusUsed = transactions
+      .filter(tx => tx.source_type === 'bonus_used' && tx.amount < 0)
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    
+    return Math.max(0, Math.min(bonusReceived - bonusUsed, wallet?.balance ?? 0));
+  }, [transactions, wallet?.balance]);
+
+  // Main balance is wallet balance minus bonus balance
+  const mainBalance = useMemo(() => {
+    const total = wallet?.balance ?? 0;
+    return Math.max(0, total - bonusBalance);
+  }, [wallet?.balance, bonusBalance]);
+
   const addTransaction = async (
     amount: number,
     type: TransactionType,
@@ -117,7 +136,52 @@ export function useWallet() {
       return { error: new Error('Saldo insuficiente') };
     }
 
-    return addTransaction(-amount, 'purchase', description, referenceId);
+    // Use bonus first, then principal
+    const bonusToUse = Math.min(bonusBalance, amount);
+    const principalToUse = amount - bonusToUse;
+
+    try {
+      if (bonusToUse > 0) {
+        const { error: bonusErr } = await supabase
+          .from('wallet_transactions')
+          .insert({
+            wallet_id: wallet.id,
+            amount: -bonusToUse,
+            type: 'purchase' as TransactionType,
+            description: `${description} (bônus)`,
+            reference_id: referenceId,
+            source_type: 'bonus_used',
+          });
+        if (bonusErr) throw bonusErr;
+      }
+
+      if (principalToUse > 0) {
+        const { error: principalErr } = await supabase
+          .from('wallet_transactions')
+          .insert({
+            wallet_id: wallet.id,
+            amount: -principalToUse,
+            type: 'purchase' as TransactionType,
+            description,
+            reference_id: referenceId,
+          });
+        if (principalErr) throw principalErr;
+      }
+
+      const newBalance = wallet.balance - amount;
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .update({ balance: newBalance })
+        .eq('id', wallet.id);
+      if (walletError) throw walletError;
+
+      setWallet(prev => prev ? { ...prev, balance: newBalance } : null);
+      await fetchTransactions();
+      return { error: null };
+    } catch (error) {
+      console.error('Error processing purchase:', error);
+      return { error: error as Error };
+    }
   };
 
   const awardPrize = async (amount: number, description: string, referenceId?: string) => {
@@ -128,9 +192,9 @@ export function useWallet() {
     wallet,
     transactions,
     isLoading,
-    balance: wallet?.balance ?? 0,
+    balance: mainBalance,
     totalBalance: wallet?.balance ?? 0,
-    bonusBalance: 0,
+    bonusBalance,
     deposit,
     purchase,
     awardPrize,
