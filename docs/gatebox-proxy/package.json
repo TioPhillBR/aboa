@@ -1,0 +1,10 @@
+{
+  "name": "gatebox-proxy",
+  "version": "1.0.0",
+  "description": "Proxy com IP fixo para chamadas à API Gatebox",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}
