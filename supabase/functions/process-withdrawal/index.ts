@@ -145,7 +145,7 @@ serve(async (req) => {
     await supabaseAdmin.from("wallet_transactions").insert({
       wallet_id: wallet.id,
       amount: -amount,
-      type: "refund",
+      type: "withdrawal" as any,
       description: `Saque via PIX - ${pixKey}`,
       reference_id: withdrawal.id,
       source_type: "withdrawal",
