@@ -4,7 +4,8 @@ import { gateboxCreatePix } from "../_shared/gatebox.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface PixRequest {
@@ -183,12 +184,12 @@ serve(async (req) => {
           description: `Depósito A BOA - R$ ${amount.toFixed(2)}`,
         };
       } else {
-        // CPF ausente ou inválido: fluxo "pagador diferente" sem documento
-        console.log("CPF ausente ou inválido, usando fluxo sem documento");
+        // CPF ausente ou inválido: enviar sem document e sem name
+        // A Gatebox valida name/document em conjunto; omitir ambos para QR genérico
+        console.log("CPF ausente ou inválido, usando fluxo sem documento/nome do beneficiário");
         pixPayload = {
           externalId,
           amount: parseFloat(amount.toFixed(2)),
-          identification: `Depósito - ${profile?.full_name || "Cliente"}`,
           expire: 3600,
           description: `Depósito A BOA - R$ ${amount.toFixed(2)}`,
         };
