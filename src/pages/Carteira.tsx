@@ -68,19 +68,21 @@ export default function Carteira() {
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [userPixKey, setUserPixKey] = useState<string | null>(null);
   const [userPixKeyType, setUserPixKeyType] = useState<string | null>(null);
+  const [userFullName, setUserFullName] = useState<string>('');
 
   // Fetch user PIX key from profile
   useEffect(() => {
     if (user) {
       supabase
         .from('profiles')
-        .select('pix_key, pix_key_type')
+        .select('pix_key, pix_key_type, full_name')
         .eq('id', user.id)
         .single()
         .then(({ data }) => {
           if (data) {
             setUserPixKey(data.pix_key);
             setUserPixKeyType(data.pix_key_type);
+            setUserFullName(data.full_name || '');
           }
         });
     }
@@ -432,11 +434,35 @@ export default function Carteira() {
                       </DialogHeader>
 
                       <div className="space-y-4 py-4">
-                        {/* Saldo disponível */}
-                        <div className="p-4 rounded-lg bg-muted">
-                          <p className="text-sm text-muted-foreground">Saldo Principal disponível</p>
-                          <p className="text-2xl font-bold text-primary">R$ {balance.toFixed(2)}</p>
-                        </div>
+                        {/* User info card */}
+                        <Card className="border-primary/20 bg-primary/5">
+                          <CardContent className="py-4 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Wallet className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-foreground">{userFullName || 'Usuário'}</p>
+                                <p className="text-xs text-muted-foreground">ID: {user?.id?.slice(0, 8)}...</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-2.5 rounded-lg bg-background border">
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Saldo disponível</p>
+                                <p className="text-lg font-bold text-primary">R$ {balance.toFixed(2)}</p>
+                              </div>
+                              <div className="p-2.5 rounded-lg bg-background border">
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Data da solicitação</p>
+                                <p className="text-sm font-semibold text-foreground mt-0.5">
+                                  {format(new Date(), "dd/MM/yyyy", { locale: ptBR })}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {format(new Date(), "HH:mm", { locale: ptBR })}
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
 
                         {/* Chave PIX */}
                         {userPixKey ? (
@@ -483,7 +509,7 @@ export default function Carteira() {
                             />
                           </div>
                           <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Mínimo: R$ 100,00</span>
+                            <span>Mínimo: R$ 10,00</span>
                             <button 
                               type="button"
                               className="text-primary hover:underline cursor-pointer"
