@@ -36,7 +36,7 @@ export async function gateboxAuthenticate(config: GateboxConfig): Promise<string
     return tokenCache.token;
   }
 
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
+  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/^=/, "").replace(/\/$/, "");
   const url = `${baseUrl}/v1/customers/auth/sign-in`;
 
   const response = await fetch(url, {
@@ -71,7 +71,7 @@ export async function gateboxCreatePix(
   config: GateboxConfig,
   payload: GateboxCreatePixPayload
 ): Promise<GateboxCreatePixResponse> {
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
+  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/^=/, "").replace(/\/$/, "");
   const url = `${baseUrl}/v1/customers/pix/create-immediate-qrcode`;
 
   const token = await gateboxAuthenticate(config);
@@ -134,7 +134,7 @@ export async function gateboxCreatePayout(
   config: GateboxConfig,
   payload: GateboxPayoutPayload
 ): Promise<GateboxPayoutResponse> {
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
+  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/^=/, "").replace(/\/$/, "");
   const url = `${baseUrl}/v1/customers/pix/create-payout`;
 
   const token = await gateboxAuthenticate(config);
