@@ -160,36 +160,26 @@ export default function Carteira() {
 
     setWithdrawLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
+      const { data, error } = await supabase.functions.invoke('process-withdrawal', {
+        body: {
+          amount,
+          pixKey: userPixKey,
+          pixKeyType: userPixKeyType,
+        },
+      });
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const res = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/process-withdrawal`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            amount,
-            pixKey: userPixKey,
-            pixKeyType: userPixKeyType,
-          }),
-        }
-      );
+      if (error) {
+        throw new Error(error.message || 'Erro ao processar saque');
+      }
 
-      const result = await res.json();
-
-      if (!res.ok) {
-        throw new Error(result.error || 'Erro ao processar saque');
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
       toast({ title: 'Saque realizado!', description: `R$ ${amount.toFixed(2)} enviado para sua chave PIX` });
       setWithdrawOpen(false);
       setWithdrawAmount('');
+      setWithdrawStep('form');
       refetch();
     } catch (err: any) {
       toast({ title: 'Erro no saque', description: err.message, variant: 'destructive' });
