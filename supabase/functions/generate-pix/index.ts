@@ -139,25 +139,39 @@ serve(async (req) => {
 
       const externalId = `deposito_${userId}_${Date.now()}`;
       const cpfLimpo = (profile?.cpf || "").replace(/\D/g, "");
-      let phoneFormatted = (profile?.phone || "").replace(/\D/g, "");
-      if (phoneFormatted.length >= 10) {
-        if (!phoneFormatted.startsWith("+")) {
-          phoneFormatted = "+55" + (phoneFormatted.startsWith("0") ? phoneFormatted.slice(1) : phoneFormatted);
-        }
-      }
 
-      try {
-        const pixResponse = await gateboxCreatePix(gateboxConfig, {
+      // Validar CPF: deve ter exatamente 11 dígitos numéricos
+      const cpfValido = cpfLimpo.length === 11 && /^\d{11}$/.test(cpfLimpo) && !/^(\d)\1{10}$/.test(cpfLimpo);
+
+      let pixPayload: Record<string, unknown>;
+
+      if (cpfValido) {
+        // CPF válido: enviar dados completos do beneficiário
+        pixPayload = {
           externalId,
           amount: parseFloat(amount.toFixed(2)),
-          document: cpfLimpo || undefined,
+          document: cpfLimpo,
           name: profile?.full_name || "Cliente",
           email: email || undefined,
           phone: phoneFormatted || undefined,
           identification: `Depósito - ${profile?.full_name || "Cliente"}`,
           expire: 3600,
           description: `Depósito A BOA - R$ ${amount.toFixed(2)}`,
-        });
+        };
+      } else {
+        // CPF ausente ou inválido: fluxo "pagador diferente" sem documento
+        console.log("CPF ausente ou inválido, usando fluxo sem documento");
+        pixPayload = {
+          externalId,
+          amount: parseFloat(amount.toFixed(2)),
+          identification: `Depósito - ${profile?.full_name || "Cliente"}`,
+          expire: 3600,
+          description: `Depósito A BOA - R$ ${amount.toFixed(2)}`,
+        };
+      }
+
+      try {
+        const pixResponse = await gateboxCreatePix(gateboxConfig, pixPayload as any);
 
         const qrCodeText = pixResponse.qrCodeText || pixResponse.qrCode;
         const transactionId = pixResponse.transactionId || externalId;
