@@ -1,6 +1,9 @@
 /**
  * Cliente Gatebox para Supabase Edge Functions (Deno)
- * Baseado na API documentada na coleção Postman
+ * Suporta chamadas diretas OU via proxy com IP fixo.
+ * 
+ * Se GATEBOX_PROXY_URL e GATEBOX_PROXY_SECRET estiverem configurados,
+ * todas as chamadas à Gatebox passam pelo proxy no VPS.
  */
 
 export interface GateboxConfig {
@@ -29,11 +32,24 @@ export interface GateboxCreatePixResponse {
   expiresAt?: string;
 }
 
+export interface GateboxPayoutPayload {
+  externalId: string;
+  amount: number;
+  pixKey: string;
+  pixKeyType: string;
+  description?: string;
+}
+
+export interface GateboxPayoutResponse {
+  transactionId?: string;
+  status?: string;
+  endToEnd?: string;
+}
+
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
 function sanitizeSecret(value?: string): string {
   if (!value) return "";
-
   return value
     .trim()
     .replace(/^['"]|['"]$/g, "")
@@ -48,6 +64,69 @@ function sanitizeBaseUrl(value?: string): string {
   return cleaned || "https://api.gatebox.com.br";
 }
 
+// --- Proxy helper ---
+
+interface ProxyConfig {
+  proxyUrl: string;
+  proxySecret: string;
+}
+
+function getProxyConfig(): ProxyConfig | null {
+  const proxyUrl = (Deno.env.get("GATEBOX_PROXY_URL") || "").trim().replace(/\/$/, "");
+  const proxySecret = (Deno.env.get("GATEBOX_PROXY_SECRET") || "").trim();
+  if (proxyUrl && proxySecret) {
+    return { proxyUrl, proxySecret };
+  }
+  return null;
+}
+
+/**
+ * Faz uma chamada à Gatebox, diretamente ou via proxy.
+ * Quando o proxy está configurado, envia { path, method, headers, payload } para ele.
+ */
+async function gateboxFetch(
+  path: string,
+  method: string,
+  headers: Record<string, string>,
+  body?: Record<string, unknown>
+): Promise<{ status: number; text: string }> {
+  const proxy = getProxyConfig();
+
+  if (proxy) {
+    console.log(`Gatebox via PROXY → ${method} ${path}`);
+    const proxyResponse = await fetch(proxy.proxyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${proxy.proxySecret}`,
+      },
+      body: JSON.stringify({
+        path,
+        method,
+        headers,
+        payload: body,
+      }),
+    });
+    const text = await proxyResponse.text();
+    return { status: proxyResponse.status, text };
+  }
+
+  // Chamada direta
+  const baseUrl = sanitizeBaseUrl(Deno.env.get("GATEBOX_BASE_URL"));
+  const url = `${baseUrl}${path}`;
+  console.log(`Gatebox DIRETO → ${method} ${url}`);
+
+  const response = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json", ...headers },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await response.text();
+  return { status: response.status, text };
+}
+
+// --- Auth ---
+
 export async function gateboxAuthenticate(config: GateboxConfig): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now()) {
     return tokenCache.token;
@@ -60,55 +139,54 @@ export async function gateboxAuthenticate(config: GateboxConfig): Promise<string
     throw new Error("Credenciais Gatebox ausentes ou mal formatadas nos secrets");
   }
 
-  const baseUrl = sanitizeBaseUrl(config.baseUrl);
-  const url = `${baseUrl}/v1/customers/auth/sign-in`;
-
   console.log("Gatebox auth metadata", {
     usernameLength: username.length,
     passwordLength: password.length,
     usernameHasWhitespace: /\s/.test(username),
     passwordHasWhitespace: /\s/.test(password),
-    baseUrl,
+    usingProxy: !!getProxyConfig(),
   });
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username,
-      password,
-    }),
-  });
+  const result = await gateboxFetch(
+    "/v1/customers/auth/sign-in",
+    "POST",
+    {},
+    { username, password }
+  );
 
-  if (!response.ok) {
-    const errText = await response.text();
-    if (response.status === 400 && (errText.includes('"statusCode":420') || /username or password/i.test(errText))) {
-      throw new Error(`Gatebox auth error (${response.status}): credenciais inválidas (verifique GATEBOX_USERNAME/GATEBOX_PASSWORD no ambiente correto). Detalhe: ${errText}`);
+  if (result.status >= 400) {
+    if (result.status === 400 && (/statusCode.*420/.test(result.text) || /username or password/i.test(result.text))) {
+      throw new Error(`Gatebox auth error (${result.status}): credenciais inválidas. Detalhe: ${result.text}`);
     }
-    throw new Error(`Gatebox auth error (${response.status}): ${errText}`);
+    throw new Error(`Gatebox auth error (${result.status}): ${result.text}`);
   }
 
-  const data = await response.json();
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(result.text);
+  } catch {
+    throw new Error(`Gatebox auth: resposta não-JSON: ${result.text.substring(0, 200)}`);
+  }
+
   if (!data.access_token) {
     throw new Error("Token não retornado pela Gatebox");
   }
 
-  const expiresIn = data.expires_in || 3600;
+  const expiresIn = (data.expires_in as number) || 3600;
   tokenCache = {
-    token: data.access_token,
+    token: data.access_token as string,
     expiresAt: Date.now() + (expiresIn - 60) * 1000,
   };
 
-  return data.access_token;
+  return data.access_token as string;
 }
+
+// --- PIX IN (QR Code) ---
 
 export async function gateboxCreatePix(
   config: GateboxConfig,
   payload: GateboxCreatePixPayload
 ): Promise<GateboxCreatePixResponse> {
-  const baseUrl = sanitizeBaseUrl(config.baseUrl);
-  const url = `${baseUrl}/v1/customers/pix/create-immediate-qrcode`;
-
   const token = await gateboxAuthenticate(config);
 
   const body: Record<string, unknown> = {
@@ -123,55 +201,41 @@ export async function gateboxCreatePix(
   if (payload.identification) body.identification = payload.identification;
   if (payload.description) body.description = payload.description;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const result = await gateboxFetch(
+    "/v1/customers/pix/create-immediate-qrcode",
+    "POST",
+    { Authorization: `Bearer ${token}` },
+    body
+  );
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gatebox PIX error (${response.status}): ${errText}`);
+  if (result.status >= 400) {
+    throw new Error(`Gatebox PIX error (${result.status}): ${result.text}`);
   }
 
-  const responseData = await response.json();
-  const data = responseData.data || responseData;
+  let responseData: Record<string, unknown>;
+  try {
+    responseData = JSON.parse(result.text);
+  } catch {
+    throw new Error(`Gatebox PIX: resposta não-JSON: ${result.text.substring(0, 200)}`);
+  }
+
+  const data = (responseData.data as Record<string, unknown>) || responseData;
 
   return {
-    qrCode: data.qrCode || data.qrCodeImage || data.qrcode || data.qrcodeImage,
-    qrCodeText: data.key || data.qrCodeText || data.qrCode || data.qrcodeText || data.qrcode,
-    transactionId: data.identifier || data.uuid || data.transactionId || data.id || data.transaction_id,
-    endToEnd: data.endToEnd || data.end_to_end || data.endToEndId,
-    expiresAt: data.expiresAt || data.expireAt || data.expires_at,
+    qrCode: (data.qrCode || data.qrCodeImage || data.qrcode || data.qrcodeImage) as string | undefined,
+    qrCodeText: (data.key || data.qrCodeText || data.qrCode || data.qrcodeText || data.qrcode) as string | undefined,
+    transactionId: (data.identifier || data.uuid || data.transactionId || data.id || data.transaction_id) as string | undefined,
+    endToEnd: (data.endToEnd || data.end_to_end || data.endToEndId) as string | undefined,
+    expiresAt: (data.expiresAt || data.expireAt || data.expires_at) as string | undefined,
   };
 }
 
-// --- PIX Payout (Transferência / Saque) ---
-
-export interface GateboxPayoutPayload {
-  externalId: string;
-  amount: number;
-  pixKey: string;
-  pixKeyType: string; // cpf, cnpj, email, phone, random
-  description?: string;
-}
-
-export interface GateboxPayoutResponse {
-  transactionId?: string;
-  status?: string;
-  endToEnd?: string;
-}
+// --- PIX OUT (Saque / Payout) ---
 
 export async function gateboxCreatePayout(
   config: GateboxConfig,
   payload: GateboxPayoutPayload
 ): Promise<GateboxPayoutResponse> {
-  const baseUrl = sanitizeBaseUrl(config.baseUrl);
-  const url = `${baseUrl}/v1/customers/pix/withdraw`;
-
   const token = await gateboxAuthenticate(config);
 
   const body: Record<string, unknown> = {
@@ -182,32 +246,22 @@ export async function gateboxCreatePayout(
   };
   if (payload.description) body.description = payload.description;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const result = await gateboxFetch(
+    "/v1/customers/pix/withdraw",
+    "POST",
+    { Authorization: `Bearer ${token}` },
+    body
+  );
 
-  const rawBody = await response.text();
-  let parsedBody: unknown = null;
-
-  if (rawBody) {
-    try {
-      parsedBody = JSON.parse(rawBody);
-    } catch {
-      parsedBody = rawBody;
-    }
+  if (result.status >= 400) {
+    throw new Error(`Gatebox Payout error (${result.status}): ${result.text}`);
   }
 
-  if (!response.ok) {
-    const errText = typeof parsedBody === "string"
-      ? parsedBody
-      : JSON.stringify(parsedBody ?? { message: "Sem corpo de resposta" });
-
-    throw new Error(`Gatebox Payout error (${response.status}): ${errText}`);
+  let parsedBody: unknown = null;
+  try {
+    parsedBody = JSON.parse(result.text);
+  } catch {
+    parsedBody = result.text;
   }
 
   const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -218,10 +272,7 @@ export async function gateboxCreatePayout(
   const data = isRecord(dataCandidate) ? dataCandidate : responseObj;
 
   if (!data) {
-    console.error("Gatebox payout response inválida (formato inesperado)", {
-      status: response.status,
-      rawBody,
-    });
+    console.error("Gatebox payout response inválida", { status: result.status, rawBody: result.text });
     throw new Error("Gatebox Payout response inválida: corpo vazio ou formato não suportado");
   }
 
@@ -229,30 +280,14 @@ export async function gateboxCreatePayout(
   const statusRaw = data.status;
   const endToEndRaw = data.endToEnd ?? data.end_to_end;
 
-  const transactionId =
-    typeof transactionIdRaw === "string" || typeof transactionIdRaw === "number"
-      ? String(transactionIdRaw)
-      : undefined;
-  const status =
-    typeof statusRaw === "string" || typeof statusRaw === "number"
-      ? String(statusRaw)
-      : undefined;
-  const endToEnd =
-    typeof endToEndRaw === "string" || typeof endToEndRaw === "number"
-      ? String(endToEndRaw)
-      : undefined;
+  const transactionId = (typeof transactionIdRaw === "string" || typeof transactionIdRaw === "number") ? String(transactionIdRaw) : undefined;
+  const status = (typeof statusRaw === "string" || typeof statusRaw === "number") ? String(statusRaw) : undefined;
+  const endToEnd = (typeof endToEndRaw === "string" || typeof endToEndRaw === "number") ? String(endToEndRaw) : undefined;
 
   if (!transactionId && !status && !endToEnd) {
-    console.error("Gatebox payout response sem campos esperados", {
-      statusCode: response.status,
-      rawBody,
-    });
+    console.error("Gatebox payout response sem campos esperados", { statusCode: result.status, rawBody: result.text });
     throw new Error("Gatebox Payout response sem transactionId/status/endToEnd");
   }
 
-  return {
-    transactionId,
-    status,
-    endToEnd,
-  };
+  return { transactionId, status, endToEnd };
 }
