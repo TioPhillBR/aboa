@@ -199,6 +199,8 @@ export default function Carteira() {
         return <Trophy className="h-4 w-4 text-yellow-500" />;
       case 'refund':
         return <ArrowDownLeft className="h-4 w-4 text-blue-500" />;
+      case 'withdrawal':
+        return <Send className="h-4 w-4 text-orange-500" />;
       default:
         return <Clock className="h-4 w-4" />;
     }
@@ -214,6 +216,8 @@ export default function Carteira() {
         return 'Prêmio';
       case 'refund':
         return 'Reembolso';
+      case 'withdrawal':
+        return 'Saque';
       default:
         return type;
     }
@@ -229,6 +233,8 @@ export default function Carteira() {
         return 'bg-yellow-500/10 text-yellow-600';
       case 'refund':
         return 'bg-blue-500/10 text-blue-600';
+      case 'withdrawal':
+        return 'bg-orange-500/10 text-orange-600';
       default:
         return 'bg-muted';
     }
