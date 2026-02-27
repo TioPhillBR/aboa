@@ -1,11 +1,23 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
+import { gateboxCreatePayout } from "../_shared/gatebox.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+function getGateboxConfig(): { username: string; password: string; baseUrl?: string } | null {
+  const username = Deno.env.get("GATEBOX_USERNAME");
+  const password = Deno.env.get("GATEBOX_PASSWORD");
+  if (!username || !password) return null;
+  return {
+    username,
+    password,
+    baseUrl: Deno.env.get("GATEBOX_BASE_URL") || "https://api.gatebox.com.br",
+  };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -72,7 +84,7 @@ serve(async (req) => {
       });
     }
 
-    // Calcular saldo principal
+    // Calcular saldo principal (excluindo bônus)
     const { data: txs } = await supabaseAdmin
       .from("wallet_transactions")
       .select("amount, source_type, created_at")
@@ -113,7 +125,8 @@ serve(async (req) => {
       );
     }
 
-    // Criar registro de saque como pendente
+    // Criar registro de saque
+    const externalId = `saque_${userId}_${Date.now()}`;
     const { data: withdrawal, error: wdError } = await supabaseAdmin
       .from("user_withdrawals")
       .insert({
@@ -151,14 +164,75 @@ serve(async (req) => {
       source_type: "withdrawal",
     });
 
-    console.log("Saque registrado com sucesso:", { withdrawalId: withdrawal.id, amount, newBalance });
+    // Tentar PIX out automático via Gatebox
+    const gateboxConfig = getGateboxConfig();
+    let payoutResult: { automatic: boolean; transactionId?: string; status?: string } = {
+      automatic: false,
+    };
+
+    if (gateboxConfig) {
+      try {
+        console.log("Tentando PIX out automático via Gatebox...", {
+          externalId,
+          amount,
+          pixKeyType,
+          pixKeyMasked: pixKey.substring(0, 4) + "***",
+        });
+
+        const payoutResponse = await gateboxCreatePayout(gateboxConfig, {
+          externalId,
+          amount,
+          pixKey,
+          pixKeyType,
+          description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
+        });
+
+        console.log("Gatebox PIX out sucesso:", payoutResponse);
+
+        // Atualizar status do saque para aprovado/processando
+        await supabaseAdmin
+          .from("user_withdrawals")
+          .update({
+            status: "approved",
+            processed_at: new Date().toISOString(),
+          })
+          .eq("id", withdrawal.id);
+
+        payoutResult = {
+          automatic: true,
+          transactionId: payoutResponse.transactionId,
+          status: payoutResponse.status,
+        };
+      } catch (payoutError: unknown) {
+        const errorMsg = payoutError instanceof Error ? payoutError.message : String(payoutError);
+        console.error("Gatebox PIX out falhou, saque ficará pendente para processamento manual:", errorMsg);
+        
+        // Saque permanece como pending para processamento manual
+        payoutResult = { automatic: false };
+      }
+    } else {
+      console.log("Gatebox não configurado, saque registrado para processamento manual");
+    }
+
+    const message = payoutResult.automatic
+      ? "Saque processado! O PIX será enviado em instantes."
+      : "Saque registrado! Será processado em até 24 horas.";
+
+    console.log("Saque finalizado:", {
+      withdrawalId: withdrawal.id,
+      amount,
+      newBalance,
+      automatic: payoutResult.automatic,
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Saque registrado! Será processado em até 24 horas.",
+        message,
         withdrawalId: withdrawal.id,
         newBalance,
+        automatic: payoutResult.automatic,
+        gatebox: payoutResult.automatic ? { transactionId: payoutResult.transactionId, status: payoutResult.status } : undefined,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
