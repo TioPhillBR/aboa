@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -6,18 +6,24 @@ const ACTIVITY_INTERVAL = 30000; // Update activity every 30 seconds
 const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutes
 
 export function useUserSession() {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const sessionIdRef = useRef<string | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const activityIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isCreatingSessionRef = useRef<boolean>(false);
   const signOutRef = useRef(signOut);
+  const accessTokenRef = useRef<string | null>(null);
   
   // Keep signOut ref updated
   useEffect(() => {
     signOutRef.current = signOut;
   }, [signOut]);
+
+  // Keep access token ref updated
+  useEffect(() => {
+    accessTokenRef.current = session?.access_token ?? null;
+  }, [session]);
 
   // End session
   const endSession = useCallback(async () => {
@@ -180,7 +186,7 @@ export function useUserSession() {
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (sessionIdRef.current) {
-        // Use sendBeacon for reliable session ending
+        // Use fetch with keepalive instead of sendBeacon to include auth headers
         const url = `https://sarauvembzbneunhssud.supabase.co/rest/v1/user_sessions?id=eq.${sessionIdRef.current}`;
         
         const body = JSON.stringify({
@@ -188,9 +194,20 @@ export function useUserSession() {
           session_ended_at: new Date().toISOString()
         });
 
-        // Try sendBeacon
-        const blob = new Blob([body], { type: 'application/json' });
-        navigator.sendBeacon(url, blob);
+        try {
+          fetch(url, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhcmF1dmVtYnpibmV1bmhzc3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyMTc4MjEsImV4cCI6MjA4NDc5MzgyMX0.H1ww5qaVw2WGX7N9Ls6eM2q5_se8cj_J6hsw12XeNpM',
+              'Authorization': `Bearer ${accessTokenRef.current || ''}`,
+              'Prefer': 'return=minimal',
+            },
+            keepalive: true,
+          });
+        } catch {
+          // Silently fail on unload
+        }
       }
     };
 
