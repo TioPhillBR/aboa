@@ -8,10 +8,30 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
+}
+
+function internalErrorResponse(message: string): Response {
+  return jsonResponse({ error: message }, 500);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 function getGateboxConfig(): { username: string; password: string; baseUrl?: string } | null {
   const username = Deno.env.get("GATEBOX_USERNAME");
   const password = Deno.env.get("GATEBOX_PASSWORD");
   if (!username || !password) return null;
+
   return {
     username,
     password,
@@ -21,16 +41,13 @@ function getGateboxConfig(): { username: string; password: string; baseUrl?: str
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
     const supabaseUser = createClient(
@@ -41,36 +58,35 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Token inválido" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (claimsError || !claimsData?.claims?.sub) {
+      return jsonResponse({ error: "Token inválido" }, 401);
     }
 
-    const userId = claimsData.claims.sub as string;
-    const { amount, pixKey, pixKeyType } = await req.json();
+    const payload = await req.json().catch(() => null);
+    if (!payload || typeof payload !== "object") {
+      return jsonResponse({ error: "Payload inválido" }, 400);
+    }
 
-    if (!amount || amount < 10) {
-      return new Response(JSON.stringify({ error: "Valor mínimo para saque é R$ 10,00" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const body = payload as Record<string, unknown>;
+    const amount = Number(body.amount);
+    const pixKey = typeof body.pixKey === "string" ? body.pixKey.trim() : "";
+    const pixKeyType = typeof body.pixKeyType === "string" ? body.pixKeyType.trim().toLowerCase() : "";
+
+    if (!Number.isFinite(amount) || amount < 10) {
+      return jsonResponse({ error: "Valor mínimo para saque é R$ 10,00" }, 400);
     }
 
     if (!pixKey || !pixKeyType) {
-      return new Response(JSON.stringify({ error: "Chave PIX não informada" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Chave PIX não informada" }, 400);
     }
+
+    const userId = claimsData.claims.sub as string;
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Buscar carteira
     const { data: wallet, error: walletError } = await supabaseAdmin
       .from("wallets")
       .select("id, balance")
@@ -78,18 +94,19 @@ serve(async (req) => {
       .single();
 
     if (walletError || !wallet) {
-      return new Response(JSON.stringify({ error: "Carteira não encontrada" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Carteira não encontrada" }, 404);
     }
 
-    // Calcular saldo principal (excluindo bônus)
-    const { data: txs } = await supabaseAdmin
+    const { data: txs, error: txsError } = await supabaseAdmin
       .from("wallet_transactions")
       .select("amount, source_type, created_at")
       .eq("wallet_id", wallet.id)
       .order("created_at", { ascending: true });
+
+    if (txsError) {
+      console.error("Erro ao calcular saldo principal (wallet_transactions):", txsError);
+      return internalErrorResponse("Erro ao verificar saldo disponível para saque");
+    }
 
     let principal = 0;
     let bonus = 0;
@@ -119,14 +136,11 @@ serve(async (req) => {
     const normalizedPrincipal = Math.max(0, total - normalizedBonus);
 
     if (amount > normalizedPrincipal) {
-      return new Response(
-        JSON.stringify({ error: "Saldo principal insuficiente", availableBalance: normalizedPrincipal }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Saldo principal insuficiente", availableBalance: normalizedPrincipal }, 400);
     }
 
-    // Criar registro de saque
     const externalId = `saque_${userId}_${Date.now()}`;
+
     const { data: withdrawal, error: wdError } = await supabaseAdmin
       .from("user_withdrawals")
       .insert({
@@ -139,23 +153,24 @@ serve(async (req) => {
       .select("id")
       .single();
 
-    if (wdError) {
-      console.error("Erro ao criar saque:", wdError);
-      return new Response(JSON.stringify({ error: "Erro ao registrar saque" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (wdError || !withdrawal?.id) {
+      console.error("Erro ao criar saque:", wdError ?? "Registro de saque sem id retornado");
+      return internalErrorResponse("Erro ao registrar saque");
     }
 
-    // Deduzir saldo imediatamente
     const newBalance = total - amount;
-    await supabaseAdmin
+
+    const { error: updateWalletError } = await supabaseAdmin
       .from("wallets")
       .update({ balance: newBalance })
       .eq("id", wallet.id);
 
-    // Registrar transação na carteira
-    await supabaseAdmin.from("wallet_transactions").insert({
+    if (updateWalletError) {
+      console.error("Erro ao atualizar saldo da carteira:", updateWalletError);
+      return internalErrorResponse("Erro ao atualizar saldo da carteira");
+    }
+
+    const { error: insertTxError } = await supabaseAdmin.from("wallet_transactions").insert({
       wallet_id: wallet.id,
       amount: -amount,
       type: "withdrawal" as any,
@@ -164,9 +179,13 @@ serve(async (req) => {
       source_type: "withdrawal",
     });
 
-    // Tentar PIX out automático via Gatebox
+    if (insertTxError) {
+      console.error("Erro ao registrar transação de saque:", insertTxError);
+      return internalErrorResponse("Erro ao registrar transação do saque");
+    }
+
     const gateboxConfig = getGateboxConfig();
-    let payoutResult: { automatic: boolean; transactionId?: string; status?: string } = {
+    let payoutResult: { automatic: boolean; transactionId?: string; status?: string; endToEnd?: string } = {
       automatic: false,
     };
 
@@ -176,7 +195,7 @@ serve(async (req) => {
           externalId,
           amount,
           pixKeyType,
-          pixKeyMasked: pixKey.substring(0, 4) + "***",
+          pixKeyMasked: `${pixKey.slice(0, 4)}***`,
         });
 
         const payoutResponse = await gateboxCreatePayout(gateboxConfig, {
@@ -187,10 +206,17 @@ serve(async (req) => {
           description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
         });
 
+        const transactionId = typeof payoutResponse.transactionId === "string" ? payoutResponse.transactionId : undefined;
+        const status = typeof payoutResponse.status === "string" ? payoutResponse.status : undefined;
+        const endToEnd = typeof payoutResponse.endToEnd === "string" ? payoutResponse.endToEnd : undefined;
+
+        if (!transactionId && !status && !endToEnd) {
+          throw new Error("Resposta da Gatebox em formato inesperado (sem transactionId/status/endToEnd)");
+        }
+
         console.log("Gatebox PIX out sucesso:", payoutResponse);
 
-        // Atualizar status do saque para aprovado/processando
-        await supabaseAdmin
+        const { error: approveError } = await supabaseAdmin
           .from("user_withdrawals")
           .update({
             status: "approved",
@@ -198,16 +224,23 @@ serve(async (req) => {
           })
           .eq("id", withdrawal.id);
 
+        if (approveError) {
+          console.error("Erro ao atualizar saque para approved após PIX out:", approveError);
+        }
+
         payoutResult = {
           automatic: true,
-          transactionId: payoutResponse.transactionId,
-          status: payoutResponse.status,
+          transactionId,
+          status,
+          endToEnd,
         };
       } catch (payoutError: unknown) {
-        const errorMsg = payoutError instanceof Error ? payoutError.message : String(payoutError);
-        console.error("Gatebox PIX out falhou, saque ficará pendente para processamento manual:", errorMsg);
-        
-        // Saque permanece como pending para processamento manual
+        console.error("Gatebox PIX out falhou, saque ficará pendente para processamento manual:", {
+          error: getErrorMessage(payoutError),
+          externalId,
+          withdrawalId: withdrawal.id,
+        });
+
         payoutResult = { automatic: false };
       }
     } else {
@@ -225,22 +258,22 @@ serve(async (req) => {
       automatic: payoutResult.automatic,
     });
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message,
-        withdrawalId: withdrawal.id,
-        newBalance,
-        automatic: payoutResult.automatic,
-        gatebox: payoutResult.automatic ? { transactionId: payoutResult.transactionId, status: payoutResult.status } : undefined,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Erro process-withdrawal:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro interno" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({
+      success: true,
+      message,
+      withdrawalId: withdrawal.id,
+      newBalance,
+      automatic: payoutResult.automatic,
+      gatebox: payoutResult.automatic
+        ? {
+            transactionId: payoutResult.transactionId,
+            status: payoutResult.status,
+            endToEnd: payoutResult.endToEnd,
+          }
+        : undefined,
+    });
+  } catch (error: unknown) {
+    console.error("Erro não tratado em process-withdrawal:", error);
+    return internalErrorResponse("Erro interno ao processar saque. Tente novamente em instantes.");
   }
 });
