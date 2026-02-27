@@ -139,8 +139,8 @@ export default function Carteira() {
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
     
-    if (!amount || amount < 100) {
-      toast({ title: 'Valor mínimo R$ 100,00', description: 'O valor mínimo para saque é R$ 100,00', variant: 'destructive' });
+    if (!amount || amount < 10) {
+      toast({ title: 'Valor mínimo R$ 10,00', description: 'O valor mínimo para saque é R$ 10,00', variant: 'destructive' });
       return;
     }
 
