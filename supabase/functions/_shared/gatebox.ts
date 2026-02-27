@@ -170,7 +170,7 @@ export async function gateboxCreatePayout(
   payload: GateboxPayoutPayload
 ): Promise<GateboxPayoutResponse> {
   const baseUrl = sanitizeBaseUrl(config.baseUrl);
-  const url = `${baseUrl}/v1/customers/pix/create-payout`;
+  const url = `${baseUrl}/v1/customers/pix/withdraw`;
 
   const token = await gateboxAuthenticate(config);
 
