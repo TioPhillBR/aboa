@@ -51,6 +51,7 @@ import { TransactionType } from '@/types';
 const CREDIT_OPTIONS = [10, 25, 50, 100, 200, 500];
 
 type PaymentStep = 'select-amount' | 'pix-payment';
+type WithdrawStep = 'form' | 'confirm';
 
 export default function Carteira() {
   const { user } = useAuth();
@@ -66,6 +67,7 @@ export default function Carteira() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>('form');
   const [userPixKey, setUserPixKey] = useState<string | null>(null);
   const [userPixKeyType, setUserPixKeyType] = useState<string | null>(null);
   const [userFullName, setUserFullName] = useState<string>('');
@@ -409,7 +411,7 @@ export default function Carteira() {
                   {/* Botão Sacar */}
                   <Dialog open={withdrawOpen} onOpenChange={(open) => {
                     setWithdrawOpen(open);
-                    if (!open) setWithdrawAmount('');
+                    if (!open) { setWithdrawAmount(''); setWithdrawStep('form'); }
                   }}>
                     <DialogTrigger asChild>
                       <Button 
@@ -520,24 +522,96 @@ export default function Carteira() {
                           </div>
                         </div>
 
-                        <Button
-                          onClick={handleWithdraw}
-                          disabled={withdrawLoading || !userPixKey || !parseFloat(withdrawAmount)}
-                          className="w-full gap-2"
-                          size="lg"
-                        >
-                          {withdrawLoading ? (
-                            <>
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                              Processando...
-                            </>
-                          ) : (
-                            <>
-                              <Send className="h-5 w-5" />
-                              Confirmar Saque
-                            </>
-                          )}
-                        </Button>
+                        {withdrawStep === 'form' ? (
+                          <Button
+                            onClick={() => {
+                              const amt = parseFloat(withdrawAmount);
+                              if (!amt || amt < 10) {
+                                toast({ title: 'Valor mínimo R$ 10,00', description: 'O valor mínimo para saque é R$ 10,00', variant: 'destructive' });
+                                return;
+                              }
+                              if (amt > balance) {
+                                toast({ title: 'Saldo insuficiente', description: `Seu saldo é R$ ${balance.toFixed(2)}`, variant: 'destructive' });
+                                return;
+                              }
+                              if (!userPixKey) {
+                                toast({ title: 'Chave PIX não cadastrada', variant: 'destructive' });
+                                return;
+                              }
+                              setWithdrawStep('confirm');
+                            }}
+                            disabled={!userPixKey || !parseFloat(withdrawAmount)}
+                            className="w-full gap-2"
+                            size="lg"
+                          >
+                            <Send className="h-5 w-5" />
+                            Revisar Saque
+                          </Button>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Confirmation summary */}
+                            <Card className="border-accent/30 bg-accent/5">
+                              <CardContent className="py-4 space-y-3">
+                                <p className="text-sm font-semibold text-foreground text-center">Resumo do Saque</p>
+                                <div className="space-y-2 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Nome</span>
+                                    <span className="font-medium">{userFullName}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Chave PIX</span>
+                                    <span className="font-medium text-right max-w-[180px] truncate">{userPixKey}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Tipo</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {userPixKeyType === 'cpf' ? 'CPF' : 
+                                       userPixKeyType === 'email' ? 'E-mail' : 
+                                       userPixKeyType === 'phone' ? 'Telefone' : 
+                                       userPixKeyType === 'random' ? 'Aleatória' : userPixKeyType}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Data</span>
+                                    <span className="font-medium">{format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                                  </div>
+                                  <div className="border-t pt-2 flex justify-between items-center">
+                                    <span className="font-semibold text-foreground">Valor do saque</span>
+                                    <span className="text-xl font-bold text-primary">R$ {parseFloat(withdrawAmount).toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            <div className="flex gap-3">
+                              <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setWithdrawStep('form')}
+                                disabled={withdrawLoading}
+                              >
+                                Voltar
+                              </Button>
+                              <Button
+                                onClick={handleWithdraw}
+                                disabled={withdrawLoading}
+                                className="flex-1 gap-2"
+                              >
+                                {withdrawLoading ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Processando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send className="h-4 w-4" />
+                                    Confirmar Saque
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </DialogContent>
                   </Dialog>
