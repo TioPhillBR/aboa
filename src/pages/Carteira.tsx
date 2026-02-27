@@ -176,7 +176,7 @@ export default function Carteira() {
         throw new Error(data.error);
       }
 
-      toast({ title: 'PIX enviado!', description: data?.message || `Saque de R$ ${amount.toFixed(2)} processado com sucesso.` });
+      toast({ title: data?.automatic ? 'PIX enviado!' : 'Saque registrado!', description: data?.message || `R$ ${amount.toFixed(2)} será processado em até 24 horas.` });
       setWithdrawOpen(false);
       setWithdrawAmount('');
       setWithdrawStep('form');

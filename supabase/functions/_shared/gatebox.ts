@@ -149,42 +149,38 @@ export async function gateboxCreatePix(
   };
 }
 
-// --- PIX Withdraw (Cash-Out / Saque) ---
+// --- PIX Payout (Transferência / Saque) ---
 
-export interface GateboxWithdrawPayload {
+export interface GateboxPayoutPayload {
   externalId: string;
-  key: string;
-  name: string;
-  description?: string;
   amount: number;
-  documentNumber: string;
+  pixKey: string;
+  pixKeyType: string; // cpf, cnpj, email, phone, random
+  description?: string;
 }
 
-export interface GateboxWithdrawResponse {
+export interface GateboxPayoutResponse {
   transactionId?: string;
   status?: string;
   endToEnd?: string;
 }
 
-export async function gateboxWithdraw(
+export async function gateboxCreatePayout(
   config: GateboxConfig,
-  payload: GateboxWithdrawPayload
-): Promise<GateboxWithdrawResponse> {
+  payload: GateboxPayoutPayload
+): Promise<GateboxPayoutResponse> {
   const baseUrl = sanitizeBaseUrl(config.baseUrl);
-  const url = `${baseUrl}/v1/customers/pix/withdraw`;
+  const url = `${baseUrl}/v1/customers/pix/create-payout`;
 
   const token = await gateboxAuthenticate(config);
 
-  const body = {
+  const body: Record<string, unknown> = {
     externalId: payload.externalId,
-    key: payload.key,
-    name: payload.name,
-    description: payload.description || "",
     amount: payload.amount,
-    documentNumber: payload.documentNumber,
+    pixKey: payload.pixKey,
+    pixKeyType: payload.pixKeyType,
   };
-
-  console.log("Gatebox withdraw request:", { url, externalId: body.externalId, amount: body.amount });
+  if (payload.description) body.description = payload.description;
 
   const response = await fetch(url, {
     method: "POST",
@@ -197,15 +193,15 @@ export async function gateboxWithdraw(
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Gatebox Withdraw error (${response.status}): ${errText}`);
+    throw new Error(`Gatebox Payout error (${response.status}): ${errText}`);
   }
 
   const responseData = await response.json();
   const data = responseData.data || responseData;
 
   return {
-    transactionId: data.identifier || data.uuid || data.transactionId || data.id || data.transaction_id,
+    transactionId: data.identifier || data.uuid || data.transactionId || data.id,
     status: data.status,
-    endToEnd: data.endToEnd || data.end_to_end || data.endToEndId,
+    endToEnd: data.endToEnd || data.end_to_end,
   };
 }

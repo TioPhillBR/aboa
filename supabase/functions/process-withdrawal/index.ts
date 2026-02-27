@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
-import { gateboxWithdraw } from "../_shared/gatebox.ts";
+import { gateboxCreatePayout } from "../_shared/gatebox.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,73 +125,8 @@ serve(async (req) => {
       );
     }
 
-    // Buscar dados do perfil para a Gatebox
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("full_name, cpf")
-      .eq("id", userId)
-      .single();
-
-    const fullName = profile?.full_name || "Cliente";
-    const cpfLimpo = (profile?.cpf || "").replace(/\D/g, "");
-
-    if (!cpfLimpo || cpfLimpo.length !== 11) {
-      return new Response(
-        JSON.stringify({ error: "CPF não cadastrado ou inválido. Atualize seu perfil antes de sacar." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const gateboxConfig = getGateboxConfig();
-
-    if (!gateboxConfig) {
-      return new Response(
-        JSON.stringify({ error: "Gateway de pagamento não configurado. Contate o suporte." }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 1. Chamar Gatebox PRIMEIRO (antes de debitar)
+    // Criar registro de saque
     const externalId = `saque_${userId}_${Date.now()}`;
-
-    console.log("Iniciando PIX withdraw via Gatebox...", {
-      externalId,
-      amount,
-      pixKeyType,
-      pixKeyMasked: pixKey.substring(0, 4) + "***",
-      cpfMasked: cpfLimpo.substring(0, 3) + "***",
-    });
-
-    let withdrawResponse;
-    try {
-      withdrawResponse = await gateboxWithdraw(gateboxConfig, {
-        externalId,
-        key: pixKey,
-        name: fullName,
-        description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
-        amount: parseFloat(amount.toFixed(2)),
-        documentNumber: cpfLimpo,
-      });
-
-      console.log("Gatebox withdraw sucesso:", withdrawResponse);
-    } catch (gateboxError: unknown) {
-      const errorMsg = gateboxError instanceof Error ? gateboxError.message : String(gateboxError);
-      console.error("Gatebox withdraw falhou:", errorMsg);
-      // NÃO debitar - retornar erro ao usuário
-      return new Response(
-        JSON.stringify({ error: `Falha ao processar PIX: ${errorMsg}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 2. Gatebox retornou sucesso - agora debitar carteira
-    const newBalance = total - amount;
-    await supabaseAdmin
-      .from("wallets")
-      .update({ balance: newBalance })
-      .eq("id", wallet.id);
-
-    // 3. Criar registro de saque como aprovado
     const { data: withdrawal, error: wdError } = await supabaseAdmin
       .from("user_withdrawals")
       .insert({
@@ -199,52 +134,112 @@ serve(async (req) => {
         amount,
         pix_key: pixKey,
         pix_key_type: pixKeyType,
-        status: "approved",
-        processed_at: new Date().toISOString(),
+        status: "pending",
       })
       .select("id")
       .single();
 
     if (wdError) {
-      console.error("Erro ao registrar saque (PIX já enviado!):", wdError);
+      console.error("Erro ao criar saque:", wdError);
+      return new Response(JSON.stringify({ error: "Erro ao registrar saque" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // 4. Registrar transação na carteira como withdrawal
+    // Deduzir saldo imediatamente
+    const newBalance = total - amount;
+    await supabaseAdmin
+      .from("wallets")
+      .update({ balance: newBalance })
+      .eq("id", wallet.id);
+
+    // Registrar transação na carteira
     await supabaseAdmin.from("wallet_transactions").insert({
       wallet_id: wallet.id,
       amount: -amount,
       type: "withdrawal" as any,
       description: `Saque via PIX - ${pixKey}`,
-      reference_id: withdrawal?.id,
+      reference_id: withdrawal.id,
       source_type: "withdrawal",
-      source_id: withdrawal?.id,
     });
 
-    console.log("Saque finalizado com sucesso:", {
-      withdrawalId: withdrawal?.id,
+    // Tentar PIX out automático via Gatebox
+    const gateboxConfig = getGateboxConfig();
+    let payoutResult: { automatic: boolean; transactionId?: string; status?: string } = {
+      automatic: false,
+    };
+
+    if (gateboxConfig) {
+      try {
+        console.log("Tentando PIX out automático via Gatebox...", {
+          externalId,
+          amount,
+          pixKeyType,
+          pixKeyMasked: pixKey.substring(0, 4) + "***",
+        });
+
+        const payoutResponse = await gateboxCreatePayout(gateboxConfig, {
+          externalId,
+          amount,
+          pixKey,
+          pixKeyType,
+          description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
+        });
+
+        console.log("Gatebox PIX out sucesso:", payoutResponse);
+
+        // Atualizar status do saque para aprovado/processando
+        await supabaseAdmin
+          .from("user_withdrawals")
+          .update({
+            status: "approved",
+            processed_at: new Date().toISOString(),
+          })
+          .eq("id", withdrawal.id);
+
+        payoutResult = {
+          automatic: true,
+          transactionId: payoutResponse.transactionId,
+          status: payoutResponse.status,
+        };
+      } catch (payoutError: unknown) {
+        const errorMsg = payoutError instanceof Error ? payoutError.message : String(payoutError);
+        console.error("Gatebox PIX out falhou, saque ficará pendente para processamento manual:", errorMsg);
+        
+        // Saque permanece como pending para processamento manual
+        payoutResult = { automatic: false };
+      }
+    } else {
+      console.log("Gatebox não configurado, saque registrado para processamento manual");
+    }
+
+    const message = payoutResult.automatic
+      ? "Saque processado! O PIX será enviado em instantes."
+      : "Saque registrado! Será processado em até 24 horas.";
+
+    console.log("Saque finalizado:", {
+      withdrawalId: withdrawal.id,
       amount,
       newBalance,
-      gateboxTransactionId: withdrawResponse.transactionId,
+      automatic: payoutResult.automatic,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Saque processado! O PIX será enviado em instantes.",
-        withdrawalId: withdrawal?.id,
+        message,
+        withdrawalId: withdrawal.id,
         newBalance,
-        gatebox: {
-          transactionId: withdrawResponse.transactionId,
-          status: withdrawResponse.status,
-          endToEnd: withdrawResponse.endToEnd,
-        },
+        automatic: payoutResult.automatic,
+        gatebox: payoutResult.automatic ? { transactionId: payoutResult.transactionId, status: payoutResult.status } : undefined,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Erro process-withdrawal:", error);
     return new Response(
-      JSON.stringify({ error: "Erro interno ao processar saque" }),
+      JSON.stringify({ error: "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
