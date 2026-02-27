@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
-import { gateboxCreatePayout } from "../_shared/gatebox.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +13,6 @@ serve(async (req) => {
   }
 
   try {
-    // Autenticar usuário
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -39,7 +37,6 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub as string;
-
     const { amount, pixKey, pixKeyType } = await req.json();
 
     if (!amount || amount < 10) {
@@ -61,7 +58,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Buscar carteira e verificar saldo principal
+    // Buscar carteira
     const { data: wallet, error: walletError } = await supabaseAdmin
       .from("wallets")
       .select("id, balance")
@@ -75,7 +72,7 @@ serve(async (req) => {
       });
     }
 
-    // Calcular saldo principal (reproduz lógica do frontend)
+    // Calcular saldo principal
     const { data: txs } = await supabaseAdmin
       .from("wallet_transactions")
       .select("amount, source_type, created_at")
@@ -111,17 +108,12 @@ serve(async (req) => {
 
     if (amount > normalizedPrincipal) {
       return new Response(
-        JSON.stringify({
-          error: "Saldo principal insuficiente",
-          availableBalance: normalizedPrincipal,
-        }),
+        JSON.stringify({ error: "Saldo principal insuficiente", availableBalance: normalizedPrincipal }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Criar registro de saque
-    const externalId = `WD-${userId.substring(0, 8)}-${Date.now()}`;
-
+    // Criar registro de saque como pendente
     const { data: withdrawal, error: wdError } = await supabaseAdmin
       .from("user_withdrawals")
       .insert({
@@ -142,76 +134,34 @@ serve(async (req) => {
       });
     }
 
-    // Chamar Gatebox para fazer o payout
-    const gateboxConfig = {
-      username: Deno.env.get("GATEBOX_USERNAME")!,
-      password: Deno.env.get("GATEBOX_PASSWORD")!,
-      baseUrl: Deno.env.get("GATEBOX_BASE_URL") || "https://api.gatebox.com.br",
-    };
+    // Deduzir saldo imediatamente
+    const newBalance = total - amount;
+    await supabaseAdmin
+      .from("wallets")
+      .update({ balance: newBalance })
+      .eq("id", wallet.id);
 
-    try {
-      const payoutResult = await gateboxCreatePayout(gateboxConfig, {
-        externalId,
-        amount,
-        pixKey,
-        pixKeyType,
-        description: `Saque A Boa - ${externalId}`,
-      });
+    // Registrar transação na carteira
+    await supabaseAdmin.from("wallet_transactions").insert({
+      wallet_id: wallet.id,
+      amount: -amount,
+      type: "refund",
+      description: `Saque via PIX - ${pixKey}`,
+      reference_id: withdrawal.id,
+      source_type: "withdrawal",
+    });
 
-      console.log("Payout Gatebox:", payoutResult);
+    console.log("Saque registrado com sucesso:", { withdrawalId: withdrawal.id, amount, newBalance });
 
-      // Deduzir do saldo
-      const newBalance = total - amount;
-      await supabaseAdmin
-        .from("wallets")
-        .update({ balance: newBalance })
-        .eq("id", wallet.id);
-
-      // Registrar transação na carteira
-      await supabaseAdmin.from("wallet_transactions").insert({
-        wallet_id: wallet.id,
-        amount: -amount,
-        type: "refund",
-        description: `Saque via PIX - ${pixKey}`,
-        reference_id: withdrawal.id,
-        source_type: "withdrawal",
-      });
-
-      // Atualizar status do saque
-      await supabaseAdmin
-        .from("user_withdrawals")
-        .update({ status: "paid", processed_at: new Date().toISOString() })
-        .eq("id", withdrawal.id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Saque processado com sucesso",
-          transactionId: payoutResult.transactionId,
-          newBalance,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } catch (payoutError) {
-      console.error("Erro Gatebox payout:", payoutError);
-
-      // Marcar saque como rejeitado
-      await supabaseAdmin
-        .from("user_withdrawals")
-        .update({
-          status: "rejected",
-          rejection_reason: `Erro no gateway: ${(payoutError as Error).message}`,
-        })
-        .eq("id", withdrawal.id);
-
-      return new Response(
-        JSON.stringify({
-          error: "Erro ao processar pagamento PIX",
-          details: (payoutError as Error).message,
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Saque registrado! Será processado em até 24 horas.",
+        withdrawalId: withdrawal.id,
+        newBalance,
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (error) {
     console.error("Erro process-withdrawal:", error);
     return new Response(

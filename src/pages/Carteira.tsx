@@ -176,7 +176,7 @@ export default function Carteira() {
         throw new Error(data.error);
       }
 
-      toast({ title: 'Saque realizado!', description: `R$ ${amount.toFixed(2)} enviado para sua chave PIX` });
+      toast({ title: 'Saque registrado!', description: `R$ ${amount.toFixed(2)} será processado em até 24 horas.` });
       setWithdrawOpen(false);
       setWithdrawAmount('');
       setWithdrawStep('form');
