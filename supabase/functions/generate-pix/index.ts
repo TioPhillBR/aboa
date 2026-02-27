@@ -161,6 +161,15 @@ serve(async (req) => {
       // Validar CPF: deve ter exatamente 11 dígitos numéricos
       const cpfValido = cpfLimpo.length === 11 && /^\d{11}$/.test(cpfLimpo) && !/^(\d)\1{10}$/.test(cpfLimpo);
 
+      // Sanitizar nome: remover caracteres especiais, garantir pelo menos 2 palavras
+      const rawName = (profile?.full_name || "").trim();
+      const sanitizedName = rawName
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+        .replace(/[^a-zA-Z\s]/g, "") // só letras e espaços
+        .replace(/\s+/g, " ") // colapsa espaços
+        .trim();
+      const nameValido = sanitizedName.length >= 3 && sanitizedName.includes(" ");
+
       let phoneFormatted = (profile?.phone || "").replace(/\D/g, "");
       if (phoneFormatted.length >= 10) {
         if (!phoneFormatted.startsWith("+")) {
@@ -168,32 +177,29 @@ serve(async (req) => {
         }
       }
 
-      let pixPayload: Record<string, unknown>;
+      // Gatebox exige name + document válidos OU nenhum dos dois.
+      // Se um estiver inválido, omitir ambos.
+      const enviarBeneficiario = cpfValido && nameValido;
 
-      if (cpfValido) {
-        // CPF válido: enviar dados completos do beneficiário
-        pixPayload = {
-          externalId,
-          amount: parseFloat(amount.toFixed(2)),
-          document: cpfLimpo,
-          name: profile?.full_name || "Cliente",
-          email: email || undefined,
-          phone: phoneFormatted || undefined,
-          identification: `Depósito - ${profile?.full_name || "Cliente"}`,
-          expire: 3600,
-          description: `Depósito A BOA - R$ ${amount.toFixed(2)}`,
-        };
+      const pixPayload: Record<string, unknown> = {
+        externalId,
+        amount: parseFloat(amount.toFixed(2)),
+        expire: 3600,
+        description: `Deposito A BOA - R$ ${amount.toFixed(2)}`,
+      };
+
+      if (enviarBeneficiario) {
+        pixPayload.document = cpfLimpo;
+        pixPayload.name = sanitizedName;
+        if (email) pixPayload.email = email;
+        if (phoneFormatted) pixPayload.phone = phoneFormatted;
       } else {
-        // CPF ausente ou inválido: enviar sem document e sem name
-        // A Gatebox valida name/document em conjunto; omitir ambos para QR genérico
-        console.log("CPF ausente ou inválido, usando fluxo sem documento/nome do beneficiário");
-        pixPayload = {
-          externalId,
-          amount: parseFloat(amount.toFixed(2)),
-          expire: 3600,
-          description: `Depósito A BOA - R$ ${amount.toFixed(2)}`,
-        };
+        console.log("Beneficiário omitido (name/document inválido)", {
+          cpfValido, nameValido, rawName, cpfLimpo: cpfLimpo.substring(0, 3) + "***",
+        });
       }
+
+      console.log("Gatebox PIX payload (sem secrets)", JSON.stringify(pixPayload));
 
       try {
         const pixResponse = await gateboxCreatePix(gateboxConfig, pixPayload as any);
