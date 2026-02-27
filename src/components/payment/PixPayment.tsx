@@ -16,6 +16,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface PixPaymentProps {
   amount: number;
@@ -241,13 +242,13 @@ export function PixPayment({ amount, onSuccess, onCancel }: PixPaymentProps) {
               <span className="text-sm">Expira em: <strong className={timeLeft < 60 ? 'text-destructive' : ''}>{formatTime(timeLeft)}</strong></span>
             </div>
 
-            {/* QR Code */}
+            {/* QR Code rendered from copy-paste code */}
             <div className="flex justify-center">
               <div className="p-4 bg-white rounded-xl shadow-lg">
-                <img 
-                  src={pixData.qrCodeBase64} 
-                  alt="QR Code PIX" 
-                  className="w-48 h-48"
+                <QRCodeSVG 
+                  value={pixData.copyPasteCode} 
+                  size={192}
+                  level="M"
                 />
               </div>
             </div>
