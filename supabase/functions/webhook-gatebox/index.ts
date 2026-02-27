@@ -23,30 +23,40 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    console.log("Webhook Gatebox RAW body:", rawBody);
+
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      console.error("Webhook Gatebox: body não é JSON válido:", rawBody.substring(0, 500));
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
 
     // --- Extrair campos padronizados ---
     const transactionId =
       body.transactionId ||
-      body.transaction?.transactionId ||
+      (body.transaction as Record<string, unknown>)?.transactionId ||
       body.id ||
       body.idTransaction;
     const externalId =
       body.externalId ||
       body.external_id ||
-      body.invoice?.externalId ||
-      body.transaction?.externalId;
-    const endToEnd = body.endToEnd || body.end_to_end || body.bankData?.endtoendId;
-    const status = (body.status || body.transaction?.status || body.statusTransaction || "").toLowerCase();
-    const amount = body.amount ?? body.transaction?.amount ?? body.value ?? 0;
-    const eventType = (body.type || body.eventType || "").toUpperCase();
+      (body.invoice as Record<string, unknown>)?.externalId ||
+      (body.transaction as Record<string, unknown>)?.externalId;
+    const endToEnd = body.endToEnd || body.end_to_end || (body.bankData as Record<string, unknown>)?.endtoendId;
+    const status = ((body.status || (body.transaction as Record<string, unknown>)?.status || body.statusTransaction || "") as string).toLowerCase();
+    const amount = body.amount ?? (body.transaction as Record<string, unknown>)?.amount ?? body.value ?? 0;
+    const eventType = ((body.type || body.eventType || "") as string).toUpperCase();
 
-    console.log("Webhook Gatebox recebido:", {
+    console.log("Webhook Gatebox parsed:", {
       transactionId,
       externalId,
       status,
       eventType,
       amount,
+      endToEnd,
       bodyKeys: Object.keys(body),
     });
 
