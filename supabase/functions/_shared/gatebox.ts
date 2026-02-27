@@ -191,17 +191,68 @@ export async function gateboxCreatePayout(
     body: JSON.stringify(body),
   });
 
+  const rawBody = await response.text();
+  let parsedBody: unknown = null;
+
+  if (rawBody) {
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch {
+      parsedBody = rawBody;
+    }
+  }
+
   if (!response.ok) {
-    const errText = await response.text();
+    const errText = typeof parsedBody === "string"
+      ? parsedBody
+      : JSON.stringify(parsedBody ?? { message: "Sem corpo de resposta" });
+
     throw new Error(`Gatebox Payout error (${response.status}): ${errText}`);
   }
 
-  const responseData = await response.json();
-  const data = responseData.data || responseData;
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object" && !Array.isArray(value);
+
+  const responseObj = isRecord(parsedBody) ? parsedBody : null;
+  const dataCandidate = responseObj?.data;
+  const data = isRecord(dataCandidate) ? dataCandidate : responseObj;
+
+  if (!data) {
+    console.error("Gatebox payout response inválida (formato inesperado)", {
+      status: response.status,
+      rawBody,
+    });
+    throw new Error("Gatebox Payout response inválida: corpo vazio ou formato não suportado");
+  }
+
+  const transactionIdRaw = data.identifier ?? data.uuid ?? data.transactionId ?? data.id ?? data.transaction_id;
+  const statusRaw = data.status;
+  const endToEndRaw = data.endToEnd ?? data.end_to_end;
+
+  const transactionId =
+    typeof transactionIdRaw === "string" || typeof transactionIdRaw === "number"
+      ? String(transactionIdRaw)
+      : undefined;
+  const status =
+    typeof statusRaw === "string" || typeof statusRaw === "number"
+      ? String(statusRaw)
+      : undefined;
+  const endToEnd =
+    typeof endToEndRaw === "string" || typeof endToEndRaw === "number"
+      ? String(endToEndRaw)
+      : undefined;
+
+  if (!transactionId && !status && !endToEnd) {
+    console.error("Gatebox payout response sem campos esperados", {
+      statusCode: response.status,
+      rawBody,
+    });
+    throw new Error("Gatebox Payout response sem transactionId/status/endToEnd");
+  }
 
   return {
-    transactionId: data.identifier || data.uuid || data.transactionId || data.id,
-    status: data.status,
-    endToEnd: data.endToEnd || data.end_to_end,
+    transactionId,
+    status,
+    endToEnd,
   };
 }
