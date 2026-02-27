@@ -130,18 +130,42 @@ serve(async (req) => {
 
       const { data: profile } = await supabaseAdmin
         .from("profiles")
-        .select("full_name, cpf, phone")
+        .select("full_name, cpf, phone, pix_key, pix_key_type, address_city, address_state")
         .eq("id", userId)
+        .single();
+
+      const { data: wallet } = await supabaseAdmin
+        .from("wallets")
+        .select("id, balance")
+        .eq("user_id", userId)
         .single();
 
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
       const email = authUser?.user?.email || "";
+
+      console.log("Deposit user info", {
+        fullName: profile?.full_name,
+        hasCpf: !!profile?.cpf,
+        hasPhone: !!profile?.phone,
+        hasPixKey: !!profile?.pix_key,
+        city: profile?.address_city,
+        state: profile?.address_state,
+        walletBalance: wallet?.balance,
+        email: email ? "yes" : "no",
+      });
 
       const externalId = `deposito_${userId}_${Date.now()}`;
       const cpfLimpo = (profile?.cpf || "").replace(/\D/g, "");
 
       // Validar CPF: deve ter exatamente 11 dígitos numéricos
       const cpfValido = cpfLimpo.length === 11 && /^\d{11}$/.test(cpfLimpo) && !/^(\d)\1{10}$/.test(cpfLimpo);
+
+      let phoneFormatted = (profile?.phone || "").replace(/\D/g, "");
+      if (phoneFormatted.length >= 10) {
+        if (!phoneFormatted.startsWith("+")) {
+          phoneFormatted = "+55" + (phoneFormatted.startsWith("0") ? phoneFormatted.slice(1) : phoneFormatted);
+        }
+      }
 
       let pixPayload: Record<string, unknown>;
 
