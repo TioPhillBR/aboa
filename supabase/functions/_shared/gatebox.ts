@@ -113,3 +113,60 @@ export async function gateboxCreatePix(
     expiresAt: data.expiresAt || data.expireAt || data.expires_at,
   };
 }
+
+// --- PIX Payout (Transferência / Saque) ---
+
+export interface GateboxPayoutPayload {
+  externalId: string;
+  amount: number;
+  pixKey: string;
+  pixKeyType: string; // cpf, cnpj, email, phone, random
+  description?: string;
+}
+
+export interface GateboxPayoutResponse {
+  transactionId?: string;
+  status?: string;
+  endToEnd?: string;
+}
+
+export async function gateboxCreatePayout(
+  config: GateboxConfig,
+  payload: GateboxPayoutPayload
+): Promise<GateboxPayoutResponse> {
+  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
+  const url = `${baseUrl}/v1/customers/pix/create-payout`;
+
+  const token = await gateboxAuthenticate(config);
+
+  const body: Record<string, unknown> = {
+    externalId: payload.externalId,
+    amount: payload.amount,
+    pixKey: payload.pixKey,
+    pixKeyType: payload.pixKeyType,
+  };
+  if (payload.description) body.description = payload.description;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gatebox Payout error (${response.status}): ${errText}`);
+  }
+
+  const responseData = await response.json();
+  const data = responseData.data || responseData;
+
+  return {
+    transactionId: data.identifier || data.uuid || data.transactionId || data.id,
+    status: data.status,
+    endToEnd: data.endToEnd || data.end_to_end,
+  };
+}

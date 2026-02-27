@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
@@ -40,7 +40,9 @@ import {
   QrCode,
   Gift,
   Banknote,
-  AlertCircle
+  AlertCircle,
+  Send,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -59,6 +61,30 @@ export default function Carteira() {
   const [customAmount, setCustomAmount] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('select-amount');
+  
+  // Withdraw modal state
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [userPixKey, setUserPixKey] = useState<string | null>(null);
+  const [userPixKeyType, setUserPixKeyType] = useState<string | null>(null);
+
+  // Fetch user PIX key from profile
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('pix_key, pix_key_type')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setUserPixKey(data.pix_key);
+            setUserPixKeyType(data.pix_key_type);
+          }
+        });
+    }
+  }, [user]);
 
 
   const handleContinueToPayment = () => {
@@ -108,6 +134,64 @@ export default function Carteira() {
 
   const getPaymentAmount = () => {
     return selectedAmount || parseFloat(customAmount) || 0;
+  };
+
+  const handleWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount);
+    
+    if (!amount || amount <= 0) {
+      toast({ title: 'Valor inválido', description: 'Digite um valor válido para saque', variant: 'destructive' });
+      return;
+    }
+
+    if (amount > balance) {
+      toast({ title: 'Saldo insuficiente', description: `Seu saldo principal é R$ ${balance.toFixed(2)}`, variant: 'destructive' });
+      return;
+    }
+
+    if (!userPixKey || !userPixKeyType) {
+      toast({ title: 'Chave PIX não cadastrada', description: 'Cadastre sua chave PIX no perfil antes de sacar', variant: 'destructive' });
+      return;
+    }
+
+    setWithdrawLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/process-withdrawal`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            amount,
+            pixKey: userPixKey,
+            pixKeyType: userPixKeyType,
+          }),
+        }
+      );
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Erro ao processar saque');
+      }
+
+      toast({ title: 'Saque realizado!', description: `R$ ${amount.toFixed(2)} enviado para sua chave PIX` });
+      setWithdrawOpen(false);
+      setWithdrawAmount('');
+      refetch();
+    } catch (err: any) {
+      toast({ title: 'Erro no saque', description: err.message, variant: 'destructive' });
+    } finally {
+      setWithdrawLoading(false);
+    }
   };
 
 
@@ -317,6 +401,118 @@ export default function Carteira() {
                           onCancel={handlePaymentCancel}
                         />
                       )}
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Botão Sacar */}
+                  <Dialog open={withdrawOpen} onOpenChange={(open) => {
+                    setWithdrawOpen(open);
+                    if (!open) setWithdrawAmount('');
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        className="gap-2"
+                        disabled={balance <= 0}
+                      >
+                        <Send className="h-4 w-4" />
+                        Sacar agora
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Send className="h-5 w-5 text-primary" />
+                          Sacar Saldo Principal
+                        </DialogTitle>
+                        <DialogDescription>
+                          Transfira seu saldo principal para sua chave PIX
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 py-4">
+                        {/* Saldo disponível */}
+                        <div className="p-4 rounded-lg bg-muted">
+                          <p className="text-sm text-muted-foreground">Saldo Principal disponível</p>
+                          <p className="text-2xl font-bold text-primary">R$ {balance.toFixed(2)}</p>
+                        </div>
+
+                        {/* Chave PIX */}
+                        {userPixKey ? (
+                          <div className="p-3 rounded-lg border">
+                            <p className="text-xs text-muted-foreground mb-1">Chave PIX cadastrada</p>
+                            <p className="font-medium">{userPixKey}</p>
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {userPixKeyType === 'cpf' ? 'CPF' : 
+                               userPixKeyType === 'email' ? 'E-mail' : 
+                               userPixKeyType === 'phone' ? 'Telefone' : 
+                               userPixKeyType === 'random' ? 'Aleatória' : userPixKeyType}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-destructive" />
+                              <p className="text-sm text-destructive">
+                                Cadastre sua chave PIX no{' '}
+                                <Link to="/perfil" className="underline font-medium">Perfil</Link>
+                                {' '}antes de sacar.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Valor do saque */}
+                        <div className="space-y-2">
+                          <Label htmlFor="withdrawAmount">Valor do saque</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                              R$
+                            </span>
+                            <Input
+                              id="withdrawAmount"
+                              type="number"
+                              min="1"
+                              max={balance}
+                              step="0.01"
+                              placeholder="0,00"
+                              value={withdrawAmount}
+                              onChange={(e) => setWithdrawAmount(e.target.value)}
+                              className="pl-10 text-lg h-12"
+                            />
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Mínimo: R$ 1,00</span>
+                            <button 
+                              type="button"
+                              className="text-primary hover:underline cursor-pointer"
+                              onClick={() => setWithdrawAmount(balance.toFixed(2))}
+                            >
+                              Sacar tudo
+                            </button>
+                          </div>
+                        </div>
+
+                        <Button
+                          onClick={handleWithdraw}
+                          disabled={withdrawLoading || !userPixKey || !parseFloat(withdrawAmount)}
+                          className="w-full gap-2"
+                          size="lg"
+                        >
+                          {withdrawLoading ? (
+                            <>
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                              Processando...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-5 w-5" />
+                              Confirmar Saque
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </DialogContent>
                   </Dialog>
 
