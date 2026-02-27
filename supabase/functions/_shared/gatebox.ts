@@ -35,8 +35,9 @@ export interface GateboxCreatePixResponse {
 export interface GateboxPayoutPayload {
   externalId: string;
   amount: number;
-  pixKey: string;
+  key: string;       // Gatebox uses "key" (not "pixKey")
   pixKeyType: string;
+  name: string;      // Recipient name (required by Gatebox)
   description?: string;
 }
 
@@ -241,8 +242,9 @@ export async function gateboxCreatePayout(
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
     amount: payload.amount,
-    pixKey: payload.pixKey,
+    key: payload.key,           // Gatebox field name
     pixKeyType: payload.pixKeyType,
+    name: payload.name,         // Recipient name (required)
   };
   if (payload.description) body.description = payload.description;
 

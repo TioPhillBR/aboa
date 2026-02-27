@@ -72,8 +72,8 @@ serve(async (req) => {
     const pixKey = typeof body.pixKey === "string" ? body.pixKey.trim() : "";
     const pixKeyType = typeof body.pixKeyType === "string" ? body.pixKeyType.trim().toLowerCase() : "";
 
-    if (!Number.isFinite(amount) || amount < 10) {
-      return jsonResponse({ error: "Valor mínimo para saque é R$ 10,00" }, 400);
+    if (!Number.isFinite(amount) || amount < 1) {
+      return jsonResponse({ error: "Valor mínimo para saque é R$ 1,00" }, 400);
     }
 
     if (!pixKey || !pixKeyType) {
@@ -87,11 +87,14 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: wallet, error: walletError } = await supabaseAdmin
-      .from("wallets")
-      .select("id, balance")
-      .eq("user_id", userId)
-      .single();
+    // Fetch wallet AND user profile (for name needed by Gatebox)
+    const [walletResult, profileResult] = await Promise.all([
+      supabaseAdmin.from("wallets").select("id, balance").eq("user_id", userId).single(),
+      supabaseAdmin.from("profiles").select("full_name").eq("id", userId).single(),
+    ]);
+
+    const { data: wallet, error: walletError } = walletResult;
+    const recipientName = profileResult.data?.full_name || "Usuario";
 
     if (walletError || !wallet) {
       return jsonResponse({ error: "Carteira não encontrada" }, 404);
@@ -191,18 +194,27 @@ serve(async (req) => {
 
     if (gateboxConfig) {
       try {
+        // Sanitize name for Gatebox (remove accents, special chars)
+        const sanitizedName = recipientName
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z\s]/g, "")
+          .replace(/\s+/g, " ")
+          .trim() || "Usuario";
+
         console.log("Tentando PIX out automático via Gatebox...", {
           externalId,
           amount,
           pixKeyType,
           pixKeyMasked: `${pixKey.slice(0, 4)}***`,
+          name: sanitizedName,
         });
 
         const payoutResponse = await gateboxCreatePayout(gateboxConfig, {
           externalId,
           amount,
-          pixKey,
+          key: pixKey,           // Gatebox uses "key" field
           pixKeyType,
+          name: sanitizedName,   // Recipient name (required)
           description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
         });
 
