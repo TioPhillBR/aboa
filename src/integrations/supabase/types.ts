@@ -1493,7 +1493,12 @@ export type Database = {
       payment_status: "pending" | "approved" | "cancelled" | "refunded"
       prize_status: "pending" | "processing" | "delivered"
       raffle_status: "open" | "drawing" | "completed" | "cancelled"
-      transaction_type: "deposit" | "purchase" | "prize" | "refund"
+      transaction_type:
+        | "deposit"
+        | "purchase"
+        | "prize"
+        | "refund"
+        | "withdrawal"
       withdrawal_status: "pending" | "approved" | "paid" | "rejected"
     }
     CompositeTypes: {
@@ -1628,7 +1633,13 @@ export const Constants = {
       payment_status: ["pending", "approved", "cancelled", "refunded"],
       prize_status: ["pending", "processing", "delivered"],
       raffle_status: ["open", "drawing", "completed", "cancelled"],
-      transaction_type: ["deposit", "purchase", "prize", "refund"],
+      transaction_type: [
+        "deposit",
+        "purchase",
+        "prize",
+        "refund",
+        "withdrawal",
+      ],
       withdrawal_status: ["pending", "approved", "paid", "rejected"],
     },
   },
