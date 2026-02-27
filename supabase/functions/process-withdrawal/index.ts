@@ -42,8 +42,8 @@ serve(async (req) => {
 
     const { amount, pixKey, pixKeyType } = await req.json();
 
-    if (!amount || amount <= 0) {
-      return new Response(JSON.stringify({ error: "Valor inválido" }), {
+    if (!amount || amount < 100) {
+      return new Response(JSON.stringify({ error: "Valor mínimo para saque é R$ 100,00" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
