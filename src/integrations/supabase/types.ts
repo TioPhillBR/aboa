@@ -277,6 +277,47 @@ export type Database = {
           },
         ]
       }
+      pix_deposits: {
+        Row: {
+          amount: number
+          created_at: string
+          external_id: string
+          id: string
+          paid_at: string | null
+          status: string
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          external_id: string
+          id?: string
+          paid_at?: string | null
+          status?: string
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          external_id?: string
+          id?: string
+          paid_at?: string | null
+          status?: string
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pix_deposits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_settings: {
         Row: {
           category: string
