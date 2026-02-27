@@ -31,25 +31,60 @@ export interface GateboxCreatePixResponse {
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
+function sanitizeSecret(value?: string): string {
+  if (!value) return "";
+
+  return value
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/^=/, "")
+    .replace(/^GATEBOX_(?:USERNAME|PASSWORD|BASE_URL)\s*=\s*/i, "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
+}
+
+function sanitizeBaseUrl(value?: string): string {
+  const cleaned = sanitizeSecret(value || "https://api.gatebox.com.br").replace(/\/$/, "");
+  return cleaned || "https://api.gatebox.com.br";
+}
+
 export async function gateboxAuthenticate(config: GateboxConfig): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now()) {
     return tokenCache.token;
   }
 
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/^=/, "").replace(/\/$/, "");
+  const username = sanitizeSecret(config.username);
+  const password = sanitizeSecret(config.password);
+
+  if (!username || !password) {
+    throw new Error("Credenciais Gatebox ausentes ou mal formatadas nos secrets");
+  }
+
+  const baseUrl = sanitizeBaseUrl(config.baseUrl);
   const url = `${baseUrl}/v1/customers/auth/sign-in`;
+
+  console.log("Gatebox auth metadata", {
+    usernameLength: username.length,
+    passwordLength: password.length,
+    usernameHasWhitespace: /\s/.test(username),
+    passwordHasWhitespace: /\s/.test(password),
+    baseUrl,
+  });
 
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      username: config.username,
-      password: config.password,
+      username,
+      password,
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text();
+    if (response.status === 400 && (errText.includes('"statusCode":420') || /username or password/i.test(errText))) {
+      throw new Error(`Gatebox auth error (${response.status}): credenciais inválidas (verifique GATEBOX_USERNAME/GATEBOX_PASSWORD no ambiente correto). Detalhe: ${errText}`);
+    }
     throw new Error(`Gatebox auth error (${response.status}): ${errText}`);
   }
 
@@ -71,7 +106,7 @@ export async function gateboxCreatePix(
   config: GateboxConfig,
   payload: GateboxCreatePixPayload
 ): Promise<GateboxCreatePixResponse> {
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/^=/, "").replace(/\/$/, "");
+  const baseUrl = sanitizeBaseUrl(config.baseUrl);
   const url = `${baseUrl}/v1/customers/pix/create-immediate-qrcode`;
 
   const token = await gateboxAuthenticate(config);
@@ -134,7 +169,7 @@ export async function gateboxCreatePayout(
   config: GateboxConfig,
   payload: GateboxPayoutPayload
 ): Promise<GateboxPayoutResponse> {
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/^=/, "").replace(/\/$/, "");
+  const baseUrl = sanitizeBaseUrl(config.baseUrl);
   const url = `${baseUrl}/v1/customers/pix/create-payout`;
 
   const token = await gateboxAuthenticate(config);
