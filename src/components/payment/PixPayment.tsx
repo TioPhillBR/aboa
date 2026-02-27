@@ -242,14 +242,26 @@ export function PixPayment({ amount, onSuccess, onCancel }: PixPaymentProps) {
               <span className="text-sm">Expira em: <strong className={timeLeft < 60 ? 'text-destructive' : ''}>{formatTime(timeLeft)}</strong></span>
             </div>
 
-            {/* QR Code rendered from copy-paste code */}
+            {/* QR Code - from copy-paste code or base64 fallback */}
             <div className="flex justify-center">
               <div className="p-4 bg-white rounded-xl shadow-lg">
-                <QRCodeSVG 
-                  value={pixData.copyPasteCode} 
-                  size={192}
-                  level="M"
-                />
+                {pixData.copyPasteCode ? (
+                  <QRCodeSVG 
+                    value={pixData.copyPasteCode} 
+                    size={192}
+                    level="M"
+                  />
+                ) : pixData.qrCodeBase64 ? (
+                  <img 
+                    src={pixData.qrCodeBase64} 
+                    alt="QR Code PIX" 
+                    className="w-48 h-48"
+                  />
+                ) : (
+                  <div className="w-48 h-48 flex items-center justify-center text-muted-foreground">
+                    <QrCode className="w-16 h-16 opacity-30" />
+                  </div>
+                )}
               </div>
             </div>
 
