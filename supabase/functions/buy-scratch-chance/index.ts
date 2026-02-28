@@ -365,7 +365,34 @@ serve(async (req) => {
     if (chanceError) throw chanceError;
 
     // ==========================================================================
-    // STEP 8: Update batch counters
+    // STEP 8: Credit prize to wallet (atomic — avoids stale frontend balance)
+    // ==========================================================================
+    let finalBalance = newBalance;
+    if (isWinner && prizeWon && prizeWon > 0) {
+      finalBalance = newBalance + prizeWon;
+      const { error: prizeUpdateError } = await supabaseAdmin
+        .from("wallets")
+        .update({ balance: finalBalance })
+        .eq("id", walletData.id);
+
+      if (prizeUpdateError) {
+        console.error("Erro ao creditar prêmio:", prizeUpdateError);
+      } else {
+        // Registrar transação de prêmio
+        await supabaseAdmin
+          .from("wallet_transactions")
+          .insert({
+            wallet_id: walletData.id,
+            amount: prizeWon,
+            type: "prize",
+            description: `Prêmio raspadinha - ${card.title}`,
+            reference_id: body.scratch_card_id,
+          });
+      }
+    }
+
+    // ==========================================================================
+    // STEP 9: Update batch counters
     // ==========================================================================
     await supabaseAdmin
       .from("scratch_card_batches")
@@ -379,7 +406,7 @@ serve(async (req) => {
       chance,
       is_winner: isWinner,
       prize_won: prizeWon,
-      new_balance: newBalance,
+      new_balance: finalBalance,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
