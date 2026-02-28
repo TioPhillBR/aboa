@@ -147,9 +147,13 @@ export default function Perfil() {
           setAddressNeighborhood(data.bairro || '');
           setAddressCity(data.localidade || '');
           setAddressState(data.uf || '');
+          toast({ title: 'CEP encontrado!', description: 'Endereço preenchido automaticamente.' });
+        } else {
+          toast({ title: 'CEP não encontrado', description: 'Verifique o CEP digitado e tente novamente.', variant: 'destructive' });
         }
       } catch (err) {
         console.error('Error fetching CEP:', err);
+        toast({ title: 'Erro ao buscar CEP', description: 'Não foi possível consultar o CEP. Verifique sua conexão.', variant: 'destructive' });
       } finally {
         setIsLoadingCep(false);
       }

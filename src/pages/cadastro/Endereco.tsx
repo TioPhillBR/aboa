@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRegistration, maskCEP } from '@/contexts/RegistrationContext';
+import { useToast } from '@/hooks/use-toast';
 
 interface ViaCepData {
   cep: string;
@@ -34,6 +35,7 @@ export default function Endereco() {
     isPersonalDataComplete,
     setBonusMessage 
   } = useRegistration();
+  const { toast } = useToast();
   
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -65,12 +67,13 @@ export default function Endereco() {
             city: data.localidade || '',
             state: data.uf || '',
           });
+          toast({ title: 'CEP encontrado!', description: 'Endereço preenchido automaticamente.' });
         } else {
-          setError('CEP não encontrado');
+          toast({ title: 'CEP não encontrado', description: 'Verifique o CEP digitado e tente novamente.', variant: 'destructive' });
         }
       } catch (err) {
         console.error('Error fetching CEP:', err);
-        setError('Erro ao buscar CEP');
+        toast({ title: 'Erro ao buscar CEP', description: 'Não foi possível consultar o CEP. Verifique sua conexão.', variant: 'destructive' });
       } finally {
         setIsLoadingCep(false);
       }
