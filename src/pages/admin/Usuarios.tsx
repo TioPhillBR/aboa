@@ -76,6 +76,8 @@ interface UserWithDetails extends Profile {
   isAdmin: boolean;
   affiliateStatus?: string | null;
   affiliateId?: string | null;
+  mainBalance: number;
+  bonusBalance: number;
 }
 
 interface TransactionWithType extends WalletTransaction {
@@ -164,6 +166,45 @@ export default function AdminUsuarios() {
             .eq('user_id', profile.id)
             .single();
 
+          // Buscar transactions para calcular saldo principal/bônus
+          let userTransactions: any[] = [];
+          if (walletData) {
+            const { data: txData } = await supabase
+              .from('wallet_transactions')
+              .select('amount, source_type, created_at')
+              .eq('wallet_id', walletData.id)
+              .order('created_at', { ascending: true })
+              .limit(1000);
+            userTransactions = txData || [];
+          }
+
+          // Calcular saldo principal e bônus (mesma lógica do useWallet)
+          const totalBalance = Number(walletData?.balance ?? 0);
+          let principal = 0;
+          let bonus = 0;
+          for (const tx of userTransactions) {
+            const amount = Number(tx.amount ?? 0);
+            const sourceType = tx.source_type;
+            if (amount > 0) {
+              if (sourceType === 'referral' || sourceType === 'admin_bonus') {
+                bonus += amount;
+              } else {
+                principal += amount;
+              }
+            } else if (amount < 0) {
+              const debit = Math.abs(amount);
+              if (sourceType === 'bonus_used') {
+                bonus = Math.max(0, bonus - debit);
+              } else {
+                const fromBonus = Math.min(bonus, debit);
+                bonus -= fromBonus;
+                principal = Math.max(0, principal - (debit - fromBonus));
+              }
+            }
+          }
+          const normalizedBonus = Math.max(0, Math.min(bonus, totalBalance));
+          const normalizedPrincipal = Math.max(0, totalBalance - normalizedBonus);
+
           // Buscar roles
           const { data: rolesData } = await supabase
             .from('user_roles')
@@ -187,6 +228,8 @@ export default function AdminUsuarios() {
             isAdmin,
             affiliateStatus: affiliateData?.status || null,
             affiliateId: affiliateData?.id || null,
+            mainBalance: normalizedPrincipal,
+            bonusBalance: normalizedBonus,
           } as UserWithDetails;
         })
       );
@@ -684,7 +727,9 @@ export default function AdminUsuarios() {
                 <TableRow>
                   <TableHead>Usuário</TableHead>
                   <TableHead>Telefone</TableHead>
-                  <TableHead>Saldo</TableHead>
+                  <TableHead>Saldo Principal</TableHead>
+                  <TableHead>Saldo Bônus</TableHead>
+                  <TableHead>Saldo Total</TableHead>
                   <TableHead>Permissões</TableHead>
                   <TableHead>Cadastro</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -693,13 +738,13 @@ export default function AdminUsuarios() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                     </TableCell>
                   </TableRow>
                 ) : filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       {searchQuery ? 'Nenhum usuário encontrado' : 'Nenhum usuário cadastrado'}
                     </TableCell>
                   </TableRow>
@@ -726,6 +771,16 @@ export default function AdminUsuarios() {
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">
+                          R$ {userDetails.mainBalance.toFixed(2)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium text-amber-600">
+                          R$ {userDetails.bonusBalance.toFixed(2)}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <span className="font-medium text-green-600">
