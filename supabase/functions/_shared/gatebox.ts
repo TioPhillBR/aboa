@@ -205,13 +205,14 @@ export async function gateboxAuthenticate(config: GateboxConfig, useProxy = true
   return data.access_token as string;
 }
 
-// --- PIX IN (QR Code) — VIA PROXY (IP fixo exigido pela Gatebox) ---
+// --- PIX IN (QR Code) — DIRETO (sem proxy) ---
 
 export async function gateboxCreatePix(
   config: GateboxConfig,
   payload: GateboxCreatePixPayload
 ): Promise<GateboxCreatePixResponse> {
-  const token = await gateboxAuthenticate(config, true); // VIA PROXY
+  // Depósitos usam chamada DIRETA (sem proxy) — o proxy é só para PIX OUT
+  const token = await gateboxAuthenticate(config, false);
 
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
@@ -225,12 +226,14 @@ export async function gateboxCreatePix(
   if (payload.identification) body.identification = payload.identification;
   if (payload.description) body.description = payload.description;
 
+  console.log("Gatebox PIX IN (depósito) → chamada DIRETA (sem proxy)");
+
   const result = await gateboxFetch(
     "/v1/customers/pix/create-immediate-qrcode",
     "POST",
     { Authorization: `Bearer ${token}` },
     body,
-    true // VIA PROXY — Gatebox exige IP fixo
+    false // DIRETO — sem proxy para depósitos
   );
 
   if (result.status >= 400) {
