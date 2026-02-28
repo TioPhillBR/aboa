@@ -20,6 +20,7 @@ import {
   Phone, CreditCard, ArrowRight, Upload, AlertCircle, Banknote
 } from 'lucide-react';
 import { DatePickerInput } from '@/components/ui/date-picker-input';
+import { parseLocalDate } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   useRegistration, 
@@ -169,7 +170,7 @@ export default function DadosPessoais() {
     if (!personalData.birthDate) {
       missingFields.push('Data de Nascimento');
     } else {
-      const age = calculateAge(new Date(personalData.birthDate));
+      const age = calculateAge(parseLocalDate(personalData.birthDate));
       if (age < 18) {
         validationErrors.push('Você precisa ter 18 anos ou mais para se cadastrar');
       }
@@ -372,7 +373,7 @@ export default function DadosPessoais() {
           <div className="space-y-2">
             <Label htmlFor="birthDate">Data de Nascimento *</Label>
             <DatePickerInput
-              value={personalData.birthDate ? new Date(personalData.birthDate) : undefined}
+              value={personalData.birthDate ? parseLocalDate(personalData.birthDate) : undefined}
               onChange={handleBirthDateChange}
               maxDate={new Date()}
               placeholder="DD/MM/AAAA"
