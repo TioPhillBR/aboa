@@ -205,13 +205,13 @@ export async function gateboxAuthenticate(config: GateboxConfig, useProxy = true
   return data.access_token as string;
 }
 
-// --- PIX IN (QR Code) — SEMPRE DIRETO, sem proxy ---
+// --- PIX IN (QR Code) — VIA PROXY (IP fixo exigido pela Gatebox) ---
 
 export async function gateboxCreatePix(
   config: GateboxConfig,
   payload: GateboxCreatePixPayload
 ): Promise<GateboxCreatePixResponse> {
-  const token = await gateboxAuthenticate(config, false); // DIRETO
+  const token = await gateboxAuthenticate(config, true); // VIA PROXY
 
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
@@ -230,7 +230,7 @@ export async function gateboxCreatePix(
     "POST",
     { Authorization: `Bearer ${token}` },
     body,
-    false // DIRETO — sem proxy
+    true // VIA PROXY — Gatebox exige IP fixo
   );
 
   if (result.status >= 400) {
