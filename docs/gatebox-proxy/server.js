@@ -1,24 +1,39 @@
 /**
- * Servidor Gatebox - IP fixo para whitelist
- * Endpoint dedicado para saques + proxy genérico
+ * Servidor Gatebox - IP Fixo
+ * 
+ * Recebe chamadas das Edge Functions do Supabase e encaminha para a API Gatebox.
+ * Rode no seu VPS com IP fixo para evitar bloqueio de IP dinâmico.
+ * 
+ * Endpoints:
+ *   POST /api/gatebox/withdraw  — Endpoint dedicado para saques (autentica + envia PIX OUT)
+ *   POST /                      — Proxy genérico (depósitos e outras operações)
+ * 
+ * Variáveis de ambiente:
+ *   PROXY_AUTH_SECRET   - Token para autenticar as Edge Functions
+ *   GATEBOX_USERNAME    - Usuário da API Gatebox
+ *   GATEBOX_PASSWORD    - Senha da API Gatebox
+ *   GATEBOX_BASE_URL    - URL base da Gatebox (padrão: https://api.gatebox.com.br)
+ *   PORT                - Porta (padrão: 3100)
  */
+
 const http = require("http");
 
 const PORT = parseInt(process.env.PORT || "3100", 10);
 const PROXY_AUTH_SECRET = process.env.PROXY_AUTH_SECRET || "";
+const GATEBOX_BASE_URL = (process.env.GATEBOX_BASE_URL || "https://api.gatebox.com.br").replace(/\/$/, "");
 const GATEBOX_USERNAME = process.env.GATEBOX_USERNAME || "";
 const GATEBOX_PASSWORD = process.env.GATEBOX_PASSWORD || "";
-const GATEBOX_BASE_URL = (process.env.GATEBOX_BASE_URL || "https://api.gatebox.com.br").replace(/\/$/, "");
 
 if (!PROXY_AUTH_SECRET) {
   console.error("ERRO: PROXY_AUTH_SECRET não configurado!");
   process.exit(1);
 }
 
-let tokenCache = { token: null, expiresAt: 0 };
+// --- Token cache ---
+let tokenCache = null; // { token, expiresAt }
 
 async function gateboxAuth() {
-  if (tokenCache.token && tokenCache.expiresAt > Date.now()) {
+  if (tokenCache && tokenCache.expiresAt > Date.now()) {
     return tokenCache.token;
   }
 
@@ -54,11 +69,13 @@ async function gateboxAuth() {
   return data.access_token;
 }
 
+// --- Auth middleware ---
 function checkAuth(req) {
   const authHeader = req.headers["authorization"] || "";
   return authHeader === `Bearer ${PROXY_AUTH_SECRET}`;
 }
 
+// --- Parse URL ---
 function getPathname(req) {
   try {
     return new URL(req.url, `http://localhost:${PORT}`).pathname;
@@ -68,9 +85,10 @@ function getPathname(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "content-type, authorization");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -87,13 +105,17 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ error: "Method not allowed" }));
   }
 
+  // Autenticação
   if (!checkAuth(req)) {
     res.writeHead(401, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ error: "Unauthorized" }));
   }
 
+  // Ler body
   let body = "";
-  for await (const chunk of req) body += chunk;
+  for await (const chunk of req) {
+    body += chunk;
+  }
 
   let parsed;
   try {
@@ -107,25 +129,23 @@ const server = http.createServer(async (req, res) => {
 
   // ====== ENDPOINT DEDICADO: /api/gatebox/withdraw ======
   if (pathname === "/api/gatebox/withdraw") {
-    const { externalId, amount, key, name, description, documentNumber } = parsed;
+    const { externalId, amount, key, pixKeyType, name, description } = parsed;
 
-    if (!externalId || !amount || !key || !name) {
+    if (!externalId || !amount || !key || !pixKeyType || !name) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ error: "Campos obrigatórios: externalId, amount, key, name" }));
+      return res.end(JSON.stringify({ error: "Campos obrigatórios: externalId, amount, key, pixKeyType, name" }));
     }
 
     console.log(`[${new Date().toISOString()}] Withdraw → externalId=${externalId} amount=${amount} key=${key}`);
 
     try {
+      // 1. Autenticar na Gatebox (com cache)
       const token = await gateboxAuth();
 
+      // 2. Chamar PIX OUT
       const withdrawUrl = `${GATEBOX_BASE_URL}/v1/customers/pix/withdraw`;
-      const withdrawBody = { externalId, amount: parseFloat(amount), key, name };
+      const withdrawBody = { externalId, amount, key, pixKeyType, name };
       if (description) withdrawBody.description = description;
-      if (documentNumber) {
-        const doc = String(documentNumber).replace(/\D/g, "");
-        if (doc.length === 11 || doc.length === 14) withdrawBody.documentNumber = doc;
-      }
 
       console.log(`[${new Date().toISOString()}] Withdraw → POST ${withdrawUrl}`);
 
@@ -164,7 +184,10 @@ const server = http.createServer(async (req, res) => {
   try {
     const response = await fetch(targetUrl, {
       method: method || "POST",
-      headers: { "Content-Type": "application/json", ...(headers || {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(headers || {}),
+      },
       body: payload ? JSON.stringify(payload) : undefined,
     });
 
@@ -182,7 +205,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Gatebox Server rodando na porta ${PORT}`);
-  console.log(`  GET  /health              → Health check`);
-  console.log(`  POST /api/gatebox/withdraw → Saques (auth + PIX OUT)`);
-  console.log(`  POST /                    → Proxy genérico`);
+  console.log(`  POST /api/gatebox/withdraw  → Saques (auth + PIX OUT)`);
+  console.log(`  POST /                      → Proxy genérico`);
 });

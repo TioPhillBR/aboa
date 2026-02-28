@@ -77,7 +77,7 @@ export default function TermosUso() {
                     O saque de valores da carteira está sujeito às seguintes condições:
                   </p>
                   <ul className="list-disc list-inside mt-2 space-y-1">
-                    <li>Valor mínimo para saque: R$ 100,00</li>
+                    <li>Valor mínimo para saque: R$ 10,00</li>
                     <li>Saldos de bônus não são sacáveis</li>
                     <li>Prazo de processamento: até 5 dias úteis</li>
                     <li>A chave PIX deve estar em nome do titular da conta</li>

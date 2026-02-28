@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift, Users, Headphones } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift, Users, Headphones, CircleDollarSign } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
@@ -82,6 +82,17 @@ export function Header() {
 
         {/* Right Section */}
         <div className="flex items-center space-x-2">
+          {/* Botão Depositar - sempre visível */}
+          {user && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => navigate('/carteira')}
+              title="Depositar"
+            >
+              <CircleDollarSign className="h-5 w-5 text-primary" />
+            </Button>
+          )}
           {/* Theme Toggle */}
           <ThemeToggle />
           
@@ -264,6 +275,13 @@ export function Header() {
                           <p className="text-xs text-muted-foreground">+R$ {bonusBalance.toFixed(2)} bônus</p>
                         )}
                       </div>
+                    </Link>
+                    <Link 
+                      to="/carteira" 
+                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
+                    >
+                      <CircleDollarSign className="h-5 w-5" />
+                      <span>Depositar</span>
                     </Link>
                     <div className="h-px bg-border my-2" />
                   </>

@@ -39,7 +39,7 @@ export default function SorteioDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { raffle, participants, myTickets, soldNumbers, prizes, isLoading, buyMultipleTickets } = useRaffle(id || '');
-  const { balance, purchase } = useWallet();
+  const { totalBalance, purchase } = useWallet();
   const isMobile = useIsMobile();
   const { addNotification } = useNotifications();
   const { toast } = useToast();
@@ -131,7 +131,7 @@ export default function SorteioDetail() {
       return;
     }
 
-    if (balance < totalPrice) {
+    if (totalBalance < totalPrice) {
       playError();
       toast({
         title: 'Saldo insuficiente',
@@ -324,7 +324,7 @@ export default function SorteioDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Roleta - Mostrar se tiver participantes */}
             {(isDrawing || isCompleted) && participants.length > 0 && (
-              <Card className="overflow-hidden border-2 border-primary/20">
+              <Card className="overflow-hidden border-2 border-primary/20 w-full max-w-full">
                 <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent">
                   <CardTitle className="flex items-center gap-2">
                     <div className="p-2 rounded-lg bg-primary/10">
@@ -339,7 +339,7 @@ export default function SorteioDetail() {
                     </CardDescription>
                   )}
                 </CardHeader>
-                <CardContent className="p-4 md:p-6">
+                <CardContent className="p-3 md:p-6 overflow-hidden">
                   <RouletteWheel 
                     participants={participants}
                     winner={winner}
@@ -681,12 +681,12 @@ export default function SorteioDetail() {
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Wallet className="h-3.5 w-3.5" />
-                  Saldo: R$ {balance.toFixed(2)}
+                  Saldo: R$ {totalBalance.toFixed(2)}
                 </div>
                 {user ? (
                   <Button
                     className="w-full h-10 text-sm font-semibold bg-gradient-primary hover:opacity-90"
-                    disabled={isBuying || balance < totalPrice}
+                    disabled={isBuying || totalBalance < totalPrice}
                     onClick={(e) => { e.stopPropagation(); handleBuyTickets(); }}
                   >
                     {isBuying ? (
@@ -694,7 +694,7 @@ export default function SorteioDetail() {
                         <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
                         Comprando...
                       </span>
-                    ) : balance < totalPrice ? (
+                    ) : totalBalance < totalPrice ? (
                       <>
                         <Wallet className="h-4 w-4 mr-1" />
                         Saldo insuficiente

@@ -1,25 +1,9 @@
 /**
  * Cliente Gatebox para Supabase Edge Functions (Deno)
- * Baseado na API documentada na coleção Postman
+ * 
+ * PIX IN (depósito/QR Code) → chamada DIRETA à Gatebox (sem proxy)
+ * PIX OUT (saque/payout)     → via proxy VPS com IP fixo
  */
-
-const GATEBOX_TIMEOUT_MS = 25000; // 25 segundos - evita espera de 2+ minutos
-
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = GATEBOX_TIMEOUT_MS): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    return res;
-  } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") {
-      throw new Error(`Gatebox timeout (${timeoutMs / 1000}s) - verifique conexão e credenciais`);
-    }
-    throw e;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 export interface GateboxConfig {
   username: string;
@@ -47,52 +31,188 @@ export interface GateboxCreatePixResponse {
   expiresAt?: string;
 }
 
+export interface GateboxPayoutPayload {
+  externalId: string;
+  amount: number;
+  key: string;
+  pixKeyType: string;
+  name: string;
+  description?: string;
+}
+
+export interface GateboxPayoutResponse {
+  transactionId?: string;
+  status?: string;
+  endToEnd?: string;
+}
+
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
-export async function gateboxAuthenticate(config: GateboxConfig): Promise<string> {
+function sanitizeSecret(value?: string): string {
+  if (!value) return "";
+  return value
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/^=/, "")
+    .replace(/^GATEBOX_(?:USERNAME|PASSWORD|BASE_URL)\s*=\s*/i, "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
+}
+
+function sanitizeBaseUrl(value?: string): string {
+  const cleaned = sanitizeSecret(value || "https://api.gatebox.com.br").replace(/\/$/, "");
+  return cleaned || "https://api.gatebox.com.br";
+}
+
+// --- Proxy helper ---
+
+interface ProxyConfig {
+  proxyUrl: string;
+  proxySecret: string;
+}
+
+function getProxyConfig(): ProxyConfig | null {
+  const proxyUrl = (Deno.env.get("GATEBOX_PROXY_URL") || "").trim().replace(/\/$/, "");
+  const proxySecret = (Deno.env.get("GATEBOX_PROXY_SECRET") || "").trim();
+  if (proxyUrl && proxySecret) {
+    return { proxyUrl, proxySecret };
+  }
+  return null;
+}
+
+/**
+ * Faz uma chamada à Gatebox, diretamente ou via proxy.
+ * @param useProxy - se true, tenta usar o proxy. Se false, sempre chama direto.
+ */
+async function gateboxFetch(
+  path: string,
+  method: string,
+  headers: Record<string, string>,
+  body?: Record<string, unknown>,
+  useProxy = true
+): Promise<{ status: number; text: string }> {
+  const proxy = useProxy ? getProxyConfig() : null;
+  const TIMEOUT_MS = 25_000;
+
+  if (proxy) {
+    console.log(`Gatebox via PROXY → ${method} ${path}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const proxyResponse = await fetch(proxy.proxyUrl, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${proxy.proxySecret}`,
+        },
+        body: JSON.stringify({ path, method, headers, payload: body }),
+      });
+      const text = await proxyResponse.text();
+      console.log(`Proxy respondeu: ${proxyResponse.status} (${text.length} bytes)`);
+      return { status: proxyResponse.status, text };
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new Error(`Proxy timeout: sem resposta em ${TIMEOUT_MS / 1000}s. Verifique se o VPS está online.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Chamada direta
+  const baseUrl = sanitizeBaseUrl(Deno.env.get("GATEBOX_BASE_URL"));
+  const url = `${baseUrl}${path}`;
+  console.log(`Gatebox DIRETO → ${method} ${url}`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...headers },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    return { status: response.status, text };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(`Gatebox timeout: sem resposta em ${TIMEOUT_MS / 1000}s.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// --- Auth ---
+
+/**
+ * @param useProxy - repassado ao gateboxFetch
+ */
+export async function gateboxAuthenticate(config: GateboxConfig, useProxy = true): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now()) {
     return tokenCache.token;
   }
 
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
-  const url = `${baseUrl}/v1/customers/auth/sign-in`;
+  const username = sanitizeSecret(config.username);
+  const password = sanitizeSecret(config.password);
 
-  const response = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: config.username,
-      password: config.password,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gatebox auth error (${response.status}): ${errText}`);
+  if (!username || !password) {
+    throw new Error("Credenciais Gatebox ausentes ou mal formatadas nos secrets");
   }
 
-  const data = await response.json();
+  console.log("Gatebox auth metadata", {
+    usernameLength: username.length,
+    passwordLength: password.length,
+    usingProxy: useProxy && !!getProxyConfig(),
+  });
+
+  const result = await gateboxFetch(
+    "/v1/customers/auth/sign-in",
+    "POST",
+    {},
+    { username, password },
+    useProxy
+  );
+
+  if (result.status >= 400) {
+    if (result.status === 400 && (/statusCode.*420/.test(result.text) || /username or password/i.test(result.text))) {
+      throw new Error(`Gatebox auth error (${result.status}): credenciais inválidas. Detalhe: ${result.text}`);
+    }
+    throw new Error(`Gatebox auth error (${result.status}): ${result.text}`);
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(result.text);
+  } catch {
+    throw new Error(`Gatebox auth: resposta não-JSON: ${result.text.substring(0, 200)}`);
+  }
+
   if (!data.access_token) {
     throw new Error("Token não retornado pela Gatebox");
   }
 
-  const expiresIn = data.expires_in || 3600;
+  const expiresIn = (data.expires_in as number) || 3600;
   tokenCache = {
-    token: data.access_token,
+    token: data.access_token as string,
     expiresAt: Date.now() + (expiresIn - 60) * 1000,
   };
 
-  return data.access_token;
+  return data.access_token as string;
 }
+
+// --- PIX IN (QR Code) — DIRETO (sem proxy) ---
 
 export async function gateboxCreatePix(
   config: GateboxConfig,
   payload: GateboxCreatePixPayload
 ): Promise<GateboxCreatePixResponse> {
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
-  const url = `${baseUrl}/v1/customers/pix/create-immediate-qrcode`;
-
-  const token = await gateboxAuthenticate(config);
+  // Depósitos usam chamada DIRETA (sem proxy) — o proxy é só para PIX OUT
+  const token = await gateboxAuthenticate(config, false);
 
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
@@ -106,141 +226,128 @@ export async function gateboxCreatePix(
   if (payload.identification) body.identification = payload.identification;
   if (payload.description) body.description = payload.description;
 
-  const response = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
+  console.log("Gatebox PIX IN (depósito) → chamada DIRETA (sem proxy)");
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gatebox PIX error (${response.status}): ${errText}`);
+  const result = await gateboxFetch(
+    "/v1/customers/pix/create-immediate-qrcode",
+    "POST",
+    { Authorization: `Bearer ${token}` },
+    body,
+    false // DIRETO — sem proxy para depósitos
+  );
+
+  if (result.status >= 400) {
+    throw new Error(`Gatebox PIX error (${result.status}): ${result.text}`);
   }
 
-  const responseData = await response.json();
-  const data = responseData.data || responseData;
+  let responseData: Record<string, unknown>;
+  try {
+    responseData = JSON.parse(result.text);
+  } catch {
+    throw new Error(`Gatebox PIX: resposta não-JSON: ${result.text.substring(0, 200)}`);
+  }
+
+  const data = (responseData.data as Record<string, unknown>) || responseData;
 
   return {
-    qrCode: data.qrCode || data.qrCodeImage || data.qrcode || data.qrcodeImage,
-    qrCodeText: data.key || data.qrCodeText || data.qrCode || data.qrcodeText || data.qrcode,
-    transactionId: data.identifier || data.uuid || data.transactionId || data.id || data.transaction_id,
-    endToEnd: data.endToEnd || data.end_to_end || data.endToEndId,
-    expiresAt: data.expiresAt || data.expireAt || data.expires_at,
+    qrCode: (data.qrCode || data.qrCodeImage || data.qrcode || data.qrcodeImage) as string | undefined,
+    qrCodeText: (data.key || data.qrCodeText || data.qrCode || data.qrcodeText || data.qrcode) as string | undefined,
+    transactionId: (data.identifier || data.uuid || data.transactionId || data.id || data.transaction_id) as string | undefined,
+    endToEnd: (data.endToEnd || data.end_to_end || data.endToEndId) as string | undefined,
+    expiresAt: (data.expiresAt || data.expireAt || data.expires_at) as string | undefined,
   };
 }
 
-/** Payload para Cash-Out (saque) - conforme Postman Gatebox */
-export interface GateboxWithdrawPayload {
-  externalId: string;
-  key: string;
-  name: string;
-  amount: number;
-  description?: string;
-  documentNumber?: string; // CPF/CNPJ do recebedor - obrigatório se validação de chave ativa
-}
+// --- PIX OUT (Saque / Payout) — Via servidor dedicado (mesmo IP dos depósitos) ---
 
-/** Resposta do Cash-Out */
-export interface GateboxWithdrawResponse {
-  transactionId?: string;
-  endToEnd?: string;
-  status?: string;
-}
-
-/**
- * Cash-Out: envia PIX para o recebedor (saque).
- * Quando GATEBOX_PROXY_URL está configurado, usa o endpoint dedicado do servidor
- * (IP fixo whitelistado na Gatebox). Caso contrário, chama a Gatebox diretamente.
- */
-export async function gateboxWithdraw(
-  config: GateboxConfig,
-  payload: GateboxWithdrawPayload
-): Promise<GateboxWithdrawResponse> {
+export async function gateboxCreatePayout(
+  _config: GateboxConfig,
+  payload: GateboxPayoutPayload
+): Promise<GateboxPayoutResponse> {
+  // Saques chamam o endpoint dedicado do servidor (não o proxy genérico)
+  // O servidor faz auth + withdraw internamente, usando IP fixo whitelistado
   const serverUrl = (Deno.env.get("GATEBOX_PROXY_URL") || "").trim().replace(/\/$/, "");
   const serverSecret = (Deno.env.get("GATEBOX_PROXY_SECRET") || "").trim();
 
-  if (serverUrl && serverSecret) {
-    // Via servidor dedicado (IP fixo) — Gatebox exige whitelist para saques
-    const withdrawEndpoint = `${serverUrl}/api/gatebox/withdraw`;
+  if (!serverUrl || !serverSecret) {
+    throw new Error("GATEBOX_PROXY_URL ou GATEBOX_PROXY_SECRET não configurados. O servidor com IP fixo é necessário para saques.");
+  }
 
-    const body: Record<string, unknown> = {
-      externalId: payload.externalId,
-      key: payload.key,
-      name: payload.name,
-      amount: payload.amount,
-    };
-    if (payload.description) body.description = payload.description;
-    if (payload.documentNumber) {
-      const doc = payload.documentNumber.replace(/\D/g, "");
-      if (doc.length === 11 || doc.length === 14) body.documentNumber = doc;
-    }
+  const withdrawEndpoint = `${serverUrl}/api/gatebox/withdraw`;
 
-    const response = await fetchWithTimeout(withdrawEndpoint, {
+  const body: Record<string, unknown> = {
+    externalId: payload.externalId,
+    amount: payload.amount,
+    key: payload.key,
+    pixKeyType: payload.pixKeyType,
+    name: payload.name,
+  };
+  if (payload.description) body.description = payload.description;
+
+  console.log(`Gatebox PIX OUT (saque) → Servidor dedicado: ${withdrawEndpoint}`);
+
+  const TIMEOUT_MS = 25_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  let result: { status: number; text: string };
+  try {
+    const response = await fetch(withdrawEndpoint, {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${serverSecret}`,
       },
       body: JSON.stringify(body),
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Gatebox withdraw error (${response.status}): ${errText}`);
+    const text = await response.text();
+    console.log(`Servidor withdraw respondeu: ${response.status} (${text.length} bytes)`);
+    result = { status: response.status, text };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(`Servidor timeout: sem resposta em ${TIMEOUT_MS / 1000}s. Verifique se o servidor está online.`);
     }
-
-    const responseData = await response.json();
-    const data = responseData.data || responseData;
-
-    return {
-      transactionId: data.identifier || data.uuid || data.transactionId || data.id,
-      endToEnd: data.endToEnd || data.end_to_end,
-      status: data.status,
-    };
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
 
-  // Chamada direta (sem proxy) — útil para dev/teste; em produção pode dar 403
-  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
-  const url = `${baseUrl}/v1/customers/pix/withdraw`;
-
-  const token = await gateboxAuthenticate(config);
-
-  const body: Record<string, unknown> = {
-    externalId: payload.externalId,
-    key: payload.key,
-    name: payload.name,
-    amount: payload.amount,
-  };
-  if (payload.description) body.description = payload.description;
-  if (payload.documentNumber) {
-    const doc = payload.documentNumber.replace(/\D/g, "");
-    if (doc.length === 11 || doc.length === 14) {
-      body.documentNumber = doc;
-    }
+  if (result.status >= 400) {
+    throw new Error(`Gatebox Payout error (${result.status}): ${result.text}`);
   }
 
-  const response = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gatebox withdraw error (${response.status}): ${errText}`);
+  let parsedBody: unknown = null;
+  try {
+    parsedBody = JSON.parse(result.text);
+  } catch {
+    parsedBody = result.text;
   }
 
-  const responseData = await response.json();
-  const data = responseData.data || responseData;
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object" && !Array.isArray(value);
 
-  return {
-    transactionId: data.identifier || data.uuid || data.transactionId || data.id,
-    endToEnd: data.endToEnd || data.end_to_end,
-    status: data.status,
-  };
+  const responseObj = isRecord(parsedBody) ? parsedBody : null;
+  const dataCandidate = responseObj?.data;
+  const data = isRecord(dataCandidate) ? dataCandidate : responseObj;
+
+  if (!data) {
+    console.error("Gatebox payout response inválida", { status: result.status, rawBody: result.text });
+    throw new Error("Gatebox Payout response inválida: corpo vazio ou formato não suportado");
+  }
+
+  const transactionIdRaw = data.identifier ?? data.uuid ?? data.transactionId ?? data.id ?? data.transaction_id;
+  const statusRaw = data.status;
+  const endToEndRaw = data.endToEnd ?? data.end_to_end;
+
+  const transactionId = (typeof transactionIdRaw === "string" || typeof transactionIdRaw === "number") ? String(transactionIdRaw) : undefined;
+  const status = (typeof statusRaw === "string" || typeof statusRaw === "number") ? String(statusRaw) : undefined;
+  const endToEnd = (typeof endToEndRaw === "string" || typeof endToEndRaw === "number") ? String(endToEndRaw) : undefined;
+
+  if (!transactionId && !status && !endToEnd) {
+    console.error("Gatebox payout response sem campos esperados", { statusCode: result.status, rawBody: result.text });
+    throw new Error("Gatebox Payout response sem transactionId/status/endToEnd");
+  }
+
+  return { transactionId, status, endToEnd };
 }

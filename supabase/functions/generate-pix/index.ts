@@ -4,7 +4,8 @@ import { gateboxCreatePix } from "../_shared/gatebox.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface PixRequest {
@@ -130,15 +131,45 @@ serve(async (req) => {
 
       const { data: profile } = await supabaseAdmin
         .from("profiles")
-        .select("full_name, cpf, phone")
+        .select("full_name, cpf, phone, pix_key, pix_key_type, address_city, address_state")
         .eq("id", userId)
         .single();
 
+      const { data: wallet } = await supabaseAdmin
+        .from("wallets")
+        .select("id, balance")
+        .eq("user_id", userId)
+        .single();
+
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
-      const email = authUser?.data?.user?.email || "";
+      const email = authUser?.user?.email || "";
+
+      console.log("Deposit user info", {
+        fullName: profile?.full_name,
+        hasCpf: !!profile?.cpf,
+        hasPhone: !!profile?.phone,
+        hasPixKey: !!profile?.pix_key,
+        city: profile?.address_city,
+        state: profile?.address_state,
+        walletBalance: wallet?.balance,
+        email: email ? "yes" : "no",
+      });
 
       const externalId = `deposito_${userId}_${Date.now()}`;
       const cpfLimpo = (profile?.cpf || "").replace(/\D/g, "");
+
+      // Validar CPF: deve ter exatamente 11 dígitos numéricos
+      const cpfValido = cpfLimpo.length === 11 && /^\d{11}$/.test(cpfLimpo) && !/^(\d)\1{10}$/.test(cpfLimpo);
+
+      // Sanitizar nome: remover caracteres especiais, garantir pelo menos 2 palavras
+      const rawName = (profile?.full_name || "").trim();
+      const sanitizedName = rawName
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+        .replace(/[^a-zA-Z\s]/g, "") // só letras e espaços
+        .replace(/\s+/g, " ") // colapsa espaços
+        .trim();
+      const nameValido = sanitizedName.length >= 3 && sanitizedName.includes(" ");
+
       let phoneFormatted = (profile?.phone || "").replace(/\D/g, "");
       if (phoneFormatted.length >= 10) {
         if (!phoneFormatted.startsWith("+")) {
@@ -146,18 +177,32 @@ serve(async (req) => {
         }
       }
 
-      try {
-        const pixResponse = await gateboxCreatePix(gateboxConfig, {
-          externalId,
-          amount: parseFloat(amount.toFixed(2)),
-          document: cpfLimpo || undefined,
-          name: profile?.full_name || "Cliente",
-          email: email || undefined,
-          phone: phoneFormatted || undefined,
-          identification: `Depósito - ${profile?.full_name || "Cliente"}`,
-          expire: 3600,
-          description: `Depósito A BOA - R$ ${amount.toFixed(2)}`,
+      // Gatebox exige name + document válidos OU nenhum dos dois.
+      // Se um estiver inválido, omitir ambos.
+      const enviarBeneficiario = cpfValido && nameValido;
+
+      const pixPayload: Record<string, unknown> = {
+        externalId,
+        amount: parseFloat(amount.toFixed(2)),
+        expire: 3600,
+        description: `Deposito A BOA - R$ ${amount.toFixed(2)}`,
+      };
+
+      if (enviarBeneficiario) {
+        pixPayload.document = cpfLimpo;
+        pixPayload.name = sanitizedName;
+        if (email) pixPayload.email = email;
+        if (phoneFormatted) pixPayload.phone = phoneFormatted;
+      } else {
+        console.log("Beneficiário omitido (name/document inválido)", {
+          cpfValido, nameValido, rawName, cpfLimpo: cpfLimpo.substring(0, 3) + "***",
         });
+      }
+
+      console.log("Gatebox PIX payload (sem secrets)", JSON.stringify(pixPayload));
+
+      try {
+        const pixResponse = await gateboxCreatePix(gateboxConfig, pixPayload as any);
 
         const qrCodeText = pixResponse.qrCodeText || pixResponse.qrCode;
         const transactionId = pixResponse.transactionId || externalId;

@@ -253,7 +253,7 @@ export function RouletteWheel({
       )}
 
       {/* Container da Roleta */}
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-md mx-auto">
         {/* Efeito de brilho animado */}
         <motion.div
           className="absolute inset-0 -m-4 rounded-2xl pointer-events-none"
@@ -444,7 +444,7 @@ export function RouletteWheel({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ type: 'spring', bounce: 0.4 }}
-            className="w-full max-w-md"
+            className="w-full max-w-md mx-auto"
           >
             <Card className="p-6 bg-gradient-to-br from-yellow-500/20 via-primary/10 to-purple-500/20 border-2 border-yellow-500/50 shadow-xl overflow-hidden relative">
               {/* Partículas decorativas */}

@@ -116,7 +116,7 @@ const defaultSettings: AllSettings = {
     pixCity: 'São Paulo',
     minimumDeposit: 10,
     maximumDeposit: 5000,
-    minimumWithdrawal: 20,
+    minimumWithdrawal: 1,
     withdrawalFee: 0,
     autoApproveWithdrawals: false,
     autoApproveLimit: 100,

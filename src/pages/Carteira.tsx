@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
@@ -40,7 +40,9 @@ import {
   QrCode,
   Gift,
   Banknote,
-  AlertCircle
+  AlertCircle,
+  Send,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -49,6 +51,7 @@ import { TransactionType } from '@/types';
 const CREDIT_OPTIONS = [10, 25, 50, 100, 200, 500];
 
 type PaymentStep = 'select-amount' | 'pix-payment';
+type WithdrawStep = 'form' | 'confirm';
 
 export default function Carteira() {
   const { user } = useAuth();
@@ -59,6 +62,33 @@ export default function Carteira() {
   const [customAmount, setCustomAmount] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('select-amount');
+  
+  // Withdraw modal state
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>('form');
+  const [userPixKey, setUserPixKey] = useState<string | null>(null);
+  const [userPixKeyType, setUserPixKeyType] = useState<string | null>(null);
+  const [userFullName, setUserFullName] = useState<string>('');
+
+  // Fetch user PIX key from profile
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('pix_key, pix_key_type, full_name')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setUserPixKey(data.pix_key);
+            setUserPixKeyType(data.pix_key_type);
+            setUserFullName(data.full_name || '');
+          }
+        });
+    }
+  }, [user]);
 
 
   const handleContinueToPayment = () => {
@@ -110,6 +140,54 @@ export default function Carteira() {
     return selectedAmount || parseFloat(customAmount) || 0;
   };
 
+  const handleWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount);
+    
+    if (!amount || amount < 1) {
+      toast({ title: 'Valor mínimo R$ 1,00', description: 'O valor mínimo para saque é R$ 1,00', variant: 'destructive' });
+      return;
+    }
+
+    if (amount > balance) {
+      toast({ title: 'Saldo insuficiente', description: `Seu saldo principal é R$ ${balance.toFixed(2)}`, variant: 'destructive' });
+      return;
+    }
+
+    if (!userPixKey || !userPixKeyType) {
+      toast({ title: 'Chave PIX não cadastrada', description: 'Cadastre sua chave PIX no perfil antes de sacar', variant: 'destructive' });
+      return;
+    }
+
+    setWithdrawLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-withdrawal', {
+        body: {
+          amount,
+          pixKey: userPixKey,
+          pixKeyType: userPixKeyType,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Erro ao processar saque');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      toast({ title: data?.automatic ? 'PIX enviado!' : 'Saque registrado!', description: data?.message || `R$ ${amount.toFixed(2)} será processado em até 24 horas.` });
+      setWithdrawOpen(false);
+      setWithdrawAmount('');
+      setWithdrawStep('form');
+      refetch();
+    } catch (err: any) {
+      toast({ title: 'Erro no saque', description: err.message, variant: 'destructive' });
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
+
 
   const getTransactionIcon = (type: TransactionType) => {
     switch (type) {
@@ -121,6 +199,8 @@ export default function Carteira() {
         return <Trophy className="h-4 w-4 text-yellow-500" />;
       case 'refund':
         return <ArrowDownLeft className="h-4 w-4 text-blue-500" />;
+      case 'withdrawal':
+        return <Send className="h-4 w-4 text-orange-500" />;
       default:
         return <Clock className="h-4 w-4" />;
     }
@@ -136,6 +216,8 @@ export default function Carteira() {
         return 'Prêmio';
       case 'refund':
         return 'Reembolso';
+      case 'withdrawal':
+        return 'Saque';
       default:
         return type;
     }
@@ -151,6 +233,8 @@ export default function Carteira() {
         return 'bg-yellow-500/10 text-yellow-600';
       case 'refund':
         return 'bg-blue-500/10 text-blue-600';
+      case 'withdrawal':
+        return 'bg-orange-500/10 text-orange-600';
       default:
         return 'bg-muted';
     }
@@ -317,6 +401,214 @@ export default function Carteira() {
                           onCancel={handlePaymentCancel}
                         />
                       )}
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Botão Sacar */}
+                  <Dialog open={withdrawOpen} onOpenChange={(open) => {
+                    setWithdrawOpen(open);
+                    if (!open) { setWithdrawAmount(''); setWithdrawStep('form'); }
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        className="gap-2"
+                        disabled={balance <= 0}
+                      >
+                        <Send className="h-4 w-4" />
+                        Sacar agora
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Send className="h-5 w-5 text-primary" />
+                          Sacar Saldo Principal
+                        </DialogTitle>
+                        <DialogDescription>
+                          Transfira seu saldo principal para sua chave PIX
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 py-4">
+                        {/* User info card */}
+                        <Card className="border-primary/20 bg-primary/5">
+                          <CardContent className="py-4 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Wallet className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-foreground">{userFullName || 'Usuário'}</p>
+                                <p className="text-xs text-muted-foreground">ID: {user?.id?.slice(0, 8)}...</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-2.5 rounded-lg bg-background border">
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Saldo disponível</p>
+                                <p className="text-lg font-bold text-primary">R$ {balance.toFixed(2)}</p>
+                              </div>
+                              <div className="p-2.5 rounded-lg bg-background border">
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Data da solicitação</p>
+                                <p className="text-sm font-semibold text-foreground mt-0.5">
+                                  {format(new Date(), "dd/MM/yyyy", { locale: ptBR })}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {format(new Date(), "HH:mm", { locale: ptBR })}
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Chave PIX */}
+                        {userPixKey ? (
+                          <div className="p-3 rounded-lg border">
+                            <p className="text-xs text-muted-foreground mb-1">Chave PIX cadastrada</p>
+                            <p className="font-medium">{userPixKey}</p>
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {userPixKeyType === 'cpf' ? 'CPF' : 
+                               userPixKeyType === 'email' ? 'E-mail' : 
+                               userPixKeyType === 'phone' ? 'Telefone' : 
+                               userPixKeyType === 'random' ? 'Aleatória' : userPixKeyType}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-destructive" />
+                              <p className="text-sm text-destructive">
+                                Cadastre sua chave PIX no{' '}
+                                <Link to="/perfil" className="underline font-medium">Perfil</Link>
+                                {' '}antes de sacar.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Valor do saque */}
+                        <div className="space-y-2">
+                          <Label htmlFor="withdrawAmount">Valor do saque</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                              R$
+                            </span>
+                            <Input
+                              id="withdrawAmount"
+                              type="number"
+                              min="1"
+                              max={balance}
+                              step="0.01"
+                              placeholder="0,00"
+                              value={withdrawAmount}
+                              onChange={(e) => setWithdrawAmount(e.target.value)}
+                              className="pl-10 text-lg h-12"
+                            />
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Mínimo: R$ 10,00</span>
+                            <button 
+                              type="button"
+                              className="text-primary hover:underline cursor-pointer"
+                              onClick={() => setWithdrawAmount(balance.toFixed(2))}
+                            >
+                              Sacar tudo
+                            </button>
+                          </div>
+                        </div>
+
+                        {withdrawStep === 'form' ? (
+                          <Button
+                            onClick={() => {
+                              const amt = parseFloat(withdrawAmount);
+                              if (!amt || amt < 1) {
+                                toast({ title: 'Valor mínimo R$ 1,00', description: 'O valor mínimo para saque é R$ 1,00', variant: 'destructive' });
+                                return;
+                              }
+                              if (amt > balance) {
+                                toast({ title: 'Saldo insuficiente', description: `Seu saldo é R$ ${balance.toFixed(2)}`, variant: 'destructive' });
+                                return;
+                              }
+                              if (!userPixKey) {
+                                toast({ title: 'Chave PIX não cadastrada', variant: 'destructive' });
+                                return;
+                              }
+                              setWithdrawStep('confirm');
+                            }}
+                            disabled={!userPixKey || !parseFloat(withdrawAmount)}
+                            className="w-full gap-2"
+                            size="lg"
+                          >
+                            <Send className="h-5 w-5" />
+                            Revisar Saque
+                          </Button>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Confirmation summary */}
+                            <Card className="border-accent/30 bg-accent/5">
+                              <CardContent className="py-4 space-y-3">
+                                <p className="text-sm font-semibold text-foreground text-center">Resumo do Saque</p>
+                                <div className="space-y-2 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Nome</span>
+                                    <span className="font-medium">{userFullName}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Chave PIX</span>
+                                    <span className="font-medium text-right max-w-[180px] truncate">{userPixKey}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Tipo</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {userPixKeyType === 'cpf' ? 'CPF' : 
+                                       userPixKeyType === 'email' ? 'E-mail' : 
+                                       userPixKeyType === 'phone' ? 'Telefone' : 
+                                       userPixKeyType === 'random' ? 'Aleatória' : userPixKeyType}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Data</span>
+                                    <span className="font-medium">{format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                                  </div>
+                                  <div className="border-t pt-2 flex justify-between items-center">
+                                    <span className="font-semibold text-foreground">Valor do saque</span>
+                                    <span className="text-xl font-bold text-primary">R$ {parseFloat(withdrawAmount).toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            <div className="flex gap-3">
+                              <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setWithdrawStep('form')}
+                                disabled={withdrawLoading}
+                              >
+                                Voltar
+                              </Button>
+                              <Button
+                                onClick={handleWithdraw}
+                                disabled={withdrawLoading}
+                                className="flex-1 gap-2"
+                              >
+                                {withdrawLoading ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Processando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send className="h-4 w-4" />
+                                    Confirmar Saque
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </DialogContent>
                   </Dialog>
 

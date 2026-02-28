@@ -54,7 +54,8 @@ export function useFinancial(dateRange?: { start: Date; end: Date }) {
       let query = supabase
         .from('payment_transactions')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(5000);
 
       if (dateRange) {
         query = query
@@ -74,7 +75,8 @@ export function useFinancial(dateRange?: { start: Date; end: Date }) {
     queryFn: async () => {
       let query = supabase
         .from('payment_transactions')
-        .select('amount, gateway_fee, net_amount, status, transaction_type');
+        .select('amount, gateway_fee, net_amount, status, transaction_type')
+        .limit(10000);
 
       if (dateRange) {
         query = query
@@ -114,7 +116,8 @@ export function useFinancial(dateRange?: { start: Date; end: Date }) {
           purchased_at,
           raffles!inner(title, price)
         `)
-        .order('purchased_at', { ascending: false });
+        .order('purchased_at', { ascending: false })
+        .limit(5000);
 
       if (dateRange) {
         ticketsQuery = ticketsQuery
@@ -135,7 +138,8 @@ export function useFinancial(dateRange?: { start: Date; end: Date }) {
           created_at,
           scratch_cards!inner(title, price)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(5000);
 
       if (dateRange) {
         scratchQuery = scratchQuery

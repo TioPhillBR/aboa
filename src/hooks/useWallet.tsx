@@ -57,7 +57,7 @@ export function useWallet() {
         .select('*, source_type')
         .eq('wallet_id', walletData.id)
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(1000);
 
       if (error) throw error;
       setTransactions((data || []) as WalletTransaction[]);
@@ -66,24 +66,54 @@ export function useWallet() {
     }
   };
 
-  // Calculate bonus balance: credits received minus bonus spent
-  const bonusBalance = useMemo(() => {
-    const bonusReceived = transactions
-      .filter(tx => (tx.source_type === 'referral' || tx.source_type === 'admin_bonus') && tx.amount > 0)
-      .reduce((sum, tx) => sum + tx.amount, 0);
-    
-    const bonusUsed = transactions
-      .filter(tx => tx.source_type === 'bonus_used' && tx.amount < 0)
-      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    
-    return Math.max(0, Math.min(bonusReceived - bonusUsed, wallet?.balance ?? 0));
-  }, [transactions, wallet?.balance]);
+  // Calcula saldo principal e bônus com base na origem das transações
+  // Regra de negócio: em débitos sem marcação explícita, consome bônus primeiro.
+  const { mainBalance, bonusBalance } = useMemo(() => {
+    const total = Number(wallet?.balance ?? 0);
 
-  // Main balance is wallet balance minus bonus balance
-  const mainBalance = useMemo(() => {
-    const total = wallet?.balance ?? 0;
-    return Math.max(0, total - bonusBalance);
-  }, [wallet?.balance, bonusBalance]);
+    let principal = 0;
+    let bonus = 0;
+
+    const orderedTransactions = [...transactions].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    for (const tx of orderedTransactions) {
+      const amount = Number(tx.amount ?? 0);
+      const sourceType = tx.source_type;
+
+      if (amount > 0) {
+        if (sourceType === 'referral' || sourceType === 'admin_bonus') {
+          bonus += amount;
+        } else {
+          principal += amount;
+        }
+        continue;
+      }
+
+      if (amount < 0) {
+        const debit = Math.abs(amount);
+
+        if (sourceType === 'bonus_used') {
+          bonus = Math.max(0, bonus - debit);
+          continue;
+        }
+
+        const fromBonus = Math.min(bonus, debit);
+        bonus -= fromBonus;
+        const remainingDebit = debit - fromBonus;
+        principal = Math.max(0, principal - remainingDebit);
+      }
+    }
+
+    const normalizedBonus = Math.max(0, Math.min(bonus, total));
+    const normalizedPrincipal = Math.max(0, total - normalizedBonus);
+
+    return {
+      mainBalance: normalizedPrincipal,
+      bonusBalance: normalizedBonus,
+    };
+  }, [transactions, wallet?.balance]);
 
   const addTransaction = async (
     amount: number,
