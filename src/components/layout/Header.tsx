@@ -82,6 +82,17 @@ export function Header() {
 
         {/* Right Section */}
         <div className="flex items-center space-x-2">
+          {/* Botão Depositar - sempre visível */}
+          {user && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => navigate('/carteira')}
+              title="Depositar"
+            >
+              <CircleDollarSign className="h-5 w-5 text-primary" />
+            </Button>
+          )}
           {/* Theme Toggle */}
           <ThemeToggle />
           
@@ -91,17 +102,6 @@ export function Header() {
             <div className="h-10 w-24 bg-muted animate-pulse rounded-md" />
           ) : user && profile ? (
             <>
-              {/* Botão Depositar - Desktop */}
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="hidden md:flex gap-2 bg-gradient-primary hover:opacity-90 font-semibold"
-                onClick={() => navigate('/carteira')}
-              >
-                <CircleDollarSign className="h-4 w-4" />
-                <span>Depositar</span>
-              </Button>
-
               {/* Saldo da Carteira - Desktop */}
               <Link to="/carteira" className="hidden md:flex items-center gap-1">
                 <Button variant="outline" size="sm" className="gap-2 font-semibold">
