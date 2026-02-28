@@ -1,0 +1,1 @@
+UPDATE scratch_card_batches SET cards_sold = 0, prizes_distributed = 0 WHERE id = '2fd9e932-13f8-4a1c-b7b7-5230e5435d90';
