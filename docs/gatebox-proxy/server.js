@@ -129,7 +129,7 @@ const server = http.createServer(async (req, res) => {
 
   // ====== ENDPOINT DEDICADO: /api/gatebox/withdraw ======
   if (pathname === "/api/gatebox/withdraw") {
-    const { externalId, amount, key, pixKeyType, name, description } = parsed;
+    const { externalId, amount, key, pixKeyType, name, description, documentNumber } = parsed;
 
     if (!externalId || !amount || !key || !pixKeyType || !name) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -146,6 +146,10 @@ const server = http.createServer(async (req, res) => {
       const withdrawUrl = `${GATEBOX_BASE_URL}/v1/customers/pix/withdraw`;
       const withdrawBody = { externalId, amount, key, pixKeyType, name };
       if (description) withdrawBody.description = description;
+      if (documentNumber) {
+        const doc = String(documentNumber).replace(/\D/g, "");
+        if (doc.length === 11 || doc.length === 14) withdrawBody.documentNumber = doc;
+      }
 
       console.log(`[${new Date().toISOString()}] Withdraw → POST ${withdrawUrl}`);
 

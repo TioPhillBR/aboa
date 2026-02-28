@@ -126,7 +126,8 @@ export function PixPayment({ amount, onSuccess, onCancel }: PixPaymentProps) {
       });
 
       if (response.error) {
-        throw new Error(response.error.message);
+        const errMsg = response.data?.error || response.error.message;
+        throw new Error(errMsg || 'Erro ao gerar PIX');
       }
 
       setPixData(response.data);
@@ -137,7 +138,7 @@ export function PixPayment({ amount, onSuccess, onCancel }: PixPaymentProps) {
       setStatus('error');
       toast({
         title: 'Erro ao gerar PIX',
-        description: 'Tente novamente em alguns instantes',
+        description: error instanceof Error ? error.message : 'Tente novamente em alguns instantes',
         variant: 'destructive',
       });
     }
