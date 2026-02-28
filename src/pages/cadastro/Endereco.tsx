@@ -212,6 +212,8 @@ export default function Endereco() {
         const { error: profileError, data: profileData } = await supabase
           .from('profiles')
           .update({
+            full_name: personalData.fullName,
+            email: personalData.email,
             phone: cleanPhone,
             cpf: cleanCpf,
             birth_date: personalData.birthDate,
