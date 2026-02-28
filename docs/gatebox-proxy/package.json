@@ -1,0 +1,6 @@
+{
+  "name": "gatebox-proxy",
+  "version": "1.0.0",
+  "description": "Proxy para chamadas Gatebox Cash-Out - IP fixo para whitelist",
+  "main": "server.js"
+}

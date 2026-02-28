@@ -3,6 +3,24 @@
  * Baseado na API documentada na coleção Postman
  */
 
+const GATEBOX_TIMEOUT_MS = 25000; // 25 segundos - evita espera de 2+ minutos
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = GATEBOX_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`Gatebox timeout (${timeoutMs / 1000}s) - verifique conexão e credenciais`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export interface GateboxConfig {
   username: string;
   password: string;
@@ -39,7 +57,7 @@ export async function gateboxAuthenticate(config: GateboxConfig): Promise<string
   const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
   const url = `${baseUrl}/v1/customers/auth/sign-in`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -88,7 +106,7 @@ export async function gateboxCreatePix(
   if (payload.identification) body.identification = payload.identification;
   if (payload.description) body.description = payload.description;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -111,5 +129,118 @@ export async function gateboxCreatePix(
     transactionId: data.identifier || data.uuid || data.transactionId || data.id || data.transaction_id,
     endToEnd: data.endToEnd || data.end_to_end || data.endToEndId,
     expiresAt: data.expiresAt || data.expireAt || data.expires_at,
+  };
+}
+
+/** Payload para Cash-Out (saque) - conforme Postman Gatebox */
+export interface GateboxWithdrawPayload {
+  externalId: string;
+  key: string;
+  name: string;
+  amount: number;
+  description?: string;
+  documentNumber?: string; // CPF/CNPJ do recebedor - obrigatório se validação de chave ativa
+}
+
+/** Resposta do Cash-Out */
+export interface GateboxWithdrawResponse {
+  transactionId?: string;
+  endToEnd?: string;
+  status?: string;
+}
+
+/**
+ * Cash-Out: envia PIX para o recebedor (saque).
+ * Quando GATEBOX_PROXY_URL está configurado, usa o endpoint dedicado do servidor
+ * (IP fixo whitelistado na Gatebox). Caso contrário, chama a Gatebox diretamente.
+ */
+export async function gateboxWithdraw(
+  config: GateboxConfig,
+  payload: GateboxWithdrawPayload
+): Promise<GateboxWithdrawResponse> {
+  const serverUrl = (Deno.env.get("GATEBOX_PROXY_URL") || "").trim().replace(/\/$/, "");
+  const serverSecret = (Deno.env.get("GATEBOX_PROXY_SECRET") || "").trim();
+
+  if (serverUrl && serverSecret) {
+    // Via servidor dedicado (IP fixo) — Gatebox exige whitelist para saques
+    const withdrawEndpoint = `${serverUrl}/api/gatebox/withdraw`;
+
+    const body: Record<string, unknown> = {
+      externalId: payload.externalId,
+      key: payload.key,
+      name: payload.name,
+      amount: payload.amount,
+    };
+    if (payload.description) body.description = payload.description;
+    if (payload.documentNumber) {
+      const doc = payload.documentNumber.replace(/\D/g, "");
+      if (doc.length === 11 || doc.length === 14) body.documentNumber = doc;
+    }
+
+    const response = await fetchWithTimeout(withdrawEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serverSecret}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gatebox withdraw error (${response.status}): ${errText}`);
+    }
+
+    const responseData = await response.json();
+    const data = responseData.data || responseData;
+
+    return {
+      transactionId: data.identifier || data.uuid || data.transactionId || data.id,
+      endToEnd: data.endToEnd || data.end_to_end,
+      status: data.status,
+    };
+  }
+
+  // Chamada direta (sem proxy) — útil para dev/teste; em produção pode dar 403
+  const baseUrl = (config.baseUrl || "https://api.gatebox.com.br").replace(/\/$/, "");
+  const url = `${baseUrl}/v1/customers/pix/withdraw`;
+
+  const token = await gateboxAuthenticate(config);
+
+  const body: Record<string, unknown> = {
+    externalId: payload.externalId,
+    key: payload.key,
+    name: payload.name,
+    amount: payload.amount,
+  };
+  if (payload.description) body.description = payload.description;
+  if (payload.documentNumber) {
+    const doc = payload.documentNumber.replace(/\D/g, "");
+    if (doc.length === 11 || doc.length === 14) {
+      body.documentNumber = doc;
+    }
+  }
+
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gatebox withdraw error (${response.status}): ${errText}`);
+  }
+
+  const responseData = await response.json();
+  const data = responseData.data || responseData;
+
+  return {
+    transactionId: data.identifier || data.uuid || data.transactionId || data.id,
+    endToEnd: data.endToEnd || data.end_to_end,
+    status: data.status,
   };
 }
