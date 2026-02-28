@@ -88,6 +88,8 @@ export default function AdminUsuarios() {
   const [filteredUsers, setFilteredUsers] = useState<UserWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   
   // Transaction dialog
   const [transactionsDialogOpen, setTransactionsDialogOpen] = useState(false);
@@ -123,7 +125,11 @@ export default function AdminUsuarios() {
         )
       );
     }
+    setCurrentPage(1);
   }, [searchQuery, users]);
+
+  const totalPages = Math.ceil(filteredUsers.length / pageSize);
+  const paginatedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const fetchUsers = async () => {
     try {
@@ -606,7 +612,7 @@ export default function AdminUsuarios() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredUsers.map((userDetails) => (
+                  paginatedUsers.map((userDetails) => (
                     <TableRow key={userDetails.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -749,6 +755,46 @@ export default function AdminUsuarios() {
               </TableBody>
             </Table>
           </CardContent>
+
+          {/* Pagination */}
+          {filteredUsers.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Exibir</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                  className="border rounded-md px-2 py-1 bg-background text-foreground"
+                >
+                  {[10, 25, 50, 100, 500].map(size => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+                <span>de {filteredUsers.length} usuários</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages || 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Transactions Dialog */}
