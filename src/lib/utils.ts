@@ -45,3 +45,13 @@ export function nowInSaoPaulo(): Date {
 export function toSaoPauloISO(date: Date): string {
   return formatInTimeZone(date, SAO_PAULO_TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
+
+/**
+ * Parse a "YYYY-MM-DD" date string as a local date (not UTC).
+ * Avoids the timezone offset issue where new Date("2024-11-14") 
+ * is interpreted as UTC midnight, shifting the day in GMT-3.
+ */
+export function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
