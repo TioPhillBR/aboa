@@ -324,7 +324,7 @@ export default function SorteioDetail() {
           <div className="lg:col-span-2 space-y-6">
             {/* Roleta - Mostrar se tiver participantes */}
             {(isDrawing || isCompleted) && participants.length > 0 && (
-              <Card className="overflow-hidden border-2 border-primary/20">
+              <Card className="overflow-hidden border-2 border-primary/20 w-full max-w-full">
                 <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent">
                   <CardTitle className="flex items-center gap-2">
                     <div className="p-2 rounded-lg bg-primary/10">
@@ -339,7 +339,7 @@ export default function SorteioDetail() {
                     </CardDescription>
                   )}
                 </CardHeader>
-                <CardContent className="p-4 md:p-6">
+                <CardContent className="p-3 md:p-6 overflow-hidden">
                   <RouletteWheel 
                     participants={participants}
                     winner={winner}
