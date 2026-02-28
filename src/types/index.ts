@@ -12,6 +12,7 @@ export type PrizeStatus = 'pending' | 'processing' | 'delivered';
 export interface Profile {
   id: string;
   full_name: string;
+  email: string | null;
   avatar_url: string | null;
   phone: string | null;
   cpf: string | null;

@@ -549,8 +549,11 @@ export default function Perfil() {
                     <div className="relative">
                       <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        value={profile?.birth_date 
-                          ? format(new Date(profile.birth_date), "dd/MM/yyyy")
+                      value={profile?.birth_date 
+                          ? (() => {
+                              const [y, m, d] = profile.birth_date.split('-');
+                              return `${d}/${m}/${y}`;
+                            })()
                           : '—'
                         }
                         disabled
