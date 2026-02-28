@@ -98,6 +98,12 @@ export function LoginForm() {
               </div>
             </div>
 
+            <div className="flex justify-end">
+              <Link to="/esqueci-senha" className="text-sm text-primary hover:underline">
+                Esqueci minha senha
+              </Link>
+            </div>
+
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <>
