@@ -38,6 +38,7 @@ interface DashboardStats {
   openRaffles: number;
   totalScratchCards: number;
   totalTicketsSold: number;
+  totalTicketSalesRevenue: number;
   totalPrizesAwarded: number;
   totalWalletBalance: number;
   totalMainBalance: number;
@@ -75,6 +76,7 @@ export default function AdminDashboard() {
     openRaffles: 0,
     totalScratchCards: 0,
     totalTicketsSold: 0,
+    totalTicketSalesRevenue: 0,
     totalPrizesAwarded: 0,
     totalWalletBalance: 0,
     totalMainBalance: 0,
@@ -204,6 +206,7 @@ export default function AdminDashboard() {
         openRaffles: openRafflesResult.count || 0,
         totalScratchCards: scratchResult.count || 0,
         totalTicketsSold: ticketsResult.count || 0,
+        totalTicketSalesRevenue: totalTicketSalesRevenue,
         totalPrizesAwarded: totalPrizes,
         totalWalletBalance: totalBalance,
         totalMainBalance: platformMain,
@@ -322,8 +325,8 @@ export default function AdminDashboard() {
             <CardContent>
               <div className="text-3xl font-bold">{stats.totalTicketsSold}</div>
               <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                <Activity className="h-3 w-3" />
-                <span>{stats.openRaffles} sorteios ativos</span>
+                <DollarSign className="h-3 w-3" />
+                <span>R$ {stats.totalTicketSalesRevenue.toFixed(2)} em vendas</span>
               </div>
             </CardContent>
           </Card>
