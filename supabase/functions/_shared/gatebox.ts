@@ -1,9 +1,8 @@
 /**
  * Cliente Gatebox para Supabase Edge Functions (Deno)
- * Suporta chamadas diretas OU via proxy com IP fixo.
  * 
- * Se GATEBOX_PROXY_URL e GATEBOX_PROXY_SECRET estiverem configurados,
- * todas as chamadas à Gatebox passam pelo proxy no VPS.
+ * PIX IN (depósito/QR Code) → chamada DIRETA à Gatebox (sem proxy)
+ * PIX OUT (saque/payout)     → via proxy VPS com IP fixo
  */
 
 export interface GateboxConfig {
@@ -35,9 +34,9 @@ export interface GateboxCreatePixResponse {
 export interface GateboxPayoutPayload {
   externalId: string;
   amount: number;
-  key: string;       // Gatebox uses "key" (not "pixKey")
+  key: string;
   pixKeyType: string;
-  name: string;      // Recipient name (required by Gatebox)
+  name: string;
   description?: string;
 }
 
@@ -83,17 +82,17 @@ function getProxyConfig(): ProxyConfig | null {
 
 /**
  * Faz uma chamada à Gatebox, diretamente ou via proxy.
- * Quando o proxy está configurado, envia { path, method, headers, payload } para ele.
+ * @param useProxy - se true, tenta usar o proxy. Se false, sempre chama direto.
  */
 async function gateboxFetch(
   path: string,
   method: string,
   headers: Record<string, string>,
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  useProxy = true
 ): Promise<{ status: number; text: string }> {
-  const proxy = getProxyConfig();
-
-  const TIMEOUT_MS = 15_000; // 15 seconds max
+  const proxy = useProxy ? getProxyConfig() : null;
+  const TIMEOUT_MS = 15_000;
 
   if (proxy) {
     console.log(`Gatebox via PROXY → ${method} ${path}`);
@@ -107,12 +106,7 @@ async function gateboxFetch(
           "Content-Type": "application/json",
           Authorization: `Bearer ${proxy.proxySecret}`,
         },
-        body: JSON.stringify({
-          path,
-          method,
-          headers,
-          payload: body,
-        }),
+        body: JSON.stringify({ path, method, headers, payload: body }),
       });
       const text = await proxyResponse.text();
       console.log(`Proxy respondeu: ${proxyResponse.status} (${text.length} bytes)`);
@@ -155,7 +149,10 @@ async function gateboxFetch(
 
 // --- Auth ---
 
-export async function gateboxAuthenticate(config: GateboxConfig): Promise<string> {
+/**
+ * @param useProxy - repassado ao gateboxFetch
+ */
+export async function gateboxAuthenticate(config: GateboxConfig, useProxy = true): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now()) {
     return tokenCache.token;
   }
@@ -170,16 +167,15 @@ export async function gateboxAuthenticate(config: GateboxConfig): Promise<string
   console.log("Gatebox auth metadata", {
     usernameLength: username.length,
     passwordLength: password.length,
-    usernameHasWhitespace: /\s/.test(username),
-    passwordHasWhitespace: /\s/.test(password),
-    usingProxy: !!getProxyConfig(),
+    usingProxy: useProxy && !!getProxyConfig(),
   });
 
   const result = await gateboxFetch(
     "/v1/customers/auth/sign-in",
     "POST",
     {},
-    { username, password }
+    { username, password },
+    useProxy
   );
 
   if (result.status >= 400) {
@@ -209,13 +205,13 @@ export async function gateboxAuthenticate(config: GateboxConfig): Promise<string
   return data.access_token as string;
 }
 
-// --- PIX IN (QR Code) ---
+// --- PIX IN (QR Code) — SEMPRE DIRETO, sem proxy ---
 
 export async function gateboxCreatePix(
   config: GateboxConfig,
   payload: GateboxCreatePixPayload
 ): Promise<GateboxCreatePixResponse> {
-  const token = await gateboxAuthenticate(config);
+  const token = await gateboxAuthenticate(config, false); // DIRETO
 
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
@@ -233,7 +229,8 @@ export async function gateboxCreatePix(
     "/v1/customers/pix/create-immediate-qrcode",
     "POST",
     { Authorization: `Bearer ${token}` },
-    body
+    body,
+    false // DIRETO — sem proxy
   );
 
   if (result.status >= 400) {
@@ -258,20 +255,20 @@ export async function gateboxCreatePix(
   };
 }
 
-// --- PIX OUT (Saque / Payout) ---
+// --- PIX OUT (Saque / Payout) — VIA PROXY (IP fixo) ---
 
 export async function gateboxCreatePayout(
   config: GateboxConfig,
   payload: GateboxPayoutPayload
 ): Promise<GateboxPayoutResponse> {
-  const token = await gateboxAuthenticate(config);
+  const token = await gateboxAuthenticate(config, true); // VIA PROXY
 
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
     amount: payload.amount,
-    key: payload.key,           // Gatebox field name
+    key: payload.key,
     pixKeyType: payload.pixKeyType,
-    name: payload.name,         // Recipient name (required)
+    name: payload.name,
   };
   if (payload.description) body.description = payload.description;
 
@@ -279,7 +276,8 @@ export async function gateboxCreatePayout(
     "/v1/customers/pix/withdraw",
     "POST",
     { Authorization: `Bearer ${token}` },
-    body
+    body,
+    true // VIA PROXY
   );
 
   if (result.status >= 400) {
