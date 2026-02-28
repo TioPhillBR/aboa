@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift, Users, Headphones } from 'lucide-react';
+import { Wallet, User, LogOut, Settings, Ticket, Menu, Trophy, Gift, Users, Headphones, CircleDollarSign } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import {
@@ -91,6 +91,17 @@ export function Header() {
             <div className="h-10 w-24 bg-muted animate-pulse rounded-md" />
           ) : user && profile ? (
             <>
+              {/* Botão Depositar - Desktop */}
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="hidden md:flex gap-2 bg-gradient-primary hover:opacity-90 font-semibold"
+                onClick={() => navigate('/carteira')}
+              >
+                <CircleDollarSign className="h-4 w-4" />
+                <span>Depositar</span>
+              </Button>
+
               {/* Saldo da Carteira - Desktop */}
               <Link to="/carteira" className="hidden md:flex items-center gap-1">
                 <Button variant="outline" size="sm" className="gap-2 font-semibold">
@@ -264,6 +275,13 @@ export function Header() {
                           <p className="text-xs text-muted-foreground">+R$ {bonusBalance.toFixed(2)} bônus</p>
                         )}
                       </div>
+                    </Link>
+                    <Link 
+                      to="/carteira" 
+                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
+                    >
+                      <CircleDollarSign className="h-5 w-5" />
+                      <span>Depositar</span>
                     </Link>
                     <div className="h-px bg-border my-2" />
                   </>
