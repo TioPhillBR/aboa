@@ -93,23 +93,38 @@ async function gateboxFetch(
 ): Promise<{ status: number; text: string }> {
   const proxy = getProxyConfig();
 
+  const TIMEOUT_MS = 15_000; // 15 seconds max
+
   if (proxy) {
     console.log(`Gatebox via PROXY → ${method} ${path}`);
-    const proxyResponse = await fetch(proxy.proxyUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${proxy.proxySecret}`,
-      },
-      body: JSON.stringify({
-        path,
-        method,
-        headers,
-        payload: body,
-      }),
-    });
-    const text = await proxyResponse.text();
-    return { status: proxyResponse.status, text };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const proxyResponse = await fetch(proxy.proxyUrl, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${proxy.proxySecret}`,
+        },
+        body: JSON.stringify({
+          path,
+          method,
+          headers,
+          payload: body,
+        }),
+      });
+      const text = await proxyResponse.text();
+      console.log(`Proxy respondeu: ${proxyResponse.status} (${text.length} bytes)`);
+      return { status: proxyResponse.status, text };
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new Error(`Proxy timeout: sem resposta em ${TIMEOUT_MS / 1000}s. Verifique se o VPS está online.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   // Chamada direta
@@ -117,13 +132,25 @@ async function gateboxFetch(
   const url = `${baseUrl}${path}`;
   console.log(`Gatebox DIRETO → ${method} ${url}`);
 
-  const response = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", ...headers },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await response.text();
-  return { status: response.status, text };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...headers },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    return { status: response.status, text };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(`Gatebox timeout: sem resposta em ${TIMEOUT_MS / 1000}s.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // --- Auth ---
