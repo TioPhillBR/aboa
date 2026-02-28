@@ -52,6 +52,8 @@ import SuporteDetail from "./pages/SuporteDetail";
 import SorteioAoVivo from "./pages/SorteioAoVivo";
 import TermosUso from "./pages/TermosUso";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
+import EsqueciSenha from "./pages/EsqueciSenha";
+import RedefinirSenha from "./pages/RedefinirSenha";
 import NotFound from "./pages/NotFound";
 
 // Component to track user session
@@ -91,6 +93,8 @@ const App = () => (
                   {/* Public Game Routes */}
                   <Route path="/" element={<Index />} />
                   <Route path="/login" element={<Login />} />
+                  <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+                  <Route path="/redefinir-senha" element={<RedefinirSenha />} />
                   
                   {/* Registration Wizard Routes */}
                   <Route path="/cadastro" element={<CadastroIndex />} />
