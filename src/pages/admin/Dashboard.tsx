@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -307,24 +308,37 @@ export default function AdminDashboard() {
               <Calendar className="h-4 w-4" />
               {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={async () => {
-                const channel = supabase.channel('force-reload');
-                await channel.send({
-                  type: 'broadcast',
-                  event: 'force-reload',
-                  payload: { timestamp: Date.now() },
-                });
-                supabase.removeChannel(channel);
-                toast.success('Comando de recarregamento enviado a todos os usuários!');
-              }}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Forçar Reload
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  Forçar Reload
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Forçar recarregamento?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso irá recarregar a página de todos os usuários conectados imediatamente. Deseja continuar?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={async () => {
+                    const channel = supabase.channel('force-reload');
+                    await channel.send({
+                      type: 'broadcast',
+                      event: 'force-reload',
+                      payload: { timestamp: Date.now() },
+                    });
+                    supabase.removeChannel(channel);
+                    toast.success('Comando de recarregamento enviado a todos os usuários!');
+                  }}>
+                    Confirmar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
 
