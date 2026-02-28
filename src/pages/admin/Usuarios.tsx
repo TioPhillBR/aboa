@@ -42,6 +42,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { Profile, Wallet, WalletTransaction, UserRole } from '@/types';
+import { EditUserDialog } from '@/components/admin/EditUserDialog';
 import { 
   Users, 
   Search,
@@ -63,6 +64,8 @@ import {
   UserX,
   MoreHorizontal,
   Plus,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -108,6 +111,14 @@ export default function AdminUsuarios() {
   const [bonusAmount, setBonusAmount] = useState('');
   const [bonusDescription, setBonusDescription] = useState('');
   const [isAddingBonus, setIsAddingBonus] = useState(false);
+
+  // Edit user state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editUser, setEditUser] = useState<UserWithDetails | null>(null);
+
+  // Delete user state
+  const [deleteUser, setDeleteUser] = useState<UserWithDetails | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -255,6 +266,87 @@ export default function AdminUsuarios() {
     setBonusAmount('');
     setBonusDescription('');
     setBonusDialogOpen(true);
+  };
+
+  const openEditDialog = (userDetails: UserWithDetails) => {
+    setEditUser(userDetails);
+    setEditDialogOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUser) return;
+    setIsDeleting(true);
+    try {
+      // Delete related data in order
+      const userId = deleteUser.id;
+
+      // Delete wallet transactions first
+      if (deleteUser.wallet) {
+        await supabase.from('wallet_transactions').delete().eq('wallet_id', deleteUser.wallet.id);
+        await supabase.from('wallets').delete().eq('id', deleteUser.wallet.id);
+      }
+
+      // Delete user roles
+      await supabase.from('user_roles').delete().eq('user_id', userId);
+
+      // Delete referral codes and referrals
+      await supabase.from('referrals').delete().or(`referrer_id.eq.${userId},referred_id.eq.${userId}`);
+      await supabase.from('referral_codes').delete().eq('user_id', userId);
+
+      // Delete sessions and locations
+      await supabase.from('user_sessions').delete().eq('user_id', userId);
+      await supabase.from('user_locations').delete().eq('user_id', userId);
+
+      // Delete scratch chances
+      await supabase.from('scratch_chances').delete().eq('user_id', userId);
+
+      // Delete raffle tickets
+      await supabase.from('raffle_tickets').delete().eq('user_id', userId);
+
+      // Delete support messages and tickets
+      await supabase.from('support_messages').delete().eq('user_id', userId);
+      await supabase.from('support_tickets').delete().eq('user_id', userId);
+
+      // Delete pix deposits
+      await supabase.from('pix_deposits').delete().eq('user_id', userId);
+
+      // Delete payment transactions
+      await supabase.from('payment_transactions').delete().eq('user_id', userId);
+
+      // Delete user withdrawals
+      await supabase.from('user_withdrawals').delete().eq('user_id', userId);
+
+      // Delete prize payments
+      await supabase.from('prize_payments').delete().eq('user_id', userId);
+
+      // Delete share tracking and events
+      const { data: shareTracking } = await supabase.from('share_tracking').select('id').eq('sharer_id', userId);
+      if (shareTracking && shareTracking.length > 0) {
+        const trackingIds = shareTracking.map(s => s.id);
+        await supabase.from('share_events').delete().in('share_tracking_id', trackingIds);
+        await supabase.from('share_tracking').delete().eq('sharer_id', userId);
+      }
+
+      // Delete affiliate data
+      if (deleteUser.affiliateId) {
+        await supabase.from('affiliate_sales').delete().eq('affiliate_id', deleteUser.affiliateId);
+        await supabase.from('affiliate_withdrawals').delete().eq('affiliate_id', deleteUser.affiliateId);
+        await supabase.from('affiliates').delete().eq('id', deleteUser.affiliateId);
+      }
+
+      // Finally delete profile
+      const { error } = await supabase.from('profiles').delete().eq('id', userId);
+      if (error) throw error;
+
+      toast({ title: `Usuário ${deleteUser.full_name} removido com sucesso` });
+      setDeleteUser(null);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast({ title: 'Erro ao excluir usuário', description: 'Verifique se existem dados vinculados.', variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getTransactionDetails = (type: string): { label: string; icon: React.ReactNode; color: string } => {
@@ -744,6 +836,23 @@ export default function AdminUsuarios() {
                                     Suspender Afiliado
                                   </DropdownMenuItem>
                                 ) : null}
+                                
+                                <DropdownMenuSeparator />
+                                
+                                {/* Edit Profile */}
+                                <DropdownMenuItem onClick={() => openEditDialog(userDetails)}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Editar Perfil
+                                </DropdownMenuItem>
+                                
+                                {/* Delete User */}
+                                <DropdownMenuItem 
+                                  onClick={() => setDeleteUser(userDetails)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Excluir Usuário
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
@@ -978,6 +1087,59 @@ export default function AdminUsuarios() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit User Dialog */}
+        <EditUserDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          user={editUser}
+          onSaved={fetchUsers}
+        />
+
+        {/* Delete User Confirmation */}
+        <AlertDialog open={deleteUser !== null} onOpenChange={(open) => !open && setDeleteUser(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir Usuário?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação é irreversível. Todos os dados de <strong>{deleteUser?.full_name}</strong> serão 
+                permanentemente removidos, incluindo carteira, transações, tickets e histórico.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {deleteUser && (
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                <Avatar>
+                  <AvatarImage src={deleteUser.avatar_url || ''} />
+                  <AvatarFallback>{deleteUser.full_name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{deleteUser.full_name}</p>
+                  <p className="text-sm text-muted-foreground">{deleteUser.email || deleteUser.phone || 'Sem contato'}</p>
+                </div>
+              </div>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteUser}
+                disabled={isDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir Permanentemente
+                  </>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AdminLayout>
   );
