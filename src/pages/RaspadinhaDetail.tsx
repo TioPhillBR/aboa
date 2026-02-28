@@ -34,7 +34,7 @@ export default function RaspadinhaDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { scratchCard, symbols, myChances, isLoading, buyChance, revealChance, refetch } = useScratchCard(id || '');
-  const { totalBalance, awardPrize, refetch: refetchWallet } = useWallet();
+  const { totalBalance, refetch: refetchWallet } = useWallet();
   const isMobile = useIsMobile();
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const { addNotification } = useNotifications();
@@ -119,13 +119,12 @@ export default function RaspadinhaDetail() {
         console.error('Error revealing chance:', err)
       );
 
-      // Se ganhou, creditar prêmio e mostrar celebração
-      if (isWinner && prize > 0) {
-        // Creditar prêmio em background - não bloquear a UI
-        awardPrize(prize, `Prêmio raspadinha - ${scratchCard?.title}`, scratchCard?.id)
-          .then(() => refetchWallet())
-          .catch(err => console.error('Error awarding prize:', err));
+      // Prêmio já foi creditado atomicamente na edge function buy-scratch-chance.
+      // Apenas atualizar o saldo local.
+      refetchWallet();
 
+      // Se ganhou, mostrar celebração
+      if (isWinner && prize > 0) {
         setCelebrationPrize(prize);
         setShowCelebration(true);
 
@@ -140,7 +139,7 @@ export default function RaspadinhaDetail() {
     } catch (err) {
       console.error('Error in handleReveal:', err);
     }
-  }, [activeChance, revealChance, awardPrize, scratchCard, addNotification, refetchWallet]);
+  }, [activeChance, revealChance, scratchCard, addNotification, refetchWallet]);
 
   const handleCloseCelebration = () => {
     setShowCelebration(false);
