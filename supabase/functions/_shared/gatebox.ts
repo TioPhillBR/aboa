@@ -258,13 +258,22 @@ export async function gateboxCreatePix(
   };
 }
 
-// --- PIX OUT (Saque / Payout) — VIA PROXY (IP fixo exigido pela Gatebox) ---
+// --- PIX OUT (Saque / Payout) — Via servidor dedicado (mesmo IP dos depósitos) ---
 
 export async function gateboxCreatePayout(
-  config: GateboxConfig,
+  _config: GateboxConfig,
   payload: GateboxPayoutPayload
 ): Promise<GateboxPayoutResponse> {
-  const token = await gateboxAuthenticate(config, true); // VIA PROXY
+  // Saques chamam o endpoint dedicado do servidor (não o proxy genérico)
+  // O servidor faz auth + withdraw internamente, usando IP fixo whitelistado
+  const serverUrl = (Deno.env.get("GATEBOX_PROXY_URL") || "").trim().replace(/\/$/, "");
+  const serverSecret = (Deno.env.get("GATEBOX_PROXY_SECRET") || "").trim();
+
+  if (!serverUrl || !serverSecret) {
+    throw new Error("GATEBOX_PROXY_URL ou GATEBOX_PROXY_SECRET não configurados. O servidor com IP fixo é necessário para saques.");
+  }
+
+  const withdrawEndpoint = `${serverUrl}/api/gatebox/withdraw`;
 
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
@@ -275,15 +284,34 @@ export async function gateboxCreatePayout(
   };
   if (payload.description) body.description = payload.description;
 
-  console.log("Gatebox PIX OUT (saque) → VIA PROXY (IP fixo)");
+  console.log(`Gatebox PIX OUT (saque) → Servidor dedicado: ${withdrawEndpoint}`);
 
-  const result = await gateboxFetch(
-    "/v1/customers/pix/withdraw",
-    "POST",
-    { Authorization: `Bearer ${token}` },
-    body,
-    true // VIA PROXY — Gatebox exige IP fixo para saques
-  );
+  const TIMEOUT_MS = 25_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  let result: { status: number; text: string };
+  try {
+    const response = await fetch(withdrawEndpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serverSecret}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+    console.log(`Servidor withdraw respondeu: ${response.status} (${text.length} bytes)`);
+    result = { status: response.status, text };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(`Servidor timeout: sem resposta em ${TIMEOUT_MS / 1000}s. Verifique se o servidor está online.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (result.status >= 400) {
     throw new Error(`Gatebox Payout error (${result.status}): ${result.text}`);
