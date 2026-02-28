@@ -297,7 +297,7 @@ export default function Carteira() {
                     R$ {balance.toFixed(2)}
                   </CardTitle>
                   <p className="text-xs text-primary-foreground/60 mt-1">
-                    Disponível para compras
+                    Disponível para compras e saques
                   </p>
                 </CardHeader>
                 
@@ -628,7 +628,7 @@ export default function Carteira() {
                     R$ {bonusBalance.toFixed(2)}
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Bônus de indicações • Não sacável
+                    Exclusivo para jogos • Não sacável
                   </p>
                 </CardHeader>
                 
@@ -636,7 +636,7 @@ export default function Carteira() {
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
                     <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-muted-foreground">
-                      O saldo bônus só pode ser usado para jogar e não pode ser sacado.
+                      O saldo bônus é exclusivamente destinado para jogos (raspadinhas e sorteios) e <strong>não pode ser sacado em nenhuma circunstância</strong>. Saques são realizados apenas a partir do saldo principal.
                     </p>
                   </div>
                 </CardContent>
