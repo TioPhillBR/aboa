@@ -258,14 +258,13 @@ export async function gateboxCreatePix(
   };
 }
 
-// --- PIX OUT (Saque / Payout) — DIRETO (sem proxy) ---
+// --- PIX OUT (Saque / Payout) — VIA PROXY (IP fixo exigido pela Gatebox) ---
 
 export async function gateboxCreatePayout(
   config: GateboxConfig,
   payload: GateboxPayoutPayload
 ): Promise<GateboxPayoutResponse> {
-  // Saques usam chamada DIRETA (sem proxy)
-  const token = await gateboxAuthenticate(config, false);
+  const token = await gateboxAuthenticate(config, true); // VIA PROXY
 
   const body: Record<string, unknown> = {
     externalId: payload.externalId,
@@ -276,14 +275,14 @@ export async function gateboxCreatePayout(
   };
   if (payload.description) body.description = payload.description;
 
-  console.log("Gatebox PIX OUT (saque) → chamada DIRETA (sem proxy)");
+  console.log("Gatebox PIX OUT (saque) → VIA PROXY (IP fixo)");
 
   const result = await gateboxFetch(
     "/v1/customers/pix/withdraw",
     "POST",
     { Authorization: `Bearer ${token}` },
     body,
-    false // DIRETO — sem proxy para saques
+    true // VIA PROXY — Gatebox exige IP fixo para saques
   );
 
   if (result.status >= 400) {
