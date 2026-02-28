@@ -744,6 +744,21 @@ export default function AdminConfiguracoes() {
                     />
                   </FormField>
                 )}
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Exibir Botão de Saque</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Controla a visibilidade do botão de saque para os usuários na carteira
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.payment.withdrawalButtonVisible}
+                    onCheckedChange={(checked) => updateSettings('payment', { withdrawalButtonVisible: checked })}
+                  />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

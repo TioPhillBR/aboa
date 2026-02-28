@@ -28,6 +28,7 @@ export interface PaymentSettings {
   withdrawalFee: number;
   autoApproveWithdrawals: boolean;
   autoApproveLimit: number;
+  withdrawalButtonVisible: boolean;
 }
 
 export interface GameSettings {
@@ -120,6 +121,7 @@ const defaultSettings: AllSettings = {
     withdrawalFee: 0,
     autoApproveWithdrawals: false,
     autoApproveLimit: 100,
+    withdrawalButtonVisible: true,
   },
   games: {
     scratchCardEnabled: true,
