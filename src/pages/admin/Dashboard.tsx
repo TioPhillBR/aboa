@@ -106,12 +106,12 @@ export default function AdminDashboard() {
         supabase.from('raffles').select('*', { count: 'exact', head: true }).eq('status', 'open'),
         supabase.from('scratch_cards').select('*', { count: 'exact', head: true }),
         supabase.from('raffle_tickets').select('*', { count: 'exact', head: true }),
-        supabase.from('scratch_chances').select('prize_won').not('prize_won', 'is', null).gt('prize_won', 0),
-        supabase.from('wallets').select('balance'),
-        supabase.from('wallet_transactions').select('amount').eq('type', 'deposit'),
+        supabase.from('scratch_chances').select('prize_won').not('prize_won', 'is', null).gt('prize_won', 0).limit(10000),
+        supabase.from('wallets').select('balance').limit(10000),
+        supabase.from('wallet_transactions').select('amount').eq('type', 'deposit').limit(10000),
         supabase.from('raffles').select('id, title, total_numbers, draw_date, price').eq('status', 'open').limit(5),
         supabase.from('raffles').select('id, title, winner_id, updated_at').eq('status', 'completed').not('winner_id', 'is', null).order('updated_at', { ascending: false }).limit(5),
-        supabase.from('scratch_chances').select('prize_won, is_revealed').eq('is_revealed', true)
+        supabase.from('scratch_chances').select('prize_won, is_revealed').eq('is_revealed', true).limit(10000)
       ]);
 
       // Calculate totals
