@@ -121,6 +121,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
+    const interval = setInterval(() => {
+      fetchDashboardData();
+    }, 30000);
+    return () => clearInterval(interval);
   }, [dateRange]);
 
   const applyDateFilter = (query: any, dateCol: string = 'created_at') => {
