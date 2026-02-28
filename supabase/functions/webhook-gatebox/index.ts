@@ -26,6 +26,20 @@ serve(async (req) => {
     const rawBody = await req.text();
     console.log("Webhook Gatebox RAW body:", rawBody);
 
+    // --- Verificação de autenticação do webhook ---
+    const webhookSecret = (Deno.env.get("GATEBOX_PROXY_SECRET") || "").trim();
+    if (webhookSecret) {
+      const authHeader = req.headers.get("Authorization") || req.headers.get("x-webhook-secret") || "";
+      const querySecret = new URL(req.url).searchParams.get("secret") || "";
+      const providedSecret = authHeader.replace(/^Bearer\s+/i, "") || querySecret;
+      
+      if (providedSecret && providedSecret !== webhookSecret) {
+        console.warn("Webhook Gatebox: secret inválido fornecido");
+        return jsonResponse({ error: "Unauthorized" }, 401);
+      }
+      // Se nenhum secret fornecido, aceitar (Gatebox pode não enviar)
+    }
+
     let body: Record<string, unknown>;
     try {
       body = JSON.parse(rawBody);
@@ -48,14 +62,14 @@ serve(async (req) => {
     const endToEnd = body.endToEnd || body.end_to_end || (body.bankData as Record<string, unknown>)?.endtoendId;
     const status = ((body.status || (body.transaction as Record<string, unknown>)?.status || body.statusTransaction || "") as string).toLowerCase();
     const amount = body.amount ?? (body.transaction as Record<string, unknown>)?.amount ?? body.value ?? 0;
-    const eventType = ((body.type || body.eventType || "") as string).toUpperCase();
+    const eventType = ((body.type || body.eventType || body.event || "") as string).toUpperCase();
 
     console.log("Webhook Gatebox parsed:", {
       transactionId,
       externalId,
       status,
       eventType,
-      amount,
+      amount: String(amount),
       endToEnd,
       bodyKeys: Object.keys(body),
     });
@@ -101,13 +115,9 @@ serve(async (req) => {
     if (isPayOut) {
       console.log("Webhook PIX OUT detectado:", { refs, status, isFailed });
 
-      // Buscar saque pendente/approved pelo externalId pattern "saque_{userId}_{timestamp}"
-      // Ou pelo transaction_id se armazenado
       let withdrawal: { id: string; user_id: string; amount: number; status: string } | null = null;
 
-      // Tentar buscar por externalId na description ou pelo pattern
-      if (externalId && externalId.startsWith("saque_")) {
-        // Extrair userId do externalId: saque_{userId}_{timestamp}
+      if (externalId && typeof externalId === "string" && externalId.startsWith("saque_")) {
         const parts = externalId.split("_");
         if (parts.length >= 3) {
           const userId = parts[1];
@@ -118,7 +128,7 @@ serve(async (req) => {
             .in("status", ["pending", "approved"])
             .order("created_at", { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
           if (data) withdrawal = data;
         }
       }
@@ -128,8 +138,13 @@ serve(async (req) => {
         return jsonResponse({ message: "Saque não encontrado" });
       }
 
+      // Idempotência: se já foi pago/rejeitado, ignorar
+      if (withdrawal.status === "paid" || withdrawal.status === "rejected") {
+        console.log("Saque já processado, ignorando webhook duplicado:", withdrawal.id);
+        return jsonResponse({ message: "Saque já processado" });
+      }
+
       if (isFailed) {
-        // Saque falhou na Gatebox: reverter saldo e marcar como rejeitado
         console.log("PIX OUT falhou, revertendo saldo:", {
           withdrawalId: withdrawal.id,
           amount: withdrawal.amount,
@@ -139,7 +154,7 @@ serve(async (req) => {
           .from("wallets")
           .select("id, balance")
           .eq("user_id", withdrawal.user_id)
-          .single();
+          .maybeSingle();
 
         if (wallet) {
           const newBalance = Number(wallet.balance) + Number(withdrawal.amount);
@@ -171,7 +186,6 @@ serve(async (req) => {
         return jsonResponse({ message: "Saque marcado como falho e saldo revertido" });
       }
 
-      // Saque confirmado pela Gatebox
       if (isPaid || status === "completed" || status === "paid" || status === "approved") {
         await supabaseAdmin
           .from("user_withdrawals")
@@ -190,7 +204,7 @@ serve(async (req) => {
     }
 
     // ============================================================
-    // PIX IN (Depósito) - Fluxo original
+    // PIX IN (Depósito) - Fluxo principal
     // ============================================================
 
     // Eventos de falha
@@ -202,7 +216,7 @@ serve(async (req) => {
           .select("id")
           .eq("external_id", ref)
           .eq("status", "pending")
-          .single();
+          .maybeSingle();
         if (data) {
           failedDeposit = data;
           break;
@@ -230,7 +244,7 @@ serve(async (req) => {
         .select("id, user_id, amount, external_id, status")
         .eq("external_id", ref)
         .eq("status", "pending")
-        .single();
+        .maybeSingle();
       if (data) {
         deposit = data;
         break;
@@ -241,9 +255,9 @@ serve(async (req) => {
       const { data: byTransactionId } = await supabaseAdmin
         .from("pix_deposits")
         .select("id, user_id, amount, external_id, status")
-        .eq("transaction_id", transactionId || externalId)
+        .eq("transaction_id", String(transactionId || externalId))
         .eq("status", "pending")
-        .single();
+        .maybeSingle();
       if (byTransactionId) deposit = byTransactionId;
     }
 
@@ -252,7 +266,9 @@ serve(async (req) => {
       return jsonResponse({ message: "Depósito não encontrado" });
     }
 
+    // Idempotência: depósito já processado
     if (deposit.status !== "pending") {
+      console.log("Depósito já processado, ignorando webhook duplicado:", deposit.id);
       return jsonResponse({ message: "Depósito já processado" });
     }
 
@@ -265,7 +281,7 @@ serve(async (req) => {
       .from("wallets")
       .select("id, balance")
       .eq("user_id", deposit.user_id)
-      .single();
+      .maybeSingle();
 
     if (!wallet) {
       console.error("Carteira não encontrada para user:", deposit.user_id);
@@ -274,9 +290,11 @@ serve(async (req) => {
 
     const newBalance = Number(wallet.balance) + amountNum;
 
+    // Atualizar depósito, saldo e registrar transação
     await supabaseAdmin.from("pix_deposits").update({
       status: "paid",
       paid_at: new Date().toISOString(),
+      transaction_id: String(transactionId || ""),
     }).eq("id", deposit.id);
 
     await supabaseAdmin.from("wallet_transactions").insert({
