@@ -1,0 +1,1 @@
+INSERT INTO public.wallets (user_id, balance) VALUES ('c08f8767-deed-4a4c-978f-f775e63d51d0', 0) ON CONFLICT (user_id) DO NOTHING;
