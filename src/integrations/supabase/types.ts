@@ -1475,6 +1475,14 @@ export type Database = {
       generate_affiliate_code: { Args: never; Returns: string }
       generate_referral_code: { Args: never; Returns: string }
       generate_share_code: { Args: never; Returns: string }
+      get_platform_withdrawal_stats: {
+        Args: never
+        Returns: {
+          available_for_withdrawal: number
+          total_prizes_awarded: number
+          total_ticket_sales: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

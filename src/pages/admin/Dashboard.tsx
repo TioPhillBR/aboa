@@ -108,7 +108,8 @@ export default function AdminDashboard() {
         activeRafflesResult,
         recentWinnersResult,
         scratchPlaysResult,
-        allTransactionsResult
+        allTransactionsResult,
+        withdrawalStatsResult
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('raffles').select('*', { count: 'exact', head: true }),
@@ -121,7 +122,8 @@ export default function AdminDashboard() {
         supabase.from('raffles').select('id, title, total_numbers, draw_date, price').eq('status', 'open').limit(5),
         supabase.from('raffles').select('id, title, winner_id, updated_at').eq('status', 'completed').not('winner_id', 'is', null).order('updated_at', { ascending: false }).limit(5),
         supabase.from('scratch_chances').select('prize_won, is_revealed').eq('is_revealed', true).limit(10000),
-        supabase.from('wallet_transactions').select('wallet_id, amount, source_type, created_at').order('created_at', { ascending: true }).limit(50000)
+        supabase.from('wallet_transactions').select('wallet_id, amount, source_type, created_at').order('created_at', { ascending: true }).limit(50000),
+        supabase.rpc('get_platform_withdrawal_stats')
       ]);
 
       // Calculate totals
@@ -130,9 +132,20 @@ export default function AdminDashboard() {
       const totalBalance = wallets.reduce((sum: number, w: any) => sum + Number(w.balance || 0), 0);
       const totalDeposits = (depositsResult.data || []).reduce((sum, d) => sum + (d.amount || 0), 0);
 
+      // Get withdrawal stats from RPC
+      const withdrawalStats = withdrawalStatsResult.data;
+      const totalAvailableWithdrawal = withdrawalStats && Array.isArray(withdrawalStats) && withdrawalStats.length > 0
+        ? Number(withdrawalStats[0].available_for_withdrawal || 0)
+        : 0;
+      const totalTicketSalesRevenue = withdrawalStats && Array.isArray(withdrawalStats) && withdrawalStats.length > 0
+        ? Number(withdrawalStats[0].total_ticket_sales || 0)
+        : 0;
+      const totalPrizesAwardedRpc = withdrawalStats && Array.isArray(withdrawalStats) && withdrawalStats.length > 0
+        ? Number(withdrawalStats[0].total_prizes_awarded || 0)
+        : 0;
+
       // Calculate platform-wide main vs bonus balances
       const allTx = allTransactionsResult.data || [];
-      // Group transactions by wallet_id
       const txByWallet = new Map<string, any[]>();
       for (const tx of allTx) {
         const list = txByWallet.get(tx.wallet_id) || [];
@@ -195,7 +208,7 @@ export default function AdminDashboard() {
         totalWalletBalance: totalBalance,
         totalMainBalance: platformMain,
         totalBonusBalance: platformBonus,
-        totalAvailableWithdrawal: platformMain,
+        totalAvailableWithdrawal: totalAvailableWithdrawal,
         totalDeposits: totalDeposits,
         totalScratchPlays,
         totalScratchWins,
@@ -427,7 +440,7 @@ export default function AdminDashboard() {
               </div>
               <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                 <Banknote className="h-3 w-3" />
-                <span>Somente saldo principal</span>
+                <span>Vendas - Prêmios</span>
               </div>
             </CardContent>
           </Card>
