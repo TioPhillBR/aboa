@@ -19,8 +19,12 @@ export default function EsqueciSenha() {
     setError(null);
     setIsLoading(true);
 
+    const redirectUrl = window.location.hostname.includes('localhost') || window.location.hostname.includes('lovable.app')
+      ? `${window.location.origin}/redefinir-senha`
+      : 'https://aboaloteria.com.br/redefinir-senha';
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/redefinir-senha`,
+      redirectTo: redirectUrl,
     });
 
     if (error) {
