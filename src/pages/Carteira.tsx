@@ -4,6 +4,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { Header } from '@/components/layout/Header';
 import { useWallet } from '@/hooks/useWallet';
 import { useAuth } from '@/hooks/useAuth';
+import { usePlatformSettings } from '@/hooks/usePlatformSettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +57,7 @@ type WithdrawStep = 'form' | 'confirm';
 export default function Carteira() {
   const { user } = useAuth();
   const { wallet, transactions, balance, bonusBalance, isLoading, deposit, refetch } = useWallet();
+  const { settings: platformSettings } = usePlatformSettings();
   const { toast } = useToast();
   
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -405,6 +407,7 @@ export default function Carteira() {
                   </Dialog>
 
                   {/* Botão Sacar */}
+                  {platformSettings.payment.withdrawalButtonVisible && (
                   <Dialog open={withdrawOpen} onOpenChange={(open) => {
                     setWithdrawOpen(open);
                     if (!open) { setWithdrawAmount(''); setWithdrawStep('form'); }
@@ -618,6 +621,7 @@ export default function Carteira() {
                       </div>
                     </DialogContent>
                   </Dialog>
+                  )}
 
                 </CardContent>
               </Card>
