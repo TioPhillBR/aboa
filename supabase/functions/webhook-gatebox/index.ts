@@ -27,18 +27,22 @@ serve(async (req) => {
     console.log("Webhook Gatebox RAW body:", rawBody);
 
     // --- Verificação de autenticação do webhook ---
-    const webhookSecret = (Deno.env.get("GATEBOX_PROXY_SECRET") || "").trim();
+    // IMPORTANTE: A Gatebox envia seus próprios headers de auth nos callbacks.
+    // NÃO devemos comparar com GATEBOX_PROXY_SECRET (que é para nosso proxy VPS).
+    // Usamos GATEBOX_WEBHOOK_SECRET se configurado; caso contrário, aceitamos
+    // todos os callbacks (a Gatebox já valida por IP/URL cadastrada no painel).
+    const webhookSecret = (Deno.env.get("GATEBOX_WEBHOOK_SECRET") || "").trim();
     if (webhookSecret) {
-      const authHeader = req.headers.get("Authorization") || req.headers.get("x-webhook-secret") || "";
       const querySecret = new URL(req.url).searchParams.get("secret") || "";
-      const providedSecret = authHeader.replace(/^Bearer\s+/i, "") || querySecret;
+      const customHeader = req.headers.get("x-webhook-secret") || "";
+      const providedSecret = querySecret || customHeader;
       
       if (providedSecret && providedSecret !== webhookSecret) {
         console.warn("Webhook Gatebox: secret inválido fornecido");
         return jsonResponse({ error: "Unauthorized" }, 401);
       }
-      // Se nenhum secret fornecido, aceitar (Gatebox pode não enviar)
     }
+    // Callbacks da Gatebox sem secret customizado são aceitos normalmente
 
     let body: Record<string, unknown>;
     try {
