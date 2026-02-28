@@ -151,7 +151,7 @@ export function RaffleCard({ raffle }: RaffleCardProps) {
             isDrawing 
               ? 'bg-warning hover:bg-warning/90 text-warning-foreground animate-pulse' 
               : isCompleted 
-                ? 'bg-secondary hover:bg-secondary/80' 
+                ? 'bg-primary hover:bg-primary/90 text-primary-foreground' 
                 : 'bg-gradient-primary hover:opacity-90 shadow-lg shadow-primary/25'
           }`}
           disabled={isCompleted}
