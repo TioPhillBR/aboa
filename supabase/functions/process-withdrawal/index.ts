@@ -14,29 +14,24 @@ function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
 }
 
-function internalErrorResponse(message: string): Response {
-  return jsonResponse({ error: message }, 500);
-}
-
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
+  try { return JSON.stringify(error); } catch { return String(error); }
 }
 
 function getGateboxConfig(): { username: string; password: string; baseUrl?: string } | null {
   const username = Deno.env.get("GATEBOX_USERNAME");
   const password = Deno.env.get("GATEBOX_PASSWORD");
   if (!username || !password) return null;
+  return { username, password, baseUrl: Deno.env.get("GATEBOX_BASE_URL") || "https://api.gatebox.com.br" };
+}
 
-  return {
-    username,
-    password,
-    baseUrl: Deno.env.get("GATEBOX_BASE_URL") || "https://api.gatebox.com.br",
-  };
+function sanitizeName(name: string): string {
+  return name
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim() || "Usuario";
 }
 
 serve(async (req) => {
@@ -45,6 +40,7 @@ serve(async (req) => {
   }
 
   try {
+    // 1. Auth — rápida, sem chamadas externas
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return jsonResponse({ error: "Não autorizado" }, 401);
@@ -62,6 +58,7 @@ serve(async (req) => {
       return jsonResponse({ error: "Token inválido" }, 401);
     }
 
+    // 2. Parse payload
     const payload = await req.json().catch(() => null);
     if (!payload || typeof payload !== "object") {
       return jsonResponse({ error: "Payload inválido" }, 400);
@@ -75,7 +72,6 @@ serve(async (req) => {
     if (!Number.isFinite(amount) || amount < 1) {
       return jsonResponse({ error: "Valor mínimo para saque é R$ 1,00" }, 400);
     }
-
     if (!pixKey || !pixKeyType) {
       return jsonResponse({ error: "Chave PIX não informada" }, 400);
     }
@@ -87,29 +83,32 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch wallet AND user profile (for name needed by Gatebox)
+    // 3. Buscar wallet, profile e transações EM PARALELO (single round-trip)
     const [walletResult, profileResult] = await Promise.all([
-      supabaseAdmin.from("wallets").select("id, balance").eq("user_id", userId).single(),
-      supabaseAdmin.from("profiles").select("full_name").eq("id", userId).single(),
+      supabaseAdmin.from("wallets").select("id, balance").eq("user_id", userId).maybeSingle(),
+      supabaseAdmin.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
     ]);
 
-    const { data: wallet, error: walletError } = walletResult;
-    const recipientName = profileResult.data?.full_name || "Usuario";
-
-    if (walletError || !wallet) {
+    const wallet = walletResult.data;
+    if (walletResult.error || !wallet) {
       return jsonResponse({ error: "Carteira não encontrada" }, 404);
     }
 
-    const { data: txs, error: txsError } = await supabaseAdmin
-      .from("wallet_transactions")
-      .select("amount, source_type, created_at")
-      .eq("wallet_id", wallet.id)
-      .order("created_at", { ascending: true });
+    const total = Number(wallet.balance);
+    const recipientName = profileResult.data?.full_name || "Usuario";
 
-    if (txsError) {
-      console.error("Erro ao calcular saldo principal (wallet_transactions):", txsError);
-      return internalErrorResponse("Erro ao verificar saldo disponível para saque");
+    // 4. Calcular saldo principal vs bônus
+    // Buscar transações SOMENTE se necessário (amount <= total)
+    if (amount > total) {
+      return jsonResponse({ error: "Saldo insuficiente", availableBalance: total }, 400);
     }
+
+    const { data: txs } = await supabaseAdmin
+      .from("wallet_transactions")
+      .select("amount, source_type")
+      .eq("wallet_id", wallet.id)
+      .order("created_at", { ascending: true })
+      .limit(10000);
 
     let principal = 0;
     let bonus = 0;
@@ -134,7 +133,6 @@ serve(async (req) => {
       }
     }
 
-    const total = Number(wallet.balance);
     const normalizedBonus = Math.max(0, Math.min(bonus, total));
     const normalizedPrincipal = Math.max(0, total - normalizedBonus);
 
@@ -142,121 +140,86 @@ serve(async (req) => {
       return jsonResponse({ error: "Saldo principal insuficiente", availableBalance: normalizedPrincipal }, 400);
     }
 
-    const externalId = `saque_${userId}_${Date.now()}`;
-
-    const { data: withdrawal, error: wdError } = await supabaseAdmin
-      .from("user_withdrawals")
-      .insert({
-        user_id: userId,
-        amount,
-        pix_key: pixKey,
-        pix_key_type: pixKeyType,
-        status: "pending",
-      })
-      .select("id")
-      .single();
-
-    if (wdError || !withdrawal?.id) {
-      console.error("Erro ao criar saque:", wdError ?? "Registro de saque sem id retornado");
-      return internalErrorResponse("Erro ao registrar saque");
-    }
-
-    const newBalance = total - amount;
-
-    const { error: updateWalletError } = await supabaseAdmin
-      .from("wallets")
-      .update({ balance: newBalance })
-      .eq("id", wallet.id);
-
-    if (updateWalletError) {
-      console.error("Erro ao atualizar saldo da carteira:", updateWalletError);
-      return internalErrorResponse("Erro ao atualizar saldo da carteira");
-    }
-
-    const { error: insertTxError } = await supabaseAdmin.from("wallet_transactions").insert({
-      wallet_id: wallet.id,
-      amount: -amount,
-      type: "withdrawal" as any,
-      description: `Saque via PIX - ${pixKey}`,
-      reference_id: withdrawal.id,
-      source_type: "withdrawal",
-    });
-
-    if (insertTxError) {
-      console.error("Erro ao registrar transação de saque:", insertTxError);
-      return internalErrorResponse("Erro ao registrar transação do saque");
-    }
-
+    // 5. FLUXO OTIMIZADO: Chamar Gatebox PRIMEIRO (antes de debitar)
     const gateboxConfig = getGateboxConfig();
+    const externalId = `saque_${userId}_${Date.now()}`;
     let payoutResult: { automatic: boolean; transactionId?: string; status?: string; endToEnd?: string } = {
       automatic: false,
     };
 
     if (gateboxConfig) {
       try {
-        // Sanitize name for Gatebox (remove accents, special chars)
-        const sanitizedName = recipientName
-          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-zA-Z\s]/g, "")
-          .replace(/\s+/g, " ")
-          .trim() || "Usuario";
+        const sanitizedName = sanitizeName(recipientName);
 
-        console.log("Tentando PIX out automático via Gatebox...", {
+        console.log("PIX OUT via Gatebox:", {
           externalId,
           amount,
           pixKeyType,
-          pixKeyMasked: `${pixKey.slice(0, 4)}***`,
           name: sanitizedName,
         });
 
         const payoutResponse = await gateboxCreatePayout(gateboxConfig, {
           externalId,
           amount,
-          key: pixKey,           // Gatebox uses "key" field
+          key: pixKey,
           pixKeyType,
-          name: sanitizedName,   // Recipient name (required)
+          name: sanitizedName,
           description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
         });
 
-        const transactionId = typeof payoutResponse.transactionId === "string" ? payoutResponse.transactionId : undefined;
-        const status = typeof payoutResponse.status === "string" ? payoutResponse.status : undefined;
-        const endToEnd = typeof payoutResponse.endToEnd === "string" ? payoutResponse.endToEnd : undefined;
-
-        if (!transactionId && !status && !endToEnd) {
-          throw new Error("Resposta da Gatebox em formato inesperado (sem transactionId/status/endToEnd)");
-        }
-
-        console.log("Gatebox PIX out sucesso:", payoutResponse);
-
-        const { error: approveError } = await supabaseAdmin
-          .from("user_withdrawals")
-          .update({
-            status: "approved",
-            processed_at: new Date().toISOString(),
-          })
-          .eq("id", withdrawal.id);
-
-        if (approveError) {
-          console.error("Erro ao atualizar saque para approved após PIX out:", approveError);
-        }
+        console.log("Gatebox PIX out OK:", payoutResponse);
 
         payoutResult = {
           automatic: true,
-          transactionId,
-          status,
-          endToEnd,
+          transactionId: typeof payoutResponse.transactionId === "string" ? payoutResponse.transactionId : undefined,
+          status: typeof payoutResponse.status === "string" ? payoutResponse.status : undefined,
+          endToEnd: typeof payoutResponse.endToEnd === "string" ? payoutResponse.endToEnd : undefined,
         };
       } catch (payoutError: unknown) {
-        console.error("Gatebox PIX out falhou, saque ficará pendente para processamento manual:", {
-          error: getErrorMessage(payoutError),
-          externalId,
-          withdrawalId: withdrawal.id,
-        });
-
+        console.error("Gatebox PIX out falhou:", getErrorMessage(payoutError));
+        // Continua para processamento manual
         payoutResult = { automatic: false };
       }
-    } else {
-      console.log("Gatebox não configurado, saque registrado para processamento manual");
+    }
+
+    // 6. APÓS Gatebox responder: debitar wallet + registrar saque + transação EM PARALELO
+    const newBalance = total - amount;
+    const withdrawalStatus = payoutResult.automatic ? "approved" : "pending";
+
+    const [withdrawalResult, updateWalletResult, insertTxResult] = await Promise.all([
+      supabaseAdmin
+        .from("user_withdrawals")
+        .insert({
+          user_id: userId,
+          amount,
+          pix_key: pixKey,
+          pix_key_type: pixKeyType,
+          status: withdrawalStatus,
+          processed_at: payoutResult.automatic ? new Date().toISOString() : null,
+        })
+        .select("id")
+        .single(),
+      supabaseAdmin
+        .from("wallets")
+        .update({ balance: newBalance })
+        .eq("id", wallet.id),
+      supabaseAdmin.from("wallet_transactions").insert({
+        wallet_id: wallet.id,
+        amount: -amount,
+        type: "withdrawal" as any,
+        description: `Saque via PIX - ${pixKey}`,
+        source_type: "withdrawal",
+      }),
+    ]);
+
+    if (withdrawalResult.error) {
+      console.error("Erro ao criar registro de saque:", withdrawalResult.error);
+    }
+    if (updateWalletResult.error) {
+      console.error("Erro ao atualizar wallet:", updateWalletResult.error);
+    }
+    if (insertTxResult.error) {
+      console.error("Erro ao inserir transação:", insertTxResult.error);
     }
 
     const message = payoutResult.automatic
@@ -264,16 +227,17 @@ serve(async (req) => {
       : "Saque registrado! Será processado em até 24 horas.";
 
     console.log("Saque finalizado:", {
-      withdrawalId: withdrawal.id,
+      withdrawalId: withdrawalResult.data?.id,
       amount,
       newBalance,
       automatic: payoutResult.automatic,
     });
 
+    // 7. Resposta imediata — sem operações extras
     return jsonResponse({
       success: true,
       message,
-      withdrawalId: withdrawal.id,
+      withdrawalId: withdrawalResult.data?.id,
       newBalance,
       automatic: payoutResult.automatic,
       gatebox: payoutResult.automatic
@@ -286,6 +250,6 @@ serve(async (req) => {
     });
   } catch (error: unknown) {
     console.error("Erro não tratado em process-withdrawal:", error);
-    return internalErrorResponse("Erro interno ao processar saque. Tente novamente em instantes.");
+    return jsonResponse({ error: "Erro interno ao processar saque. Tente novamente em instantes." }, 500);
   }
 });
