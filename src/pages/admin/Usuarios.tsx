@@ -389,14 +389,14 @@ export default function AdminUsuarios() {
             // Create affiliate if doesn't exist
             const { data: profileData } = await supabase
               .from('profiles')
-              .select('full_name, phone')
+              .select('full_name, phone, cpf')
               .eq('id', actionUser.id)
               .single();
               
             await supabase.from('affiliates').insert({
               user_id: actionUser.id,
               full_name: profileData?.full_name || 'Afiliado',
-              cpf: '00000000000', // Placeholder - user should update
+              cpf: profileData?.cpf || '00000000000',
               status: 'approved',
               approved_by: user.id,
               approved_at: new Date().toISOString(),
