@@ -86,7 +86,7 @@ serve(async (req) => {
     // 3. Buscar wallet, profile e transações EM PARALELO (single round-trip)
     const [walletResult, profileResult] = await Promise.all([
       supabaseAdmin.from("wallets").select("id, balance").eq("user_id", userId).maybeSingle(),
-      supabaseAdmin.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
+      supabaseAdmin.from("profiles").select("full_name, cpf").eq("id", userId).maybeSingle(),
     ]);
 
     const wallet = walletResult.data;
@@ -158,15 +158,36 @@ serve(async (req) => {
       name: sanitizedName,
     });
 
+    // Resolver documentNumber para chaves CPF
+    let documentNumber: string | undefined;
+    if (pixKeyType === "cpf") {
+      // Usar CPF do perfil ou a própria chave PIX
+      const profileCpf = profileResult.data?.cpf?.replace(/\D/g, "") || "";
+      const pixKeyCpf = pixKey.replace(/\D/g, "");
+      documentNumber = (profileCpf.length === 11 ? profileCpf : pixKeyCpf.length === 11 ? pixKeyCpf : undefined);
+    }
+
+    // Formatar chave telefone em E.164
+    let formattedKey = pixKey;
+    if (pixKeyType === "phone") {
+      const digits = pixKey.replace(/\D/g, "");
+      if (digits.length >= 10 && !digits.startsWith("55")) {
+        formattedKey = `+55${digits}`;
+      } else if (digits.startsWith("55")) {
+        formattedKey = `+${digits}`;
+      }
+    }
+
     let payoutResponse: { transactionId?: string; status?: string; endToEnd?: string };
     try {
       payoutResponse = await gateboxCreatePayout(gateboxConfig, {
         externalId,
         amount,
-        key: pixKey,
+        key: formattedKey,
         pixKeyType,
         name: sanitizedName,
         description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
+        documentNumber,
       });
     } catch (payoutError: unknown) {
       const errMsg = getErrorMessage(payoutError);

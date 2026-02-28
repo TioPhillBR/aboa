@@ -38,6 +38,7 @@ export interface GateboxPayoutPayload {
   pixKeyType: string;
   name: string;
   description?: string;
+  documentNumber?: string;
 }
 
 export interface GateboxPayoutResponse {
@@ -283,6 +284,7 @@ export async function gateboxCreatePayout(
     name: payload.name,
   };
   if (payload.description) body.description = payload.description;
+  if (payload.documentNumber) body.documentNumber = payload.documentNumber;
 
   console.log(`Gatebox PIX OUT (saque) → Servidor dedicado: ${withdrawEndpoint}`);
 

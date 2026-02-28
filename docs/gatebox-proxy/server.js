@@ -136,7 +136,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ error: "Campos obrigatórios: externalId, amount, key, pixKeyType, name" }));
     }
 
-    console.log(`[${new Date().toISOString()}] Withdraw → externalId=${externalId} amount=${amount} key=${key}`);
+    console.log(`[${new Date().toISOString()}] Withdraw → externalId=${externalId} amount=${amount} key=${key} documentNumber=${documentNumber || 'N/A'}`);
 
     try {
       // 1. Autenticar na Gatebox (com cache)
@@ -147,8 +147,10 @@ const server = http.createServer(async (req, res) => {
       const withdrawBody = { externalId, amount, key, pixKeyType, name };
       if (description) withdrawBody.description = description;
       if (documentNumber) {
-        const doc = String(documentNumber).replace(/\D/g, "");
-        if (doc.length === 11 || doc.length === 14) withdrawBody.documentNumber = doc;
+        const cleanDoc = String(documentNumber).replace(/\D/g, "");
+        if (cleanDoc.length === 11 || cleanDoc.length === 14) {
+          withdrawBody.documentNumber = cleanDoc;
+        }
       }
 
       console.log(`[${new Date().toISOString()}] Withdraw → POST ${withdrawUrl}`);
