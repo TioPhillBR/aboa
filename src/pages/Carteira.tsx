@@ -432,6 +432,13 @@ export default function Carteira() {
                       </DialogHeader>
 
                       <div className="space-y-4 py-4">
+                        {/* Aviso saldo bônus */}
+                        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                          <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-muted-foreground">
+                            Apenas o <strong className="text-foreground">Saldo Principal</strong> pode ser sacado. O saldo bônus é exclusivo para jogos e não pode ser retirado.
+                          </p>
+                        </div>
                         {/* User info card */}
                         <Card className="border-primary/20 bg-primary/5">
                           <CardContent className="py-4 space-y-3">
