@@ -49,6 +49,7 @@ interface DashboardStats {
   totalScratchPlays: number;
   totalScratchWins: number;
   totalScratchLosses: number;
+  totalScratchRevenue: number;
 }
 
 interface RecentWinner {
@@ -86,6 +87,7 @@ export default function AdminDashboard() {
     totalScratchPlays: 0,
     totalScratchWins: 0,
     totalScratchLosses: 0,
+    totalScratchRevenue: 0,
   });
   const [recentWinners, setRecentWinners] = useState<RecentWinner[]>([]);
   const [activeRaffles, setActiveRaffles] = useState<ActiveRaffle[]>([]);
@@ -111,7 +113,8 @@ export default function AdminDashboard() {
         recentWinnersResult,
         scratchPlaysResult,
         allTransactionsResult,
-        withdrawalStatsResult
+        withdrawalStatsResult,
+        scratchRevenueResult
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('raffles').select('*', { count: 'exact', head: true }),
@@ -125,7 +128,8 @@ export default function AdminDashboard() {
         supabase.from('raffles').select('id, title, winner_id, updated_at').eq('status', 'completed').not('winner_id', 'is', null).order('updated_at', { ascending: false }).limit(5),
         supabase.from('scratch_chances').select('prize_won, is_revealed').eq('is_revealed', true).limit(10000),
         supabase.from('wallet_transactions').select('wallet_id, amount, source_type, created_at').order('created_at', { ascending: true }).limit(50000),
-        supabase.rpc('get_platform_withdrawal_stats')
+        supabase.rpc('get_platform_withdrawal_stats'),
+        supabase.from('scratch_chances').select('scratch_card_id, scratch_cards(price)').limit(50000)
       ]);
 
       // Calculate totals
@@ -200,6 +204,12 @@ export default function AdminDashboard() {
       const totalScratchWins = scratchPlays.filter(p => p.prize_won && p.prize_won > 0).length;
       const totalScratchLosses = totalScratchPlays - totalScratchWins;
 
+      // Calculate scratch card revenue
+      const totalScratchRevenue = (scratchRevenueResult.data || []).reduce((sum: number, chance: any) => {
+        const price = chance.scratch_cards?.price || 0;
+        return sum + Number(price);
+      }, 0);
+
       setStats({
         totalUsers: usersResult.count || 0,
         totalRaffles: rafflesResult.count || 0,
@@ -216,6 +226,7 @@ export default function AdminDashboard() {
         totalScratchPlays,
         totalScratchWins,
         totalScratchLosses,
+        totalScratchRevenue,
       });
 
       // Process active raffles with ticket counts
@@ -450,7 +461,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Secondary Stats */}
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -468,6 +479,25 @@ export default function AdminDashboard() {
                 </Badge>
                 <Badge variant="secondary">
                   {stats.totalRaffles - stats.openRaffles} finalizados
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Receita Raspadinhas</p>
+                  <p className="text-2xl font-bold text-success">R$ {stats.totalScratchRevenue.toFixed(2)}</p>
+                </div>
+                <div className="p-3 rounded-full bg-success/10">
+                  <DollarSign className="h-6 w-6 text-success" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <Badge variant="secondary">
+                  {stats.totalScratchPlays} jogadas vendidas
                 </Badge>
               </div>
             </CardContent>
