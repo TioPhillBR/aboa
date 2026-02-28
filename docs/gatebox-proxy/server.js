@@ -142,9 +142,10 @@ const server = http.createServer(async (req, res) => {
       // 1. Autenticar na Gatebox (com cache)
       const token = await gateboxAuth();
 
-      // 2. Chamar PIX OUT
+      // 2. Chamar PIX OUT — Gatebox NÃO usa pixKeyType (Postman); envia só key, documentNumber
+      // Enviar pixKeyType faz a Gatebox interpretar como telefone e dar "invalid phone format"
       const withdrawUrl = `${GATEBOX_BASE_URL}/v1/customers/pix/withdraw`;
-      const withdrawBody = { externalId, amount, key, pixKeyType, name };
+      const withdrawBody = { externalId, amount, key, name };
       if (description) withdrawBody.description = description;
       if (documentNumber) {
         const cleanDoc = String(documentNumber).replace(/\D/g, "");
