@@ -92,7 +92,7 @@ async function gateboxFetch(
   useProxy = true
 ): Promise<{ status: number; text: string }> {
   const proxy = useProxy ? getProxyConfig() : null;
-  const TIMEOUT_MS = 15_000;
+  const TIMEOUT_MS = 25_000;
 
   if (proxy) {
     console.log(`Gatebox via PROXY → ${method} ${path}`);
