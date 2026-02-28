@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { toast } from 'sonner';
 import { 
   LayoutDashboard, 
   Ticket, 
@@ -27,7 +28,8 @@ import {
   ThumbsDown,
   Target,
   Gift,
-  Banknote
+  Banknote,
+  RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -300,9 +302,29 @@ export default function AdminDashboard() {
               Visão geral do sistema de apostas
             </p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={async () => {
+                const channel = supabase.channel('force-reload');
+                await channel.send({
+                  type: 'broadcast',
+                  event: 'force-reload',
+                  payload: { timestamp: Date.now() },
+                });
+                supabase.removeChannel(channel);
+                toast.success('Comando de recarregamento enviado a todos os usuários!');
+              }}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Forçar Reload
+            </Button>
           </div>
         </div>
 

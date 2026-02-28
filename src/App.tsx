@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,6 +12,7 @@ import { MobileNav } from "@/components/layout/MobileNav";
 import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import { useUserSession } from "@/hooks/useUserSession";
 import { RegistrationProvider } from "@/contexts/RegistrationContext";
+import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import CadastroIndex from "./pages/cadastro/Index";
@@ -62,6 +64,18 @@ function SessionTracker() {
   return null;
 }
 
+// Listen for admin force-reload broadcast
+function ForceReloadListener() {
+  useEffect(() => {
+    const channel = supabase.channel('force-reload');
+    channel.on('broadcast', { event: 'force-reload' }, () => {
+      window.location.reload();
+    }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+  return null;
+}
+
 const queryClient = new QueryClient();
 
 // Component to conditionally render MobileNav (hide on admin routes)
@@ -87,6 +101,7 @@ const App = () => (
           <BrowserRouter>
             <RegistrationProvider>
               <SessionTracker />
+              <ForceReloadListener />
               <ScrollToTop />
               <div className="pb-16 md:pb-0">
                 <Routes>
