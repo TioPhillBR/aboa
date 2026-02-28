@@ -140,51 +140,54 @@ serve(async (req) => {
       return jsonResponse({ error: "Saldo principal insuficiente", availableBalance: normalizedPrincipal }, 400);
     }
 
-    // 5. FLUXO OTIMIZADO: Chamar Gatebox PRIMEIRO (antes de debitar)
+    // 5. FLUXO CORRIGIDO: Chamar Gatebox PRIMEIRO — só debitar se sucesso
     const gateboxConfig = getGateboxConfig();
-    const externalId = `saque_${userId}_${Date.now()}`;
-    let payoutResult: { automatic: boolean; transactionId?: string; status?: string; endToEnd?: string } = {
-      automatic: false,
-    };
-
-    if (gateboxConfig) {
-      try {
-        const sanitizedName = sanitizeName(recipientName);
-
-        console.log("PIX OUT via Gatebox:", {
-          externalId,
-          amount,
-          pixKeyType,
-          name: sanitizedName,
-        });
-
-        const payoutResponse = await gateboxCreatePayout(gateboxConfig, {
-          externalId,
-          amount,
-          key: pixKey,
-          pixKeyType,
-          name: sanitizedName,
-          description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
-        });
-
-        console.log("Gatebox PIX out OK:", payoutResponse);
-
-        payoutResult = {
-          automatic: true,
-          transactionId: typeof payoutResponse.transactionId === "string" ? payoutResponse.transactionId : undefined,
-          status: typeof payoutResponse.status === "string" ? payoutResponse.status : undefined,
-          endToEnd: typeof payoutResponse.endToEnd === "string" ? payoutResponse.endToEnd : undefined,
-        };
-      } catch (payoutError: unknown) {
-        console.error("Gatebox PIX out falhou:", getErrorMessage(payoutError));
-        // Continua para processamento manual
-        payoutResult = { automatic: false };
-      }
+    if (!gateboxConfig) {
+      console.error("Gatebox NÃO configurada — saque impossível");
+      return jsonResponse({ error: "Gateway de pagamento não configurado. Contate o suporte." }, 503);
     }
 
-    // 6. APÓS Gatebox responder: debitar wallet + registrar saque + transação EM PARALELO
+    const externalId = `saque_${userId}_${Date.now()}`;
+    const sanitizedName = sanitizeName(recipientName);
+
+    console.log(">>> [1/3] Chamando Gatebox para PIX OUT...", {
+      externalId,
+      amount,
+      pixKey,
+      pixKeyType,
+      name: sanitizedName,
+    });
+
+    let payoutResponse: { transactionId?: string; status?: string; endToEnd?: string };
+    try {
+      payoutResponse = await gateboxCreatePayout(gateboxConfig, {
+        externalId,
+        amount,
+        key: pixKey,
+        pixKeyType,
+        name: sanitizedName,
+        description: `Saque A BOA - R$ ${amount.toFixed(2)}`,
+      });
+    } catch (payoutError: unknown) {
+      const errMsg = getErrorMessage(payoutError);
+      console.error(">>> Gatebox PIX OUT FALHOU:", errMsg);
+      // NÃO debita a carteira — retorna erro ao usuário
+      return jsonResponse({
+        error: "Não foi possível enviar o PIX. Tente novamente em alguns minutos.",
+        detail: errMsg,
+      }, 502);
+    }
+
+    console.log(">>> [2/3] Gatebox respondeu OK:", JSON.stringify(payoutResponse));
+
+    // 6. Gatebox confirmou → agora debitar wallet + registrar saque
     const newBalance = total - amount;
-    const withdrawalStatus = payoutResult.automatic ? "approved" : "pending";
+
+    console.log(">>> [3/3] Debitando carteira e registrando saque...", {
+      walletId: wallet.id,
+      oldBalance: total,
+      newBalance,
+    });
 
     const [withdrawalResult, updateWalletResult, insertTxResult] = await Promise.all([
       supabaseAdmin
@@ -194,8 +197,8 @@ serve(async (req) => {
           amount,
           pix_key: pixKey,
           pix_key_type: pixKeyType,
-          status: withdrawalStatus,
-          processed_at: payoutResult.automatic ? new Date().toISOString() : null,
+          status: "approved",
+          processed_at: new Date().toISOString(),
         })
         .select("id")
         .single(),
@@ -222,31 +225,25 @@ serve(async (req) => {
       console.error("Erro ao inserir transação:", insertTxResult.error);
     }
 
-    const message = payoutResult.automatic
-      ? "Saque processado! O PIX será enviado em instantes."
-      : "Saque registrado! Será processado em até 24 horas.";
-
-    console.log("Saque finalizado:", {
+    console.log(">>> Saque COMPLETO:", {
       withdrawalId: withdrawalResult.data?.id,
       amount,
       newBalance,
-      automatic: payoutResult.automatic,
+      transactionId: payoutResponse.transactionId,
+      endToEnd: payoutResponse.endToEnd,
     });
 
-    // 7. Resposta imediata — sem operações extras
     return jsonResponse({
       success: true,
-      message,
+      message: "Saque processado! O PIX será enviado em instantes.",
       withdrawalId: withdrawalResult.data?.id,
       newBalance,
-      automatic: payoutResult.automatic,
-      gatebox: payoutResult.automatic
-        ? {
-            transactionId: payoutResult.transactionId,
-            status: payoutResult.status,
-            endToEnd: payoutResult.endToEnd,
-          }
-        : undefined,
+      automatic: true,
+      gatebox: {
+        transactionId: payoutResponse.transactionId,
+        status: payoutResponse.status,
+        endToEnd: payoutResponse.endToEnd,
+      },
     });
   } catch (error: unknown) {
     console.error("Erro não tratado em process-withdrawal:", error);
