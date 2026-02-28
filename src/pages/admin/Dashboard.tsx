@@ -96,6 +96,7 @@ const RANKING_PAGE_SIZE = 10;
 export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData>(initialData);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -368,6 +369,7 @@ export default function AdminDashboard() {
       toast.error('Erro ao carregar dados do dashboard');
     } finally {
       setIsLoading(false);
+      setLastUpdated(new Date());
     }
   };
 
@@ -453,8 +455,14 @@ export default function AdminDashboard() {
               </div>
               Dashboard Financeiro
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground mt-1 flex items-center gap-2">
               Gestão financeira consolidada da plataforma
+              {lastUpdated && (
+                <span className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-0.5 rounded-full">
+                  <Activity className="h-3 w-3 text-green-500 animate-pulse" />
+                  Atualizado às {format(lastUpdated, 'HH:mm:ss')}
+                </span>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
