@@ -34,8 +34,9 @@ A integração com o gateway Gatebox permite depósitos e saques PIX reais na pl
 | key | string | ✅ | Chave PIX do usuário (Gatebox usa `key`) |
 | name | string | ✅ | Nome completo do recebedor |
 | pixKeyType | string | ✅ | cpf, email, phone, random |
+| keyType | string | ❌ | CPF, CNPJ, PHONE, EMAIL — evita "invalid phone format" em chaves CPF |
 | description | string | ❌ | Texto descritivo |
-| documentNumber | string | ❌ | CPF/CNPJ do recebedor (se validação ativa) |
+| documentNumber | string | ❌ | CPF/CNPJ do recebedor (obrigatório se validação ativa) |
 
 ---
 

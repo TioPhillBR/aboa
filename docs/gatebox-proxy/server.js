@@ -142,8 +142,8 @@ const server = http.createServer(async (req, res) => {
       // 1. Autenticar na Gatebox (com cache)
       const token = await gateboxAuth();
 
-      // 2. Chamar PIX OUT — Gatebox NÃO usa pixKeyType (Postman); envia só key, documentNumber
-      // Enviar pixKeyType faz a Gatebox interpretar como telefone e dar "invalid phone format"
+      // 2. Chamar PIX OUT — Gatebox infere tipo pela chave; 11 dígitos pode ser confundido com telefone
+      // Enviar keyType: "CPF" evita "Pix key invalid phone format" quando a chave é CPF
       const withdrawUrl = `${GATEBOX_BASE_URL}/v1/customers/pix/withdraw`;
       const withdrawBody = { externalId, amount, key, name };
       if (description) withdrawBody.description = description;
@@ -152,6 +152,16 @@ const server = http.createServer(async (req, res) => {
         if (cleanDoc.length === 11 || cleanDoc.length === 14) {
           withdrawBody.documentNumber = cleanDoc;
         }
+      }
+      // Indica explicitamente que a chave é CPF (evita inferência incorreta como telefone)
+      if (pixKeyType === "cpf") {
+        withdrawBody.keyType = "CPF";
+      } else if (pixKeyType === "cnpj") {
+        withdrawBody.keyType = "CNPJ";
+      } else if (pixKeyType === "phone") {
+        withdrawBody.keyType = "PHONE";
+      } else if (pixKeyType === "email") {
+        withdrawBody.keyType = "EMAIL";
       }
 
       console.log(`[${new Date().toISOString()}] Withdraw → POST ${withdrawUrl}`);
