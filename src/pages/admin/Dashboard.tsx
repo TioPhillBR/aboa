@@ -25,7 +25,9 @@ import {
   Play,
   Crown,
   ThumbsDown,
-  Target
+  Target,
+  Gift,
+  Banknote
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -38,6 +40,9 @@ interface DashboardStats {
   totalTicketsSold: number;
   totalPrizesAwarded: number;
   totalWalletBalance: number;
+  totalMainBalance: number;
+  totalBonusBalance: number;
+  totalAvailableWithdrawal: number;
   totalDeposits: number;
   // Scratch card game stats
   totalScratchPlays: number;
@@ -72,6 +77,9 @@ export default function AdminDashboard() {
     totalTicketsSold: 0,
     totalPrizesAwarded: 0,
     totalWalletBalance: 0,
+    totalMainBalance: 0,
+    totalBonusBalance: 0,
+    totalAvailableWithdrawal: 0,
     totalDeposits: 0,
     totalScratchPlays: 0,
     totalScratchWins: 0,
@@ -99,7 +107,8 @@ export default function AdminDashboard() {
         depositsResult,
         activeRafflesResult,
         recentWinnersResult,
-        scratchPlaysResult
+        scratchPlaysResult,
+        allTransactionsResult
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('raffles').select('*', { count: 'exact', head: true }),
@@ -107,17 +116,68 @@ export default function AdminDashboard() {
         supabase.from('scratch_cards').select('*', { count: 'exact', head: true }),
         supabase.from('raffle_tickets').select('*', { count: 'exact', head: true }),
         supabase.from('scratch_chances').select('prize_won').not('prize_won', 'is', null).gt('prize_won', 0).limit(10000),
-        supabase.from('wallets').select('balance').limit(10000),
+        supabase.from('wallets').select('id, balance, user_id').limit(10000),
         supabase.from('wallet_transactions').select('amount').eq('type', 'deposit').limit(10000),
         supabase.from('raffles').select('id, title, total_numbers, draw_date, price').eq('status', 'open').limit(5),
         supabase.from('raffles').select('id, title, winner_id, updated_at').eq('status', 'completed').not('winner_id', 'is', null).order('updated_at', { ascending: false }).limit(5),
-        supabase.from('scratch_chances').select('prize_won, is_revealed').eq('is_revealed', true).limit(10000)
+        supabase.from('scratch_chances').select('prize_won, is_revealed').eq('is_revealed', true).limit(10000),
+        supabase.from('wallet_transactions').select('wallet_id, amount, source_type, created_at').order('created_at', { ascending: true }).limit(50000)
       ]);
 
       // Calculate totals
       const totalPrizes = (prizesResult.data || []).reduce((sum, p) => sum + (p.prize_won || 0), 0);
-      const totalBalance = (walletsResult.data || []).reduce((sum, w) => sum + (w.balance || 0), 0);
+      const wallets = walletsResult.data || [];
+      const totalBalance = wallets.reduce((sum: number, w: any) => sum + Number(w.balance || 0), 0);
       const totalDeposits = (depositsResult.data || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+
+      // Calculate platform-wide main vs bonus balances
+      const allTx = allTransactionsResult.data || [];
+      // Group transactions by wallet_id
+      const txByWallet = new Map<string, any[]>();
+      for (const tx of allTx) {
+        const list = txByWallet.get(tx.wallet_id) || [];
+        list.push(tx);
+        txByWallet.set(tx.wallet_id, list);
+      }
+
+      let platformMain = 0;
+      let platformBonus = 0;
+
+      for (const w of wallets) {
+        const walletTotal = Number(w.balance || 0);
+        const walletTx = txByWallet.get(w.id) || [];
+
+        let principal = 0;
+        let bonus = 0;
+
+        for (const tx of walletTx) {
+          const amount = Number(tx.amount ?? 0);
+          const sourceType = tx.source_type;
+
+          if (amount > 0) {
+            if (sourceType === 'referral' || sourceType === 'admin_bonus') {
+              bonus += amount;
+            } else {
+              principal += amount;
+            }
+          } else if (amount < 0) {
+            const debit = Math.abs(amount);
+            if (sourceType === 'bonus_used') {
+              bonus = Math.max(0, bonus - debit);
+            } else {
+              const fromBonus = Math.min(bonus, debit);
+              bonus -= fromBonus;
+              principal = Math.max(0, principal - (debit - fromBonus));
+            }
+          }
+        }
+
+        const normalizedBonus = Math.max(0, Math.min(bonus, walletTotal));
+        const normalizedPrincipal = Math.max(0, walletTotal - normalizedBonus);
+
+        platformMain += normalizedPrincipal;
+        platformBonus += normalizedBonus;
+      }
 
       // Calculate scratch card game stats (wins vs losses)
       const scratchPlays = scratchPlaysResult.data || [];
@@ -133,6 +193,9 @@ export default function AdminDashboard() {
         totalTicketsSold: ticketsResult.count || 0,
         totalPrizesAwarded: totalPrizes,
         totalWalletBalance: totalBalance,
+        totalMainBalance: platformMain,
+        totalBonusBalance: platformBonus,
+        totalAvailableWithdrawal: platformMain,
         totalDeposits: totalDeposits,
         totalScratchPlays,
         totalScratchWins,
@@ -228,9 +291,9 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{stats.totalUsers}</div>
-              <div className="flex items-center gap-1 mt-1 text-xs text-success">
-                <ArrowUpRight className="h-3 w-3" />
-                <span>+12% este mês</span>
+              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                <Activity className="h-3 w-3" />
+                <span>{stats.openRaffles} sorteios ativos</span>
               </div>
             </CardContent>
           </Card>
@@ -253,25 +316,6 @@ export default function AdminDashboard() {
           </Card>
 
           <Card className="relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-success opacity-10 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Saldo em Carteiras</CardTitle>
-              <div className="p-2 rounded-lg bg-success/20">
-                <Wallet className="h-4 w-4 text-success" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-success">
-                R$ {stats.totalWalletBalance.toFixed(0)}
-              </div>
-              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                <TrendingUp className="h-3 w-3" />
-                <span>Total disponível</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-fire opacity-10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Prêmios Pagos</CardTitle>
@@ -286,6 +330,104 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                 <DollarSign className="h-3 w-3" />
                 <span>Em raspadinhas</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-success opacity-10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Total Depositado</CardTitle>
+              <div className="p-2 rounded-lg bg-success/20">
+                <TrendingUp className="h-4 w-4 text-success" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-success">
+                R$ {stats.totalDeposits.toFixed(0)}
+              </div>
+              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                <DollarSign className="h-3 w-3" />
+                <span>Via PIX</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Wallet Balance Breakdown */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-success opacity-10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Saldo Total</CardTitle>
+              <div className="p-2 rounded-lg bg-success/20">
+                <Wallet className="h-4 w-4 text-success" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-success">
+                R$ {stats.totalWalletBalance.toFixed(2)}
+              </div>
+              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                <TrendingUp className="h-3 w-3" />
+                <span>Em todas as carteiras</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-primary opacity-10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Saldo Principal</CardTitle>
+              <div className="p-2 rounded-lg bg-primary/10">
+                <DollarSign className="h-4 w-4 text-primary" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-primary">
+                R$ {stats.totalMainBalance.toFixed(2)}
+              </div>
+              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                <Wallet className="h-3 w-3" />
+                <span>Depósitos e prêmios</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-gold opacity-10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Saldo Bônus</CardTitle>
+              <div className="p-2 rounded-lg bg-accent/20">
+                <Gift className="h-4 w-4 text-accent" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-accent">
+                R$ {stats.totalBonusBalance.toFixed(2)}
+              </div>
+              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                <Gift className="h-3 w-3" />
+                <span>Indicações e bônus admin</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-primary opacity-10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Disponível p/ Saque</CardTitle>
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Banknote className="h-4 w-4 text-primary" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-primary">
+                R$ {stats.totalAvailableWithdrawal.toFixed(2)}
+              </div>
+              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                <Banknote className="h-3 w-3" />
+                <span>Somente saldo principal</span>
               </div>
             </CardContent>
           </Card>
