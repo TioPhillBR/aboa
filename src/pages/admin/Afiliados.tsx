@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -87,10 +87,27 @@ export default function AdminAfiliados() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedAffiliate, setSelectedAffiliate] = useState<any>(null);
   const [viewAffiliate, setViewAffiliate] = useState<any>(null);
+  const [viewAffiliateEmail, setViewAffiliateEmail] = useState<string | null>(null);
   const [editAffiliate, setEditAffiliate] = useState<any>(null);
   const [deleteAffiliate, setDeleteAffiliate] = useState<any>(null);
   const [newCommission, setNewCommission] = useState<number>(10);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch email from auth.users when viewing affiliate
+  useEffect(() => {
+    if (!viewAffiliate?.user_id) {
+      setViewAffiliateEmail(null);
+      return;
+    }
+    setViewAffiliateEmail(null);
+    supabase.functions.invoke('get-user-email', {
+      body: { user_id: viewAffiliate.user_id },
+    }).then(({ data, error }) => {
+      if (!error && data?.email) {
+        setViewAffiliateEmail(data.email);
+      }
+    });
+  }, [viewAffiliate?.user_id]);
   
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -543,7 +560,7 @@ export default function AdminAfiliados() {
                       <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
                       <div>
                         <p className="text-xs text-muted-foreground">E-mail</p>
-                        <p className="font-medium">{viewAffiliate.email || '-'}</p>
+                        <p className="font-medium">{viewAffiliateEmail || viewAffiliate.email || '-'}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
