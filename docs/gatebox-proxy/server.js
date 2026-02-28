@@ -129,14 +129,14 @@ const server = http.createServer(async (req, res) => {
 
   // ====== ENDPOINT DEDICADO: /api/gatebox/withdraw ======
   if (pathname === "/api/gatebox/withdraw") {
-    const { externalId, amount, key, pixKeyType, name, description } = parsed;
+    const { externalId, amount, key, pixKeyType, name, description, documentNumber } = parsed;
 
     if (!externalId || !amount || !key || !pixKeyType || !name) {
       res.writeHead(400, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: "Campos obrigatórios: externalId, amount, key, pixKeyType, name" }));
     }
 
-    console.log(`[${new Date().toISOString()}] Withdraw → externalId=${externalId} amount=${amount} key=${key}`);
+    console.log(`[${new Date().toISOString()}] Withdraw → externalId=${externalId} amount=${amount} key=${key} documentNumber=${documentNumber || 'N/A'}`);
 
     try {
       // 1. Autenticar na Gatebox (com cache)
@@ -146,6 +146,12 @@ const server = http.createServer(async (req, res) => {
       const withdrawUrl = `${GATEBOX_BASE_URL}/v1/customers/pix/withdraw`;
       const withdrawBody = { externalId, amount, key, pixKeyType, name };
       if (description) withdrawBody.description = description;
+      if (documentNumber) {
+        const cleanDoc = documentNumber.replace(/\D/g, "");
+        if (cleanDoc.length === 11 || cleanDoc.length === 14) {
+          withdrawBody.documentNumber = cleanDoc;
+        }
+      }
 
       console.log(`[${new Date().toISOString()}] Withdraw → POST ${withdrawUrl}`);
 
